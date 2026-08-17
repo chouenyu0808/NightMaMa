@@ -62,23 +62,29 @@ export default function HomePage() {
 
   // 1. 自動讀取裝置目前實時 GPS 位置
   useEffect(() => {
+    const defaultPos = { lat: 25.0478, lng: 121.5170 } // 台北車站預設點位
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude
           const lng = pos.coords.longitude
-          userGpsRef.current = { lat, lng }
-          setOriginLatLng({ lat, lng })
+          const gpsPos = { lat, lng }
+          userGpsRef.current = gpsPos
+          setOriginLatLng(gpsPos)
           if (mapInstance.current) {
-            mapInstance.current.panTo({ lat, lng })
+            mapInstance.current.panTo(gpsPos)
           }
         },
         (err) => {
-          console.warn('GPS 定位失敗，設為台北車站預設點位:', err)
-          setOriginLatLng({ lat: 25.0478, lng: 121.5170 })
+          console.warn('GPS 定位失敗或逾時，使用預設點位:', err)
+          userGpsRef.current = defaultPos
+          setOriginLatLng(defaultPos)
         },
         { enableHighAccuracy: true, timeout: 5000 }
       )
+    } else {
+      userGpsRef.current = defaultPos
+      setOriginLatLng(defaultPos)
     }
   }, [])
 
@@ -255,13 +261,23 @@ export default function HomePage() {
     setIsLoading(true)
 
     try {
-      const origLatLng = (origin === '我的位置' && userGpsRef.current) 
-        ? userGpsRef.current 
-        : (originLatLng || await geocodeAddress(origin))
-      
-      const destLatLngResolved = (destLatLng && destination === '信義區 松智街') 
-        ? destLatLng 
-        : await geocodeAddress(destination)
+      // 1. Resolve Origin (Safe fallback for '我的位置')
+      let origLatLng: LatLng | null = null
+      if (origin === '我的位置' || !origin.trim()) {
+        origLatLng = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
+      } else {
+        origLatLng = originLatLng || await geocodeAddress(origin)
+      }
+
+      // 2. Resolve Destination (Safe fallback for '我的位置')
+      let destLatLngResolved: LatLng | null = null
+      if (destination === '我的位置') {
+        destLatLngResolved = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
+      } else if (destLatLng && destination === '信義區 松智街') {
+        destLatLngResolved = destLatLng
+      } else {
+        destLatLngResolved = await geocodeAddress(destination)
+      }
 
       if (!origLatLng || !destLatLngResolved) {
         throw new Error('找不到地址，請確認出發地與目的地名稱')
