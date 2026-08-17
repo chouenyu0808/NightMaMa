@@ -790,12 +790,12 @@ function NavigateContent() {
       </div>
       )}
 
-      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 45dvh) ───────────── */}
+      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 48dvh) ───────────── */}
       {showCompanionSplit && (
         <div style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
-          height: '45dvh',
+          height: '48dvh',
           zIndex: 60,
           background: 'rgba(15, 17, 35, 0.98)',
           backdropFilter: 'blur(20px)',
@@ -805,7 +805,47 @@ function NavigateContent() {
           flexDirection: 'column',
           animation: 'slideUp 0.3s ease-out'
         }}>
-          {/* Companion Drawer Header Bar */}
+          {/* ─── 1. Navigation Live Activity "Now Bar" (Dynamic Island / Now Bar Style) ─── */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.95), rgba(15, 23, 42, 0.95))',
+            borderBottom: '1px solid rgba(16, 185, 129, 0.3)',
+            padding: '8px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexShrink: 0,
+          }}>
+            {/* Left: Live Pulsing Green Dot + Navigation Status + Time/Dist */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: '#10b981', boxShadow: '0 0 8px #10b981',
+                flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399', whiteSpace: 'nowrap' }}>導航中</span>
+              <span style={{ fontSize: 13, fontWeight: 900, color: 'white', whiteSpace: 'nowrap' }}>{formatDuration(remainingSec)}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>({formatDistance(realtimeDistanceM)})</span>
+            </div>
+
+            {/* Right: ETA + SOS Pill Button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap' }}>
+                預計 <strong style={{ color: '#60a5fa' }}>{etaTime}</strong> 抵達
+              </span>
+              <button
+                onClick={() => router.push('/sos')}
+                style={{
+                  background: '#dc2626', border: '1px solid rgba(248,113,113,0.4)', color: 'white',
+                  borderRadius: 12, padding: '3px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(220,38,38,0.4)', whiteSpace: 'nowrap'
+                }}
+              >
+                🆘 SOS
+              </button>
+            </div>
+          </div>
+
+          {/* ─── 2. AI Companion Header Bar ─── */}
           <div style={{
             padding: '10px 14px',
             background: 'rgba(30, 27, 75, 0.95)',
@@ -813,55 +853,45 @@ function NavigateContent() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
                 background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16
+                boxShadow: '0 0 12px rgba(250, 204, 21, 0.5)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                flexShrink: 0,
               }}>
                 🌙
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>
                   NightMaMa AI 陪聊
-                  <span style={{ fontSize: 10, background: 'rgba(16,185,129,0.2)', color: '#34d399', padding: '1px 6px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.4)' }}>
-                    🟢 導航中 · {formatDuration(remainingSec)}
-                  </span>
                 </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
-                  {formatDistance(realtimeDistanceM)} · 預計 {etaTime} 抵達
+                <div style={{ fontSize: 11, color: '#c084fc', fontWeight: 600 }}>
+                  媽媽線上即時語音陪伴 · 有狀況隨時說 💜
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button
-                onClick={() => router.push('/sos')}
-                style={{
-                  background: '#dc2626', border: 'none', color: 'white',
-                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer'
-                }}
-              >
-                🆘 SOS
-              </button>
-              <button
-                onClick={() => {
-                  setShowCompanionSplit(false)
-                  setTimeout(() => {
-                    if (mapInstance.current) {
-                      google.maps.event.trigger(mapInstance.current, 'resize')
-                    }
-                  }, 320)
-                }}
-                style={{
-                  background: 'rgba(255,255,255,0.12)', border: 'none', color: 'white',
-                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                }}
-              >
-                ▼ 收起
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setShowCompanionSplit(false)
+                setTimeout(() => {
+                  if (mapInstance.current) {
+                    google.maps.event.trigger(mapInstance.current, 'resize')
+                  }
+                }, 320)
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white',
+                borderRadius: 16, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >
+              ▼ 收起陪聊
+            </button>
           </div>
 
           {/* Companion Messages Area */}
