@@ -8,7 +8,7 @@ export interface LatLng {
   lng: number
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 
 let loaderConfigured = false
 let mapsReady = false

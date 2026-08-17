@@ -2,7 +2,7 @@
  * 沿途 24 小時營業「台灣便利商店」與「警察局 / 派出所」全涵蓋地圖標記工具
  */
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 
 export interface SafetyPlace {
   id: string
@@ -245,6 +245,7 @@ export async function drawAnxietyReportMarkers(
   map: google.maps.Map,
   infoWindow?: google.maps.InfoWindow
 ): Promise<google.maps.Marker[]> {
+  if (!BACKEND_URL) return []
   try {
     const res = await fetch(`${BACKEND_URL}/report`).catch(() => null)
     if (!res || !res.ok) return []
