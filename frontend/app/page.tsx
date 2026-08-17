@@ -667,8 +667,45 @@ export default function HomePage() {
                     />
                   ))
                 ) : (
-                  // 收下去時：只留使用者選中的那 1 條路線 RouteCard 資訊
+                  // 收下去時：頂部留有 3 條路線的快速切換 Tab 按鈕，下方顯示目前選中的 1 條路線詳細 RouteCard 資訊
                   <>
+                    {/* Quick Route Selector Segmented Tabs (切換選項按鈕列) */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
+                      {routes.map((route, idx) => {
+                        const isSelected = idx === selectedIdx
+                        return (
+                          <button
+                            key={idx}
+                            onClick={() => handleSelectRoute(idx)}
+                            style={{
+                              flex: 1,
+                              padding: '8px 6px',
+                              borderRadius: 14,
+                              border: isSelected ? `2px solid ${route.safety.color}` : '1px solid rgba(255,255,255,0.15)',
+                              background: isSelected
+                                ? `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.2)`
+                                : 'rgba(255,255,255,0.06)',
+                              color: 'white',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 2,
+                              transition: 'all 0.15s ease',
+                              boxShadow: isSelected ? `0 2px 10px ${route.safety.color}44` : 'none',
+                            }}
+                          >
+                            <div style={{ fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4, color: isSelected ? 'white' : 'rgba(255,255,255,0.8)' }}>
+                              {typeIconFor(route.typeLabel, 14)} {route.typeLabel}
+                            </div>
+                            <div style={{ fontSize: 11, color: isSelected ? route.safety.color : 'rgba(255,255,255,0.6)', fontWeight: 700 }}>
+                              {formatDuration(route.durationSec)} · {route.safety.total}分
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+
                     {routes[selectedIdx] && (
                       <RouteCard
                         route={routes[selectedIdx]}
@@ -676,22 +713,6 @@ export default function HomePage() {
                         onClick={() => {}}
                       />
                     )}
-                    <button
-                      onClick={() => setIsFullExpanded(true)}
-                      style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px dashed rgba(255,255,255,0.2)',
-                        color: 'rgba(255,255,255,0.7)',
-                        borderRadius: 14,
-                        padding: '8px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                      }}
-                    >
-                      ▲ 點擊或向上滑動，滿版展開查看其他 2 條路線詳細指標
-                    </button>
                   </>
                 )}
               </div>
