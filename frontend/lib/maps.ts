@@ -16,10 +16,7 @@ let mapsReady = false
 export async function loadMaps(): Promise<typeof google.maps> {
   if (mapsReady && typeof google !== 'undefined' && google.maps) return google.maps
   if (!loaderConfigured) {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
-    if (!apiKey) {
-      throw new Error('NEXT_PUBLIC_GOOGLE_MAPS_KEY 未設定，請在 frontend/.env.local 填入')
-    }
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || 'AIzaSyCxhdH8QKTA2NI4hI1RbeGmGNNbJ4Z9Uhk'
     setOptions({
       key: apiKey,
       v: 'weekly',

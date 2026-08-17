@@ -718,7 +718,7 @@ export default function HomePage() {
 }
 
 // ─── Dark Map Style ──────────────────────────────────────────────────────────
-const darkMapStyle: google.maps.MapTypeStyle[] = [
+const darkMapStyle: any[] = [
   { elementType: 'geometry', stylers: [{ color: '#111827' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },

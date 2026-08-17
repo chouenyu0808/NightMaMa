@@ -763,7 +763,7 @@ const floatingControlStyle: React.CSSProperties = {
 }
 
 // Google Navigation style map — standard, natural (green) colors
-const googleNavMapStyle: google.maps.MapTypeStyle[] = [
+const googleNavMapStyle: any[] = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
