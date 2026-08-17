@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
-import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget } from '@/components/Icons'
+import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget, IconHome, IconArrowUpDown, IconArrowRight, IconX, IconUser } from '@/components/Icons'
 
 interface RouteVisual {
   total: number
@@ -100,7 +100,7 @@ export default function HomePage() {
           zoom: 14.5,
           disableDefaultUI: true,
           gestureHandling: 'greedy',
-          styles: darkMapStyle,
+          styles: normalMapStyle,
         })
 
         setTimeout(() => {
@@ -439,9 +439,9 @@ export default function HomePage() {
                   <div style={{
                     width: 20, height: 20, borderRadius: '50%',
                     background: 'rgba(244,114,182,0.2)', border: '1px solid rgba(244,114,182,0.4)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}>
-                    🏠
+                    <IconHome size={11} color="#f472b6" />
                   </div>
                 </div>
 
@@ -486,11 +486,11 @@ export default function HomePage() {
                   style={{
                     width: 38, height: 38, borderRadius: '50%',
                     background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-                    color: '#a78bfa', fontSize: 16, cursor: 'pointer'
+                    color: '#a78bfa', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
                   }}
                   title="對調"
                 >
-                  ⇅
+                  <IconArrowUpDown size={16} color="#a78bfa" />
                 </button>
               </div>
 
@@ -506,7 +506,11 @@ export default function HomePage() {
                   cursor: 'pointer', boxShadow: '0 6px 20px rgba(124, 58, 237, 0.4)'
                 }}
               >
-                {isLoading ? '搜尋安心路線中...' : '帶我回家 ➔'}
+                {isLoading ? '搜尋安心路線中...' : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    帶我回家 <IconArrowRight size={16} color="white" />
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -525,7 +529,7 @@ export default function HomePage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#8b5cf6' }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{origin}</span>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>➔</span>
+                <IconArrowRight size={12} color="rgba(255,255,255,0.4)" />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#f472b6' }}>{destination}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -593,9 +597,9 @@ export default function HomePage() {
             </div>
             <button
               onClick={() => setShowSheet(false)}
-              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'rgba(255,255,255,0.7)', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer' }}
+              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'rgba(255,255,255,0.7)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             >
-              ✕
+              <IconX size={14} color="rgba(255,255,255,0.7)" />
             </button>
           </div>
 
@@ -654,11 +658,11 @@ export default function HomePage() {
               </div>
 
               <div style={{ display: 'flex', gap: 6 }}>
-                <span style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '2px 8px', borderRadius: 999 }}>
-                  🏪 {selectedRoute.storeCount || 4} 家24h超商
+                <span style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '2px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <IconStore size={12} color="#f97316" /> {selectedRoute.storeCount || 4} 家24h超商
                 </span>
-                <span style={{ background: 'rgba(30,58,138,0.3)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 999 }}>
-                  👮 {selectedRoute.policeCount || 2} 派出所
+                <span style={{ background: 'rgba(30,58,138,0.3)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <IconUser size={12} color="#93c5fd" /> {selectedRoute.policeCount || 2} 派出所
                 </span>
               </div>
             </div>
@@ -734,13 +738,16 @@ export default function HomePage() {
   )
 }
 
-// ─── Dark Map Style ──────────────────────────────────────────────────────────
-const darkMapStyle: any[] = [
-  { elementType: 'geometry', stylers: [{ color: '#111827' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#111827' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#374151' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+// ─── Normal (Light) Map Style — 與導航頁一致的自然色地圖 ──────────────────────
+const normalMapStyle: any[] = [
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e5e7eb' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#fde68a' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a5d8e8' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#d4ecd0' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#a8d5a2' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#eef3e8' }] },
 ]

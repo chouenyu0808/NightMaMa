@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { NavBar } from '@/app/components/NavBar'
+import { IconSettings, IconSend, IconTrash, IconCheckCircle, IconHeart, IconMoon, IconMap, IconCamera, IconMic, IconRoute } from '@/components/Icons'
 
 const CONTACTS_KEY = 'nightmama_contacts'
 const GEMINI_KEY_STORAGE = 'nightmama_gemini_key'
@@ -67,7 +68,7 @@ export default function SettingsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-primary)' }}>
       {/* Header */}
       <div style={{ padding: '52px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ fontWeight: 900, fontSize: 20 }}>⚙️ 設定</div>
+        <div style={{ fontWeight: 900, fontSize: 20, display: 'flex', alignItems: 'center', gap: 8 }}><IconSettings size={20} /> 設定</div>
         <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>管理緊急聯絡人與 LINE 通知</div>
       </div>
 
@@ -77,7 +78,7 @@ export default function SettingsPage() {
 
         {/* LINE Official Account Contact Setup */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>💚 LINE 緊急求救通知設定</div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><IconHeart size={16} color="#06C755" /> LINE 緊急求救通知設定</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
             一般使用者只需加入 <b>NightMaMa 官方帳號好友</b>，設定緊急聯絡人姓名與 LINE ID，觸發 SOS 時即可自動發送即時 GPS 定位警報！
           </div>

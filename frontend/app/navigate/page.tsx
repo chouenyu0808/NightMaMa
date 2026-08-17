@@ -6,24 +6,46 @@ import { Suspense } from 'react'
 import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, type RouteResult, type RouteStep } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
-import { IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle, IconSos } from '@/components/Icons'
+import {
+  IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle,
+  IconCornerUpRight, IconCornerUpLeft, IconArrowUp, IconFlag, IconSparkles, IconX,
+  IconSos, IconLoader, IconStore, IconMoon, IconSend, IconChevronDown, IconRoute,
+} from '@/components/Icons'
+
+type ManeuverIcon = 'right' | 'left' | 'slight-right' | 'slight-left' | 'uturn' | 'straight' | 'destination'
 
 interface NavStep {
   instruction: string
   distanceM: number
   maneuver: string
   streetName: string
-  icon: string
+  icon: ManeuverIcon
 }
 
-function getManeuverIcon(maneuver: string): string {
+function getManeuverIcon(maneuver: string): ManeuverIcon {
   const m = maneuver.toUpperCase()
-  if (m.includes('RIGHT')) return '↱'
-  if (m.includes('LEFT')) return '↰'
-  if (m.includes('SLIGHT_RIGHT') || m.includes('BEAR_RIGHT')) return '⬏'
-  if (m.includes('SLIGHT_LEFT') || m.includes('BEAR_LEFT')) return '⬎'
-  if (m.includes('UTURN')) return '↰↰'
-  return '⬆️'
+  if (m.includes('UTURN')) return 'uturn'
+  if (m.includes('SLIGHT_RIGHT') || m.includes('BEAR_RIGHT')) return 'slight-right'
+  if (m.includes('SLIGHT_LEFT') || m.includes('BEAR_LEFT')) return 'slight-left'
+  if (m.includes('RIGHT')) return 'right'
+  if (m.includes('LEFT')) return 'left'
+  return 'straight'
+}
+
+function StepIcon({ icon, size = 24, color = 'currentColor' }: { icon: ManeuverIcon; size?: number; color?: string }) {
+  switch (icon) {
+    case 'right':
+    case 'slight-right':
+    case 'uturn':
+      return <IconCornerUpRight size={size} color={color} />
+    case 'left':
+    case 'slight-left':
+      return <IconCornerUpLeft size={size} color={color} />
+    case 'destination':
+      return <IconFlag size={size} color={color} />
+    default:
+      return <IconArrowUp size={size} color={color} />
+  }
 }
 
 function parseStreetName(instruction: string): string {
@@ -60,7 +82,7 @@ function calculateHeading(lat1: number, lng1: number, lat2: number, lng2: number
 
 function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, destination: string): NavStep[] {
   if (points.length < 2) {
-    return [{ instruction: `前往 ${destination}`, distanceM: 100, maneuver: 'STRAIGHT', streetName: destination, icon: '⬆️' }]
+    return [{ instruction: `前往 ${destination}`, distanceM: 100, maneuver: 'STRAIGHT', streetName: destination, icon: 'straight' }]
   }
 
   const generated: NavStep[] = []
@@ -78,7 +100,7 @@ function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, de
         distanceM: Math.round(dist),
         maneuver: 'STRAIGHT',
         streetName: '起點路段',
-        icon: '⬆️',
+        icon: 'straight',
       })
       continue
     }
@@ -92,24 +114,24 @@ function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, de
 
       if (Math.abs(diff) > 25 || accumulatedDist > 220) {
         let maneuver = 'STRAIGHT'
-        let icon = '⬆️'
+        let icon: ManeuverIcon = 'straight'
         let turnName = '直行前進'
 
         if (diff >= 25 && diff < 110) {
           maneuver = 'TURN_RIGHT'
-          icon = '↱'
+          icon = 'right'
           turnName = '右轉'
         } else if (diff <= -25 && diff > -110) {
           maneuver = 'TURN_LEFT'
-          icon = '↰'
+          icon = 'left'
           turnName = '左轉'
         } else if (diff >= 110) {
           maneuver = 'SLIGHT_RIGHT'
-          icon = '⬏'
+          icon = 'slight-right'
           turnName = '斜右轉'
         } else if (diff <= -110) {
           maneuver = 'SLIGHT_LEFT'
-          icon = '⬎'
+          icon = 'slight-left'
           turnName = '斜左轉'
         }
 
@@ -130,7 +152,7 @@ function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, de
     distanceM: 0,
     maneuver: 'DESTINATION',
     streetName: destination.split('區')[1] || destination,
-    icon: '🎯',
+    icon: 'destination',
   })
 
   return generated
@@ -492,7 +514,7 @@ function NavigateContent() {
   }
 
   const currentStep = steps[currentStepIdx] || {
-    icon: '⬆️',
+    icon: 'straight' as ManeuverIcon,
     streetName: destination,
     instruction: `前往 ${destination}`,
     distanceM: distanceM,
@@ -544,7 +566,7 @@ function NavigateContent() {
             justifyContent: 'center',
             flexShrink: 0,
           }}>
-            {currentStep.icon}
+            <StepIcon icon={currentStep.icon} size={30} color="white" />
           </div>
 
           {/* Turn text */}
@@ -575,7 +597,6 @@ function NavigateContent() {
               background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
               border: 'none',
               color: 'white',
-              fontSize: 20,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -584,7 +605,7 @@ function NavigateContent() {
               flexShrink: 0,
             }}
           >
-            ✦
+            <IconSparkles size={20} color="white" />
           </button>
         </div>
 
@@ -605,7 +626,7 @@ function NavigateContent() {
             fontWeight: 600,
           }}>
             <span>接下來</span>
-            <span style={{ fontSize: 16 }}>{nextStep.icon}</span>
+            <StepIcon icon={nextStep.icon} size={16} />
             <span>{nextStep.streetName}</span>
           </div>
         )}
@@ -668,7 +689,7 @@ function NavigateContent() {
           }}
           title={showSafetyPlaces ? '隱藏超商/警局' : '顯示附近超商/警局'}
         >
-          {isLoadingSafetyPlaces ? '⏳' : '🏪'}
+          {isLoadingSafetyPlaces ? <IconLoader size={20} color="white" className="spin" /> : <IconStore size={20} color="white" />}
         </button>
       </div>
 
@@ -704,7 +725,6 @@ function NavigateContent() {
                 background: 'rgba(239,68,68,0.15)',
                 border: '1px solid rgba(239,68,68,0.4)',
                 color: '#ef4444',
-                fontSize: 18,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -712,7 +732,7 @@ function NavigateContent() {
               }}
               title="結束導航"
             >
-              ✕
+              <IconX size={18} color="#ef4444" />
             </button>
 
             {/* ETA Info Center */}
@@ -780,10 +800,10 @@ function NavigateContent() {
             </button>
             <button
               className="btn-primary btn-danger"
-              style={{ flex: 1, padding: '12px 6px', animation: 'none', fontSize: 13, fontWeight: 700 }}
+              style={{ flex: 1, padding: '12px 6px', animation: 'none', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={() => router.push('/sos')}
             >
-              🆘 SOS
+              <IconSos size={15} color="white" /> SOS
             </button>
           </div>
         </div>
@@ -818,15 +838,15 @@ function NavigateContent() {
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
                 background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
-                🌙
+                <IconMoon size={16} color="#7c2d12" />
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
                   NightMaMa AI 陪聊
-                  <span style={{ fontSize: 10, background: 'rgba(16,185,129,0.2)', color: '#34d399', padding: '1px 6px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.4)' }}>
-                    🟢 導航中 · {formatDuration(remainingSec)}
+                  <span style={{ fontSize: 10, background: 'rgba(16,185,129,0.2)', color: '#34d399', padding: '1px 6px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.4)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399' }} /> 導航中 · {formatDuration(remainingSec)}
                   </span>
                 </div>
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
@@ -840,10 +860,10 @@ function NavigateContent() {
                 onClick={() => router.push('/sos')}
                 style={{
                   background: '#dc2626', border: 'none', color: 'white',
-                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer'
+                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
                 }}
               >
-                🆘 SOS
+                <IconSos size={12} color="white" /> SOS
               </button>
               <button
                 onClick={() => {
@@ -856,10 +876,10 @@ function NavigateContent() {
                 }}
                 style={{
                   background: 'rgba(255,255,255,0.12)', border: 'none', color: 'white',
-                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
                 }}
               >
-                ▼ 收起
+                <IconChevronDown size={12} color="white" /> 收起
               </button>
             </div>
           </div>
@@ -893,8 +913,8 @@ function NavigateContent() {
               </div>
             ))}
             {isThinkingCompanion && (
-              <div style={{ alignSelf: 'flex-start', background: 'rgba(30,27,75,0.8)', padding: '8px 14px', borderRadius: 18, fontSize: 12, color: '#c084fc' }}>
-                💭 媽媽思考中...
+              <div style={{ alignSelf: 'flex-start', background: 'rgba(30,27,75,0.8)', padding: '8px 14px', borderRadius: 18, fontSize: 12, color: '#c084fc', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <IconLoader size={12} color="#c084fc" className="spin" /> 媽媽思考中...
               </div>
             )}
             <div ref={companionEndRef} />
@@ -916,12 +936,12 @@ function NavigateContent() {
                 width: 40, height: 40, borderRadius: '50%',
                 background: isListeningCompanion ? '#ef4444' : 'rgba(139, 92, 246, 0.25)',
                 border: isListeningCompanion ? '2px solid #f87171' : '1px solid rgba(139, 92, 246, 0.5)',
-                color: 'white', fontSize: 18, cursor: 'pointer',
+                color: 'white', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
               title={isListeningCompanion ? '按一下停止錄音' : '按一下開始語音輸入'}
             >
-              🎙️
+              <IconMic size={18} color="white" />
             </button>
 
             {/* Text Input Box */}
@@ -956,10 +976,11 @@ function NavigateContent() {
                 fontSize: 13,
                 fontWeight: 700,
                 cursor: companionInput.trim() ? 'pointer' : 'default',
-                opacity: companionInput.trim() ? 1 : 0.5
+                opacity: companionInput.trim() ? 1 : 0.5,
+                display: 'flex', alignItems: 'center', gap: 6
               }}
             >
-              傳送
+              <IconSend size={14} color="white" /> 傳送
             </button>
           </div>
         </div>
@@ -990,8 +1011,8 @@ function NavigateContent() {
           padding: '52px 20px 24px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 20, fontWeight: 900 }}>🔀 轉彎路線指引</div>
-            <button onClick={() => setShowStepsDrawer(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer' }}>✕</button>
+            <div style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}><IconRoute size={22} /> 轉彎路線指引</div>
+            <button onClick={() => setShowStepsDrawer(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', display: 'flex' }}><IconX size={24} color="white" /></button>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }} className="scrollable">
@@ -1008,7 +1029,7 @@ function NavigateContent() {
                   gap: 14,
                 }}
               >
-                <div style={{ fontSize: 28, width: 40, textAlign: 'center' }}>{step.icon}</div>
+                <div style={{ width: 40, display: 'flex', justifyContent: 'center' }}><StepIcon icon={step.icon} size={26} /></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{step.instruction.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{formatDistance(step.distanceM)}</div>
