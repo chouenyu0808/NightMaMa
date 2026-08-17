@@ -16,24 +16,14 @@ export default function SettingsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [name, setName] = useState('')
   const [lineToken, setLineToken] = useState('')
-  const [geminiKey, setGeminiKey] = useState('')
   const [saved, setSaved] = useState(false)
-  const [geminiKeySaved, setGeminiKeySaved] = useState(false)
   const [testSent, setTestSent] = useState(false)
   const [isSendingTest, setIsSendingTest] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem(CONTACTS_KEY)
     if (stored) setContacts(JSON.parse(stored))
-    const gk = localStorage.getItem(GEMINI_KEY_STORAGE)
-    if (gk) setGeminiKey(gk)
   }, [])
-
-  const saveGeminiKey = () => {
-    localStorage.setItem(GEMINI_KEY_STORAGE, geminiKey.trim())
-    setGeminiKeySaved(true)
-    setTimeout(() => setGeminiKeySaved(false), 2000)
-  }
 
   const saveContact = () => {
     if (!name.trim() || !lineToken.trim()) return
@@ -83,32 +73,7 @@ export default function SettingsPage() {
 
       <div className="scrollable" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 80 }}>
 
-        {/* Gemini AI Key setup */}
-        <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>🤖 Gemini AI 專屬 API Key 設定</div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14 }}>
-            輸入您自己的 Google AI Studio API Key，解鎖 100% 動態即時 Gemini AI 陪伴對話（非罐頭回覆）
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <input
-              className="input-field"
-              placeholder="貼上您的 Gemini API Key (例: AIzaSy...)"
-              value={geminiKey}
-              onChange={e => setGeminiKey(e.target.value)}
-              type="password"
-            />
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              📌 免費取得 Key：造訪{' '}
-              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>
-                aistudio.google.com/app/apikey
-              </a>
-              {' '}→ 點擊「Create API Key」免費複製
-            </div>
-            <button className="btn-primary" onClick={saveGeminiKey} style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)' }}>
-              {geminiKeySaved ? '✅ 已儲存 Gemini Key！' : '💾 儲存 Gemini API Key'}
-            </button>
-          </div>
-        </div>
+
 
         {/* LINE Notify setup */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
