@@ -92,6 +92,7 @@ export default function HomePage() {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [error, setError] = useState('')
   const [showSheet, setShowSheet] = useState(false)
+  const [navBarVisible, setNavBarVisible] = useState(false)
 
   // Init map when entering map state
   useEffect(() => {
@@ -379,6 +380,25 @@ export default function HomePage() {
     window.addEventListener('pointerup', onUp)
   }
 
+  // 底部導航列預設隱藏，往上滑手把才展開（節省地圖空間）
+  const navDragMovedRef = useRef(false)
+  const onNavHandleDragStart = (e: React.PointerEvent) => {
+    navDragMovedRef.current = false
+    const startY = e.clientY
+    const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientY - startY) > 10) navDragMovedRef.current = true
+    }
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      const delta = ev.clientY - startY
+      if (delta < -20) setNavBarVisible(true)
+      else if (delta > 20) setNavBarVisible(false)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
   const handleStartNavigation = () => {
     const route = routes[selectedIdx]
     if (!route) return
@@ -640,7 +660,19 @@ export default function HomePage() {
         </div>
       )}
 
-      {!(showSheet && routes.length > 0) && <NavBar active="home" />}
+      {/* 導航列預設收起，往上滑或點手把才顯示；路線結果面板顯示時完全讓出空間 */}
+      {!(showSheet && routes.length > 0) && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 55 }}>
+          {navBarVisible && <NavBar active="home" />}
+          <div
+            onClick={() => { if (!navDragMovedRef.current) setNavBarVisible(v => !v) }}
+            onPointerDown={onNavHandleDragStart}
+            style={{ display: 'flex', justifyContent: 'center', padding: navBarVisible ? '2px 0 6px' : '10px 0 14px', cursor: 'grab', touchAction: 'none' }}
+          >
+            <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.35)' }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
