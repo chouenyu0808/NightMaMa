@@ -152,9 +152,9 @@ export default function SettingsPage() {
           <div style={{ fontWeight: 700, marginBottom: 12 }}>🌙 關於 NightMaMa</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
             <div>🗺️ 路燈資料：台北市 145,919 盞路燈（data.taipei）</div>
-            <div>📹 CCTV 資料：台北市 417 支監視器</div>
-            <div>🤖 AI 陪聊：Google Gemini 2.0 Flash</div>
-            <div>🗺️ 地圖路線：Google Maps Routes API</div>
+            <div>📹 CCTV 資料：台北市 5,036 支警察局監視器</div>
+            <div>🤖 AI 陪聊：Google Gemini 3.6 Flash / 2.5 Flash</div>
+            <div>🗺️ 地圖路線：Google Maps Routes API (Custom Safety Matrix)</div>
           </div>
         </div>
       </div>
