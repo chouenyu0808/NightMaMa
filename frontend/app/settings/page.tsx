@@ -22,6 +22,7 @@ import {
 export default function SettingsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [lineUserId, setLineUserId] = useState('')
   const [inputError, setInputError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -71,25 +72,36 @@ export default function SettingsPage() {
 
   const saveContact = () => {
     const trimmedName = name.trim()
+    const trimmedPhone = phone.trim()
     const trimmedId = lineUserId.trim()
 
     if (!trimmedName) {
       setInputError('請輸入聯絡人姓名')
       return
     }
-    // 先擋掉格式錯誤，否則要等到真的觸發 SOS 才會發現通知送不出去
-    if (!LINE_USER_ID_PATTERN.test(trimmedId)) {
-      setInputError('LINE User ID 格式不正確，應為 U 開頭加上 32 個英數字元')
+    // LINE User ID 是選填：一般人在 LINE App 裡看不到自己的這組 ID
+    // （個人資料頁那個「用戶 ID」是搜尋用的，不能用於推播）。
+    // 沒填也能用 —— 通知會改走 LINE 分享連結。
+    // 但若填了格式錯的值就要擋，否則會等到真的求救時才發現送不出去。
+    if (trimmedId && !LINE_USER_ID_PATTERN.test(trimmedId)) {
+      setInputError('LINE User ID 格式不正確，應為 U 開頭加上 32 個英數字元。不確定就留空。')
+      return
+    }
+    if (!trimmedPhone && !trimmedId) {
+      setInputError('請至少填寫電話號碼，SOS 才能直接撥號')
       return
     }
 
     setInputError('')
-    const newContact: Contact = { id: Date.now().toString(), name: trimmedName, lineUserId: trimmedId }
+    const newContact: Contact = {
+      id: Date.now().toString(), name: trimmedName, phone: trimmedPhone, lineUserId: trimmedId,
+    }
     const updated = [...contacts, newContact]
     setContacts(updated)
     saveContacts(updated)
     syncContactsToBackend(updated)
     setName('')
+    setPhone('')
     setLineUserId('')
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -108,8 +120,19 @@ export default function SettingsPage() {
       '\n🌙 NightMaMa 測試通知\n\n你已成功設定 NightMaMa 緊急通知！\n當你的聯絡人觸發 SOS 時，你會收到即時定位通知。',
       targetId
     )
-    setTestResult({ ok: outcome.sent, text: outcome.message })
     setIsSendingTest(false)
+
+    if (outcome.sent) {
+      setTestResult({ ok: true, text: outcome.message })
+      setTimeout(() => setTestResult(null), 5000)
+      return
+    }
+    // 未綁定 LINE：導向分享連結。必須在這個點擊事件內導向，否則會被瀏覽器擋。
+    if (outcome.shareUrl) {
+      window.location.assign(outcome.shareUrl)
+      return
+    }
+    setTestResult({ ok: false, text: outcome.message })
     setTimeout(() => setTestResult(null), 5000)
   }
 
@@ -186,13 +209,23 @@ export default function SettingsPage() {
             />
             <input
               className="input-field"
-              placeholder="LINE User ID（U 開頭 33 碼，非顯示用的 LINE ID）"
+              type="tel"
+              placeholder="聯絡人電話（SOS 一鍵撥號用）"
+              value={phone}
+              onChange={e => { setPhone(e.target.value); setInputError('') }}
+            />
+            <input
+              className="input-field"
+              placeholder="LINE User ID（選填，留空即可）"
               value={lineUserId}
               onChange={e => { setLineUserId(e.target.value); setInputError('') }}
             />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              這裡要填的是聯絡人加入官方帳號後產生的 <b>User ID</b>（U 開頭 33 碼），
-              不是個人資料頁上的 LINE ID。請勿在此填入任何 access token。
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              <b>LINE User ID 可以留空。</b>那是 LINE 內部的推播 ID（U 開頭 33 碼），
+              一般人在 App 裡看不到 —— 個人資料頁上的「用戶 ID」是搜尋用的，並不通用。
+              <br />
+              留空時，SOS 與平安回報會開啟 LINE 並帶入預填訊息，由你選擇收件人送出，
+              一樣能用。請勿在此填入任何 access token。
             </div>
 
             {inputError && (
@@ -227,7 +260,10 @@ export default function SettingsPage() {
                   <div>
                     <div style={{ fontWeight: 600 }}>{contact.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      User ID: {contact.lineUserId.slice(0, 8)}…
+                      {contact.phone || '未填電話'}
+                      {contact.lineUserId
+                        ? ' · LINE 已綁定'
+                        : ' · LINE 未綁定（用分享連結）'}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>

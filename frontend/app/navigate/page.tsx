@@ -6,6 +6,8 @@ import { Suspense } from 'react'
 import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, type RouteResult, type RouteStep } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
+import SosOptionsSheet from '@/app/components/SosOptionsSheet'
+import ArrivalRatingModal from '@/app/components/ArrivalRatingModal'
 import {
   IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle,
   IconCornerUpRight, IconCornerUpLeft, IconArrowUp, IconFlag, IconSparkles, IconX,
@@ -193,6 +195,12 @@ function NavigateContent() {
   const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
+  const [showSosSheet, setShowSosSheet] = useState(false)
+
+  // 抵達判定：進入目的地 40m 內就跳出回報/評分視窗。
+  // 用 ref 記住是否已經跳過，避免在目的地附近來回走動時重複彈出。
+  const [showArrival, setShowArrival] = useState(false)
+  const hasArrivedRef = useRef(false)
 
   // ─── Split Screen AI Companion (body is the shared CompanionContent component) ─
   const [showCompanionSplit, setShowCompanionSplit] = useState(false)
@@ -441,6 +449,13 @@ function NavigateContent() {
             const remainingM = Math.round(haversineMeters(current.lat, current.lng, destPoint.lat, destPoint.lng))
             setRealtimeDistanceM(remainingM)
             setRemainingSec(Math.round(remainingM / 1.25)) // 1.25 m/s walking speed
+
+            // 抵達目的地 40m 內視為已抵達。取 40m 是因為手機 GPS 在
+            // 市區的誤差通常就有 10-20m，門檻太小會一直觸發不了。
+            if (remainingM <= 40 && !hasArrivedRef.current) {
+              hasArrivedRef.current = true
+              setShowArrival(true)
+            }
 
             // Find closest route point index
             let minIndex = 0
@@ -809,7 +824,7 @@ function NavigateContent() {
             <button
               className="btn-primary btn-danger"
               style={{ flex: 1, padding: '12px 6px', animation: 'none', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              onClick={() => router.push('/sos')}
+              onClick={() => setShowSosSheet(true)}
             >
               <IconSos size={15} color="white" /> SOS
             </button>
@@ -862,7 +877,7 @@ function NavigateContent() {
                 預計 <strong style={{ color: '#60a5fa' }}>{etaTime}</strong> 抵達
               </span>
               <button
-                onClick={() => router.push('/sos')}
+                onClick={() => setShowSosSheet(true)}
                 style={{
                   background: '#dc2626', border: '1px solid rgba(248,113,113,0.4)', color: 'white',
                   borderRadius: 12, padding: '3px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer',
@@ -896,6 +911,25 @@ function NavigateContent() {
           </div>
         </div>
       )}
+
+      {/* 導航中的 SOS 選項面板 */}
+      <SosOptionsSheet
+        isOpen={showSosSheet}
+        onClose={() => setShowSosSheet(false)}
+        currentPos={userPos}
+        destination={destination}
+      />
+
+      {/* 抵達目的地後的平安回報與路線評分 */}
+      <ArrivalRatingModal
+        isOpen={showArrival}
+        onClose={() => setShowArrival(false)}
+        origin={origin}
+        destination={destination}
+        routeType={searchParams.get('type') || '步行'}
+        safetyScore={safetyScore}
+        distanceM={distanceM}
+      />
 
       {/* Anxiety Report Modal */}
       <AnxietyReportModal

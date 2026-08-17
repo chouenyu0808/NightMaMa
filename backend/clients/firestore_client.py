@@ -170,3 +170,59 @@ def get_weight_overrides(db: firestore.Client, user_id: str | None) -> dict[str,
     if not doc.exists:
         return None
     return (doc.to_dict() or {}).get("weight_overrides")
+
+
+def add_route_rating(
+    db: firestore.Client,
+    user_id: str,
+    origin: str,
+    destination: str,
+    rating: int,
+    route_type: str,
+    safety_score: float | None,
+    distance_m: int,
+) -> None:
+    """抵達後的 1-5 分主觀安全評價。
+
+    同時記下當下的演算法分數（safety_score），日後才能比對「使用者實際感受」
+    與「路燈/CCTV 算出來的分數」差多少，用來校準權重與門檻。
+    """
+    db.collection("users").document(user_id).collection("route_ratings").add(
+        {
+            "origin": origin,
+            "destination": destination,
+            "rating": rating,
+            "route_type": route_type,
+            "safety_score": safety_score,
+            "distance_m": distance_m,
+            "rated_at": firestore.SERVER_TIMESTAMP,
+        }
+    )
+
+
+def list_route_ratings(db: firestore.Client, user_id: str, limit: int = 50) -> list[dict]:
+    docs = (
+        db.collection("users")
+        .document(user_id)
+        .collection("route_ratings")
+        .order_by("rated_at", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
+    )
+    out = []
+    for d in docs:
+        data = d.to_dict() or {}
+        ts = data.get("rated_at")
+        out.append(
+            {
+                "id": d.id,
+                "origin": data.get("origin", ""),
+                "destination": data.get("destination", ""),
+                "rating": data.get("rating", 0),
+                "route_type": data.get("route_type", ""),
+                "safety_score": data.get("safety_score"),
+                "distance_m": data.get("distance_m", 0),
+                "rated_at": int(ts.timestamp() * 1000) if ts else None,
+            }
+        )
+    return out

@@ -9,6 +9,9 @@ from models.schemas import (
     ConversationMessage,
     EmergencyContact,
     EmergencyContactsRequest,
+    RouteRatingItem,
+    RouteRatingRequest,
+    RouteRatingsResponse,
     SavedAddresses,
     UserProfile,
 )
@@ -76,4 +79,34 @@ def add_message(
     user_id: str, session_id: str, msg: ConversationMessage, db: firestore.Client = Depends(get_firestore)
 ) -> dict:
     firestore_client.add_conversation_message(db, user_id, session_id, msg.role, msg.text)
+    return {"status": "saved"}
+
+
+@router.get("/route-ratings", response_model=RouteRatingsResponse)
+def get_route_ratings(
+    user_id: str, limit: int = 50, db: firestore.Client = Depends(get_firestore)
+) -> RouteRatingsResponse:
+    rows = firestore_client.list_route_ratings(db, user_id, limit=limit)
+    return RouteRatingsResponse(ratings=[RouteRatingItem(**r) for r in rows])
+
+
+@router.post("/route-ratings", status_code=201)
+def add_route_rating(
+    user_id: str, req: RouteRatingRequest, db: firestore.Client = Depends(get_firestore)
+) -> dict:
+    """使用者抵達目的地後給這條路線的 1-5 分主觀安全評價。
+
+    rating 的範圍由 RouteRatingRequest 的 Field(ge=1, le=5) 驗證，
+    超出範圍會直接回 422，不會寫進 Firestore。
+    """
+    firestore_client.add_route_rating(
+        db,
+        user_id,
+        origin=req.origin,
+        destination=req.destination,
+        rating=req.rating,
+        route_type=req.route_type,
+        safety_score=req.safety_score,
+        distance_m=req.distance_m,
+    )
     return {"status": "saved"}

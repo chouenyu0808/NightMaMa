@@ -491,17 +491,9 @@ export default function HomePage() {
 
       const scored: ScoredRoute[] = []
 
-      // 1. 大眾運輸 (Transit) — if available
-      if (transitList.length > 0) {
-        const tr = transitList[0]
-        scored.push({
-          ...tr,
-          typeLabel: '大眾運輸',
-          description: tr.reason || `🚌 大眾運輸轉乘路線`,
-        })
-      }
-
-      // 2. Walking Routes processing (Safest, Fastest, Balanced with deduplication)
+      // 步行路線先放，大眾運輸最後 —— 陣列第一筆就是預設選中的路線，
+      // 而這個 App 的主要情境是「夜間獨自步行回家」，預設不該是搭車。
+      // 1. Walking Routes processing (Safest, Fastest, Balanced with deduplication)
       if (walkingList.length > 0) {
         // 評分是後端算的 0-100 分；顯示成 x/10 分
         const scoreText = (r: RouteResult) =>
@@ -559,6 +551,16 @@ export default function HomePage() {
             })
           }
         }
+      }
+
+      // 2. 大眾運輸 (Transit) — 放最後，作為額外選項而非預設
+      if (transitList.length > 0) {
+        const tr = transitList[0]
+        scored.push({
+          ...tr,
+          typeLabel: '大眾運輸',
+          description: tr.reason || `🚌 大眾運輸轉乘路線`,
+        })
       }
 
       setRoutes(scored)

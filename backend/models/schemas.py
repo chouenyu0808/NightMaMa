@@ -1,5 +1,5 @@
 """Pydantic request/response models shared across routers."""
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LatLng(BaseModel):
@@ -96,6 +96,9 @@ class SpeakResponse(BaseModel):
 class EmergencyContact(BaseModel):
     id: str
     name: str
+    phone: str = ""
+    # 一般使用者拿不到自己的 LINE userId（個人資料頁上的是搜尋用 LINE ID），
+    # 因此為選填；未綁定時前端改走 LINE 分享連結。
     line_user_id: str = ""
 
 
@@ -142,3 +145,24 @@ class NearestStoreResponse(BaseModel):
 class SavedAddresses(BaseModel):
     home: str = ""
     work: str = ""
+
+
+class RouteRatingRequest(BaseModel):
+    """抵達後對這條路線的主觀安全評價。"""
+    origin: str = ""
+    destination: str = ""
+    # 1 = 很不安, 5 = 很安心
+    rating: int = Field(ge=1, le=5)
+    route_type: str = ""
+    # 當下演算法算出的分數，用來比對主觀感受與客觀評分的落差
+    safety_score: float | None = None
+    distance_m: int = 0
+
+
+class RouteRatingItem(RouteRatingRequest):
+    id: str
+    rated_at: int | None = None
+
+
+class RouteRatingsResponse(BaseModel):
+    ratings: list[RouteRatingItem]
