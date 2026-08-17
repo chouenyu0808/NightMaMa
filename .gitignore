@@ -1,3 +1,31 @@
+# NightMaMa — 夜間安全導航
+
+.env
+.env.local
+.env*.local
+
+# Python
 __pycache__/
 *.pyc
-.env
+
+# Node
+node_modules/
+.npm
+npm-debug.log*
+
+# Next.js build
+frontend/.next/
+frontend/out/
+
+# Large raw data (already converted to JSON)
+data/TaipeiLight.csv
+
+# Duplicate data folder at root (only keep frontend/public/data/)
+public/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
