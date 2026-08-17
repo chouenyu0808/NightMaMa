@@ -487,12 +487,43 @@ export default function HomePage() {
       if (mapInstance.current && scored.length > 0) {
         searchNearbySafetyPlaces(mapInstance.current, scored[0].points).then((places) => {
           fetchedSafetyPlacesRef.current = places
+
+          // Compute TRUE route-specific spatial store and police counts for EACH route
+          const scoredWithCounts = scored.map(r => {
+            let storeCount = 0
+            let policeCount = 0
+
+            places.forEach(p => {
+              let minD = Infinity
+              for (let i = 0; i < r.points.length; i += 3) {
+                const pt = r.points[i]
+                const d = haversineM(p.lat, p.lng, pt.lat, pt.lng)
+                if (d < minD) minD = d
+                if (d <= 150) break
+              }
+
+              if (p.type === 'store' && minD <= 250) {
+                storeCount++
+              } else if (p.type === 'police' && minD <= 500) {
+                policeCount++
+              }
+            })
+
+            return {
+              ...r,
+              storeCount,
+              policeCount,
+            }
+          })
+
+          setRoutes(scoredWithCounts)
+
           if (mapInstance.current) {
             if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
             safetyMarkersRef.current.forEach(m => m.setMap(null))
             safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
           }
-          drawRoutes(scored, 0)
+          drawRoutes(scoredWithCounts, 0)
         }).catch(() => {
           drawRoutes(scored, 0)
         })
