@@ -7,6 +7,7 @@ import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, 
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import { IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle, IconSos } from '@/components/Icons'
+import { CompanionContent } from '@/app/companion/page'
 
 interface NavStep {
   instruction: string
@@ -790,30 +791,31 @@ function NavigateContent() {
       </div>
       )}
 
-      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 48dvh) ───────────── */}
+      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 52dvh) ───────────── */}
       {showCompanionSplit && (
         <div style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
-          height: '48dvh',
+          height: '52dvh',
           zIndex: 60,
-          background: 'rgba(15, 17, 35, 0.98)',
-          backdropFilter: 'blur(20px)',
-          borderTop: '1px solid rgba(167, 139, 250, 0.4)',
+          background: '#8cabd0',
+          borderTop: '2px solid rgba(255, 255, 255, 0.4)',
           boxShadow: '0 -10px 40px rgba(0,0,0,0.8)',
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
           animation: 'slideUp 0.3s ease-out'
         }}>
           {/* ─── 1. Navigation Live Activity "Now Bar" (Dynamic Island / Now Bar Style) ─── */}
           <div style={{
-            background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.95), rgba(15, 23, 42, 0.95))',
+            background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.98), rgba(15, 23, 42, 0.98))',
             borderBottom: '1px solid rgba(16, 185, 129, 0.3)',
             padding: '8px 14px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexShrink: 0,
+            zIndex: 10,
           }}>
             {/* Left: Live Pulsing Green Dot + Navigation Status + Time/Dist */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
@@ -845,38 +847,11 @@ function NavigateContent() {
             </div>
           </div>
 
-          {/* ─── 2. AI Companion Header Bar ─── */}
-          <div style={{
-            padding: '10px 14px',
-            background: 'rgba(30, 27, 75, 0.95)',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexShrink: 0,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
-                boxShadow: '0 0 12px rgba(250, 204, 21, 0.5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-                flexShrink: 0,
-              }}>
-                🌙
-              </div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>
-                  NightMaMa AI 陪聊
-                </div>
-                <div style={{ fontSize: 11, color: '#c084fc', fontWeight: 600 }}>
-                  媽媽線上即時語音陪伴 · 有狀況隨時說 💜
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
+          {/* ─── 2. Shared Authentic LINE-Style AI Companion Component ─── */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+            <CompanionContent
+              embeddedInNav={true}
+              onCloseNav={() => {
                 setShowCompanionSplit(false)
                 setTimeout(() => {
                   if (mapInstance.current) {
@@ -884,113 +859,13 @@ function NavigateContent() {
                   }
                 }, 320)
               }}
-              style={{
-                background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)', color: 'white',
-                borderRadius: 16, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                whiteSpace: 'nowrap', flexShrink: 0,
-              }}
-            >
-              ▼ 收起陪聊
-            </button>
-          </div>
-
-          {/* Companion Messages Area */}
-          <div style={{ flex: 1, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {companionMessages.map((msg, idx) => (
-              <div key={idx} style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              }}>
-                <div style={{
-                  maxWidth: '82%',
-                  padding: '10px 14px',
-                  borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                  background: msg.role === 'user'
-                    ? 'linear-gradient(135deg, #6366f1, #3b82f6)'
-                    : 'rgba(30, 27, 75, 0.95)',
-                  border: msg.role === 'user' ? 'none' : '1px solid rgba(167, 139, 250, 0.3)',
-                  color: 'white',
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                }}>
-                  {msg.text}
-                </div>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2, padding: '0 4px' }}>
-                  {msg.time}
-                </span>
-              </div>
-            ))}
-            {isThinkingCompanion && (
-              <div style={{ alignSelf: 'flex-start', background: 'rgba(30,27,75,0.8)', padding: '8px 14px', borderRadius: 18, fontSize: 12, color: '#c084fc' }}>
-                💭 媽媽思考中...
-              </div>
-            )}
-            <div ref={companionEndRef} />
-          </div>
-
-          {/* Companion Input Bar */}
-          <div style={{
-            padding: '10px 12px 14px',
-            background: 'rgba(10, 14, 26, 0.95)',
-            borderTop: '1px solid rgba(255,255,255,0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}>
-            {/* Speech Mic Button */}
-            <button
-              onClick={toggleSpeechRecognition}
-              style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: isListeningCompanion ? '#ef4444' : 'rgba(139, 92, 246, 0.25)',
-                border: isListeningCompanion ? '2px solid #f87171' : '1px solid rgba(139, 92, 246, 0.5)',
-                color: 'white', fontSize: 18, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-              title={isListeningCompanion ? '按一下停止錄音' : '按一下開始語音輸入'}
-            >
-              🎙️
-            </button>
-
-            {/* Text Input Box */}
-            <input
-              type="text"
-              value={companionInput}
-              onChange={e => setCompanionInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && sendCompanionMsg()}
-              placeholder={isListeningCompanion ? '聆聽語音中...' : '說點什麼或問問路線狀況...'}
-              style={{
-                flex: 1,
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 20,
-                padding: '10px 14px',
-                color: 'white',
-                fontSize: 13,
-                outline: 'none',
+              routeContext={{
+                origin,
+                destination,
+                safetyScore,
+                durationSec: remainingSec,
               }}
             />
-
-            {/* Send Button */}
-            <button
-              onClick={() => sendCompanionMsg()}
-              disabled={!companionInput.trim() || isThinkingCompanion}
-              style={{
-                background: companionInput.trim() ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'rgba(255,255,255,0.1)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 20,
-                padding: '10px 16px',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: companionInput.trim() ? 'pointer' : 'default',
-                opacity: companionInput.trim() ? 1 : 0.5
-              }}
-            >
-              傳送
-            </button>
           </div>
         </div>
       )}
