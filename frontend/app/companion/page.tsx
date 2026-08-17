@@ -322,11 +322,11 @@ function CompanionContent() {
     }
   }, [callActive, callState])
 
-  // Play Google Neural TTS Voice MP3 when call connected
+  // Play Google Gemini 3.1 Flash TTS Voice MP3 when call connected
   useEffect(() => {
     if (callActive && callState === 'connected') {
       if (!momVoiceAudioRef.current) {
-        momVoiceAudioRef.current = new Audio('/mom_voice.mp3')
+        momVoiceAudioRef.current = new Audio('/api/tts')
       }
       momVoiceAudioRef.current.play().catch(err => {
         console.warn('Google TTS MP3 play notice, falling back to WebSpeech:', err)

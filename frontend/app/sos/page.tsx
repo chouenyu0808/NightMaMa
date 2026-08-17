@@ -124,11 +124,11 @@ function SOSContent() {
 
   const voiceAudioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Play Google Cloud TTS Voice MP3 when fake call is answered
+  // Play Google Gemini 3.1 Flash TTS Voice MP3 when fake call is answered
   useEffect(() => {
     if (fakeCallActive && fakeCallState === 'connected') {
       if (!voiceAudioRef.current) {
-        voiceAudioRef.current = new Audio('/mom_voice.mp3')
+        voiceAudioRef.current = new Audio('/api/tts')
       }
       voiceAudioRef.current.play().catch(err => {
         console.warn('Google TTS MP3 play notice, falling back to WebSpeech:', err)
