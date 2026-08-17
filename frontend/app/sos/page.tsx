@@ -91,17 +91,17 @@ function SOSContent() {
     if (audioRef.current) {
       audioRef.current.play().catch(console.warn)
     } else {
-      audioRef.current = new Audio('/line_ringtone.wav')
+      audioRef.current = new Audio('/line_ringtone.mp3')
       audioRef.current.loop = true
       audioRef.current.play().catch(console.warn)
     }
   }
 
-  // Play authentic LINE Ringtone WAV when fake call ringing
+  // Play authentic 320k LINE Ringtone MP3 when fake call ringing
   useEffect(() => {
     if (fakeCallActive && fakeCallTimer > 0) {
       if (!audioRef.current) {
-        audioRef.current = new Audio('/line_ringtone.wav')
+        audioRef.current = new Audio('/line_ringtone.mp3')
         audioRef.current.loop = true
       }
       audioRef.current.play().then(() => setAudioUnlocked(true)).catch(err => {
