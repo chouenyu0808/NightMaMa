@@ -608,6 +608,32 @@ export default function HomePage() {
     setDestLatLng(tempOrigLatLng)
   }
 
+  const handleResetSearch = () => {
+    setShowSheet(false)
+    setRoutes([])
+
+    // 1. Clear all route polylines from map
+    polylinesRef.current.forEach(p => p.setMap(null))
+    polylinesRef.current = []
+
+    // 2. Clear route markers (start, end, bus stops, shields)
+    markersRef.current.forEach(m => m.setMap(null))
+    markersRef.current = []
+
+    // 3. Clear safety place markers
+    safetyMarkersRef.current.forEach(m => m.setMap(null))
+    safetyMarkersRef.current = []
+    fetchedSafetyPlacesRef.current = []
+
+    // 4. Recenter map cleanly on user GPS position
+    if (mapInstance.current) {
+      const center = userGpsRef.current || { lat: 25.0478, lng: 121.5170 }
+      mapInstance.current.setCenter(center)
+      mapInstance.current.setZoom(15)
+      updateUserGpsMarker(center)
+    }
+  }
+
   const selectedRoute = routes[selectedIdx] || {
     score: 88,
     lightCount: 45,
@@ -636,11 +662,11 @@ export default function HomePage() {
       }}>
         {/* Floating Top Header (when search sheet is closed) */}
         {!showSheet && (
-          <div style={{ padding: '20px 20px 0', pointerEvents: 'auto' }}>
+          <div style={{ padding: '10px 14px 0', pointerEvents: 'auto' }}>
             {/* Hero Brand Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
               <div>
-                <h1 style={{ fontSize: 32, fontWeight: 900, margin: 0, lineHeight: 1.1, textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
+                <h1 style={{ fontSize: 26, fontWeight: 900, margin: 0, lineHeight: 1.1, textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
                   Night<span style={{ background: 'linear-gradient(135deg,#a78bfa,#60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>MaMa</span>
                 </h1>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 600, textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}>
@@ -868,7 +894,7 @@ export default function HomePage() {
                   <IconAlertTriangle size={12} color="#f87171" /> 不安通報
                 </button>
                 <button
-                  onClick={() => setShowSheet(false)}
+                  onClick={handleResetSearch}
                   style={{
                     background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
                     color: '#c4b5fd', padding: '5px 9px', borderRadius: 10, fontSize: 11, fontWeight: 800,
@@ -927,7 +953,7 @@ export default function HomePage() {
               選取安心路線 ({routes.length} 條)
             </div>
             <button
-              onClick={() => setShowSheet(false)}
+              onClick={handleResetSearch}
               style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'rgba(255,255,255,0.7)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             >
               <IconX size={14} color="rgba(255,255,255,0.7)" />
