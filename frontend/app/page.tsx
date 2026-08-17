@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
 import { attachSafetyScores } from '@/lib/safetyScore'
+import { loadAddresses } from '@/lib/addresses'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers, haversineM, type SafetyPlace } from '@/lib/safetyPlaces'
 import { NavBar } from '@/app/components/NavBar'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
@@ -790,7 +791,7 @@ export default function HomePage() {
               <div style={{ display: 'flex', gap: 8, margin: '8px 0 10px' }}>
                 <button
                   onClick={() => {
-                    const home = localStorage.getItem('nightmama_home_address')
+                    const home = loadAddresses().home
                     if (home && home.trim()) {
                       handleSearch(home.trim())
                     } else {
@@ -809,7 +810,7 @@ export default function HomePage() {
                 </button>
                 <button
                   onClick={() => {
-                    const work = localStorage.getItem('nightmama_work_address')
+                    const work = loadAddresses().work
                     if (work && work.trim()) {
                       handleSearch(work.trim())
                     } else {

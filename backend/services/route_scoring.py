@@ -38,7 +38,11 @@ class ScoredRoute:
     segment_scores: list[float]
 
 
-def score_polylines(bq: bigquery.Client, polylines: list[str]) -> list[ScoredRoute]:
+def score_polylines(
+    bq: bigquery.Client,
+    polylines: list[str],
+    weights: dict[str, float] | None = None,
+) -> list[ScoredRoute]:
     """Score every encoded polyline, sharing one BigQuery job across all of them.
 
     The BigQuery helpers take a flat list of points and return a flat list of
@@ -101,12 +105,12 @@ def score_polylines(bq: bigquery.Client, polylines: list[str]) -> list[ScoredRou
                 # A polyline too short to yield even one segment can't be judged;
                 # 0.0 would read as "extremely dangerous" rather than "unknown",
                 # so callers should treat an empty-segment route as unscored.
-                score=round(score_route(segments), 1) if segments else 0.0,
+                score=round(score_route(segments, weights), 1) if segments else 0.0,
                 light_count=sum(s.light_count for s in segments),
                 camera_count=sum(s.camera_count for s in segments),
                 police_count=police_total,
                 store_count=len(stores),
-                segment_scores=[round(score_segment(s), 1) for s in segments],
+                segment_scores=[round(score_segment(s, weights), 1) for s in segments],
             )
         )
 

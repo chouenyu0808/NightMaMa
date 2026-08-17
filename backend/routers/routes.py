@@ -1,23 +1,38 @@
 """POST /routes — candidate routes ranked by segment-based safety score."""
 from fastapi import APIRouter, Depends
-from google.cloud import bigquery
+from google.cloud import bigquery, firestore
 
-from clients import maps_client
-from deps import get_bigquery
+from clients import firestore_client, maps_client
+from deps import get_bigquery, get_firestore
 from models.schemas import RouteOption, RouteRequest, RoutesResponse
 from services import route_scoring
 
 router = APIRouter()
 
 
+def _weights_from(overrides: dict[str, float] | None) -> dict[str, float]:
+    """Convert user weight overrides to a dict; returns defaults if empty."""
+    defaults = {"lighting": 0.40, "cctv": 0.25, "safe_haven": 0.35}
+    if not overrides:
+        return defaults
+    merged = {**defaults, **overrides}
+    return merged
+
+
 @router.post("/routes", response_model=RoutesResponse)
-def get_routes(req: RouteRequest, bq: bigquery.Client = Depends(get_bigquery)) -> RoutesResponse:
-    raw_routes = maps_client.compute_routes(req.origin, req.destination)
+def get_routes(
+    req: RouteRequest,
+    bq: bigquery.Client = Depends(get_bigquery),
+    db: firestore.Client = Depends(get_firestore),
+) -> RoutesResponse:
+    weights = _weights_from(req.weight_overrides or firestore_client.get_weight_overrides(db, user_id=None))
+
+    raw_routes = maps_client.compute_routes(req.origin, req.destination, waypoints=req.waypoints)
     if not raw_routes:
         return RoutesResponse(routes=[])
 
     polylines = [raw["polyline"]["encodedPolyline"] for raw in raw_routes]
-    scored = route_scoring.score_polylines(bq, polylines)
+    scored = route_scoring.score_polylines(bq, polylines, weights=weights)
 
     options: list[RouteOption] = []
     for raw, s in zip(raw_routes, scored):

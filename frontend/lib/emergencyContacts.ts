@@ -1,8 +1,11 @@
 /**
- * 緊急聯絡人（存在 localStorage）與 LINE 推播的共用邏輯。
+ * 緊急聯絡人（localStorage 為主、Firestore 為跨裝置同步）與 LINE 推播的共用邏輯。
  */
+import { getUserId } from './user'
 
 export const CONTACTS_KEY = 'nightmama_contacts'
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 
 /** LINE User ID 格式：U + 32 個十六進位字元 */
 export const LINE_USER_ID_PATTERN = /^U[0-9a-f]{32}$/i
@@ -49,6 +52,51 @@ export function saveContacts(contacts: Contact[]): void {
 /** 取出第一個有合法 LINE User ID 的聯絡人。 */
 export function primaryRecipient(): Contact | null {
   return loadContacts().find(c => LINE_USER_ID_PATTERN.test(c.lineUserId)) ?? null
+}
+
+// ─── Firestore 跨裝置同步 ───────────────────────────────────────────
+// 後端欄位名是 line_user_id，與前端的 lineUserId 對應。
+
+interface BackendContact {
+  id: string
+  name: string
+  line_user_id: string
+}
+
+/** 推送到 Firestore。後端不可用時靜默失敗，localStorage 已經存好。 */
+export async function syncContactsToBackend(contacts: Contact[]): Promise<void> {
+  const userId = getUserId()
+  if (!BACKEND_URL || !userId) return
+  try {
+    await fetch(`${BACKEND_URL}/users/${userId}/contacts`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contacts: contacts.map(c => ({ id: c.id, name: c.name, line_user_id: c.lineUserId })),
+      }),
+    })
+  } catch {
+    // 後端連不上，localStorage 仍是可用的來源
+  }
+}
+
+/** 從 Firestore 拉回聯絡人；沒有資料或後端不可用時回傳 null。 */
+export async function loadContactsFromBackend(): Promise<Contact[] | null> {
+  const userId = getUserId()
+  if (!BACKEND_URL || !userId) return null
+  try {
+    const res = await fetch(`${BACKEND_URL}/users/${userId}/contacts`)
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!Array.isArray(data?.contacts) || data.contacts.length === 0) return null
+    return (data.contacts as BackendContact[]).map(c => ({
+      id: c.id,
+      name: c.name,
+      lineUserId: (c.line_user_id ?? '').trim(),
+    }))
+  } catch {
+    return null
+  }
 }
 
 export interface NotifyOutcome {

@@ -6,10 +6,18 @@ import { IconSettings, IconHeart } from '@/components/Icons'
 import {
   loadContacts,
   saveContacts,
+  syncContactsToBackend,
+  loadContactsFromBackend,
   sendLineNotification,
   LINE_USER_ID_PATTERN,
   type Contact,
 } from '@/lib/emergencyContacts'
+import {
+  loadAddresses,
+  saveAddresses as persistAddresses,
+  syncAddressesToBackend,
+  loadAddressesFromBackend,
+} from '@/lib/addresses'
 
 export default function SettingsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -20,6 +28,7 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [isSendingTest, setIsSendingTest] = useState(false)
 
+  // 常用地址
   const [homeAddress, setHomeAddress] = useState('')
   const [workAddress, setWorkAddress] = useState('')
   const [addressSaved, setAddressSaved] = useState(false)
@@ -28,17 +37,36 @@ export default function SettingsPage() {
   // 包在 queueMicrotask 裡是為了避開 effect body 內同步 setState 造成的串接渲染。
   useEffect(() => {
     queueMicrotask(() => {
+      // 先讀本機，畫面立刻有東西
       setContacts(loadContacts())
-      setHomeAddress(localStorage.getItem('nightmama_home_address') ?? '')
-      setWorkAddress(localStorage.getItem('nightmama_work_address') ?? '')
+      const local = loadAddresses()
+      setHomeAddress(local.home)
+      setWorkAddress(local.work)
+
+      // 再嘗試用 Firestore 的資料覆蓋（跨裝置同步）
+      loadContactsFromBackend().then(remote => {
+        if (remote) {
+          setContacts(remote)
+          saveContacts(remote)
+        }
+      })
+      loadAddressesFromBackend().then(remote => {
+        if (remote) {
+          setHomeAddress(remote.home)
+          setWorkAddress(remote.work)
+          persistAddresses(remote)
+        }
+      })
     })
   }, [])
 
-  const saveAddresses = () => {
-    localStorage.setItem('nightmama_home_address', homeAddress.trim())
-    localStorage.setItem('nightmama_work_address', workAddress.trim())
+  const saveAddresses = async () => {
+    const addresses = { home: homeAddress.trim(), work: workAddress.trim() }
+    // persistAddresses 會同時寫新舊 localStorage key，首頁快捷標籤才讀得到
+    persistAddresses(addresses)
     setAddressSaved(true)
     setTimeout(() => setAddressSaved(false), 2000)
+    await syncAddressesToBackend(addresses)
   }
 
   const saveContact = () => {
@@ -60,6 +88,7 @@ export default function SettingsPage() {
     const updated = [...contacts, newContact]
     setContacts(updated)
     saveContacts(updated)
+    syncContactsToBackend(updated)
     setName('')
     setLineUserId('')
     setSaved(true)
@@ -70,6 +99,7 @@ export default function SettingsPage() {
     const updated = contacts.filter(c => c.id !== id)
     setContacts(updated)
     saveContacts(updated)
+    syncContactsToBackend(updated)
   }
 
   const sendTestNotification = async (targetId: string) => {
@@ -93,20 +123,16 @@ export default function SettingsPage() {
 
       <div className="scrollable" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 80 }}>
 
-
-
-        {/* 常用地址設定 (Home & Work Shortcut Addresses) */}
+        {/* 常用地址設定 */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>🏠 常用地址設定 (快捷一鍵帶入)</span>
-          </div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>🏠 常用地址設定 (快捷一鍵帶入)</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>
             預先設定您的住家與公司/學校地址，搜尋路線時只需點選「快捷標籤」，即可自動填入目的地進行安心路線規劃！
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', marginBottom: 4, display: 'block' }}>🏠 住家地址</label>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', marginBottom: 6 }}>🏠 住家地址</div>
               <input
                 className="input-field"
                 placeholder="例如：臺北市信義區市府路1號"
@@ -115,7 +141,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8', marginBottom: 4, display: 'block' }}>🏢 公司 / 學校地址</label>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399', marginBottom: 6 }}>🏢 公司 / 學校地址</div>
               <input
                 className="input-field"
                 placeholder="例如：臺北市大安區羅斯福路四段1號"
@@ -125,7 +151,7 @@ export default function SettingsPage() {
             </div>
 
             <button className="btn-primary" onClick={saveAddresses} style={{ marginTop: 4 }}>
-              {addressSaved ? '✅ 已成功儲存常用地址！' : '💾 儲存常用地址'}
+              {addressSaved ? '✅ 常用地址已儲存！' : '💾 儲存常用地址'}
             </button>
           </div>
         </div>

@@ -17,6 +17,12 @@ LIGHTING_WEIGHT = 0.40
 CCTV_WEIGHT = 0.25
 SAFE_HAVEN_WEIGHT = 0.35
 
+DEFAULT_WEIGHTS = {
+    "lighting": LIGHTING_WEIGHT,
+    "cctv": CCTV_WEIGHT,
+    "safe_haven": SAFE_HAVEN_WEIGHT,
+}
+
 # ponytail: hand-picked reference/decay constants against Taipei's actual streetlight
 # (145k) and CCTV (5k) coverage; revisit if real routes cluster near 0 or 100
 LIGHT_DENSITY_REF_PER_100M = 3.0  # streetlight count per 100m considered "fully lit"
@@ -68,11 +74,28 @@ def safe_haven_score(segment: Segment) -> float:
     return _proximity_score(segment.store_nearest_m, STORE_PROXIMITY_DECAY_M)
 
 
-def score_segment(segment: Segment) -> float:
-    return LIGHTING_WEIGHT * lighting_score(segment) + CCTV_WEIGHT * cctv_score(segment) + SAFE_HAVEN_WEIGHT * safe_haven_score(segment)
+def score_segment(segment: Segment, weights: dict[str, float] | None = None) -> float:
+    """Blend the three sub-scores. `weights` lets a user rebalance what matters to
+    them (e.g. weight lighting higher); omitted keys fall back to the defaults.
+
+    Weights are normalised so the result stays on the same 0-100 scale no matter
+    what the caller passes — otherwise a user whose overrides sum to 2.0 would get
+    scores near 200 and every route would read as "safe".
+    """
+    w = {**DEFAULT_WEIGHTS, **(weights or {})}
+    total = w["lighting"] + w["cctv"] + w["safe_haven"]
+    if total <= 0:
+        w = DEFAULT_WEIGHTS
+        total = 1.0
+
+    return (
+        w["lighting"] * lighting_score(segment)
+        + w["cctv"] * cctv_score(segment)
+        + w["safe_haven"] * safe_haven_score(segment)
+    ) / total
 
 
-def score_route(segments: list[Segment]) -> float:
+def score_route(segments: list[Segment], weights: dict[str, float] | None = None) -> float:
     if not segments:
         raise ValueError("route must have at least one segment")
-    return min(score_segment(s) for s in segments)
+    return min(score_segment(s, weights) for s in segments)

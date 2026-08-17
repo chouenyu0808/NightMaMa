@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     gcp_project_id: str = ""
+    # Firestore can live in a separate GCP project (e.g. your personal account)
+    firestore_project_id: str = ""  # falls back to gcp_project_id if empty
+    firestore_credentials_file: str = ""  # path to service-account JSON for Firestore only
     google_maps_api_key: str = ""
     gemini_api_key: str = ""
     geocoding_api_key: str = ""  # optional: separate GCP project/key for the one-off bulk geocode script

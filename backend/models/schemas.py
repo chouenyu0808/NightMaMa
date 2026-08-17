@@ -7,9 +7,15 @@ class LatLng(BaseModel):
     lng: float
 
 
+# Mapping of scoring factor name to its weight (0.0–1.0)
+WeightOverrides = dict[str, float]
+
+
 class RouteRequest(BaseModel):
     origin: LatLng
     destination: LatLng
+    weight_overrides: WeightOverrides | None = None
+    waypoints: list[LatLng] | None = None
 
 
 class RouteOption(BaseModel):
@@ -61,6 +67,9 @@ class ReportRequest(BaseModel):
     lat: float
     lng: float
     reason: str
+    category: str | None = None
+    address: str | None = None
+    user_id: str | None = None
 
 
 class ReportItem(BaseModel):
@@ -82,3 +91,54 @@ class SpeakRequest(BaseModel):
 
 class SpeakResponse(BaseModel):
     audio: str  # base64-encoded WAV, per Gemini TTS output_audio.data
+
+
+class EmergencyContact(BaseModel):
+    id: str
+    name: str
+    line_user_id: str = ""
+
+
+class EmergencyContactsRequest(BaseModel):
+    contacts: list[EmergencyContact]
+
+
+class UserProfile(BaseModel):
+    name: str = ""
+    phone: str = ""
+
+
+class ConversationMessage(BaseModel):
+    role: str
+    text: str
+    timestamp: int | None = None
+
+
+class ReportRecord(BaseModel):
+    id: str
+    user_id: str | None = None
+    lat: float
+    lng: float
+    category: str
+    address: str | None = None
+    timestamp: int
+
+
+class ReportListResponse(BaseModel):
+    reports: list[ReportRecord]
+
+
+class ConversationHistoryResponse(BaseModel):
+    messages: list[ConversationMessage]
+
+
+class NearestStoreResponse(BaseModel):
+    found: bool
+    name: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+
+class SavedAddresses(BaseModel):
+    home: str = ""
+    work: str = ""

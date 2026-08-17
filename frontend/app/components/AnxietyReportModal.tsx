@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { IconAlertTriangle, IconUser, IconBulb, IconVolume2, IconShield } from '@/components/Icons'
 import { sendLineNotification } from '@/lib/emergencyContacts'
+import { getUserId } from '@/lib/user'
 
 interface AnxietyReportModalProps {
   isOpen: boolean
@@ -66,7 +67,7 @@ export default function AnxietyReportModal({
       const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat, lng, category: categoryLabel, address: addressText }),
+        body: JSON.stringify({ lat, lng, category: categoryLabel, address: addressText, user_id: getUserId() }),
       })
       reportOk = res.ok
     } catch {
