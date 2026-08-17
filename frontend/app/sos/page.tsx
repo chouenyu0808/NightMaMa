@@ -127,9 +127,10 @@ function SOSContent() {
     if (fakeCallActive && fakeCallState === 'connected') {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel()
-        const utt = new SpeechSynthesisUtterance('喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！')
+        const script = '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
+        const utt = new SpeechSynthesisUtterance(script)
         utt.lang = 'zh-TW'
-        utt.rate = 1.0
+        utt.rate = 0.95
         utt.pitch = 1.05
         window.speechSynthesis.speak(utt)
       }
@@ -209,7 +210,7 @@ function SOSContent() {
           <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>媽咪</div>
           <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600 }}>LINE 通話中 {mins}:{secs}</div>
           <div className="glass-light" style={{ color: '#F3F4F6', textAlign: 'center', fontSize: 15, marginTop: 14, padding: '14px 20px', borderRadius: 18, lineHeight: 1.6, maxWidth: 300, background: 'rgba(255,255,255,0.08)' }}>
-            「喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！」
+            「喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！」
           </div>
         </div>
 
