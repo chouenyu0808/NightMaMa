@@ -68,6 +68,7 @@ export default function HomePage() {
           gestureHandling: 'greedy',
           styles: darkMapStyle,
         })
+        google.maps.event.trigger(mapInstance.current, 'resize')
         if (originInputRef.current) {
           autocompleteOriginRef.current = new google.maps.places.Autocomplete(originInputRef.current, {
             componentRestrictions: { country: 'tw' },
@@ -179,12 +180,15 @@ export default function HomePage() {
     // Bottom padding: ~90px if collapsed, ~240px if expanded
     const bottomPad = sheetCollapsed ? 90 : 240
 
-    mapInstance.current!.fitBounds(bounds, {
-      top: topPad,
-      bottom: bottomPad,
-      left: 35,
-      right: 35,
-    })
+    if (mapInstance.current) {
+      google.maps.event.trigger(mapInstance.current, 'resize')
+      mapInstance.current.fitBounds(bounds, {
+        top: topPad,
+        bottom: bottomPad,
+        left: 35,
+        right: 35,
+      })
+    }
   }, [])
 
   // Continuous GPS tracking with high accuracy

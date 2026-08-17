@@ -4,21 +4,31 @@
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
 import type { LatLng } from './safetyScore'
 
+let loaderConfigured = false
 let mapsReady = false
 
 export async function loadMaps(): Promise<typeof google.maps> {
-  if (mapsReady) return google.maps
-  const apiKey =
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
-    ('AIzaSy' + 'CxhdH8QKTA2NI4hI1RbeGmGNNbJ4Z9Uhk')
-  setOptions({
-    key: apiKey,
-    v: 'weekly',
-  })
-  await importLibrary('maps')
-  await importLibrary('places')
-  await importLibrary('geometry')
-  mapsReady = true
+  if (mapsReady && typeof google !== 'undefined' && google.maps) return google.maps
+  if (!loaderConfigured) {
+    const apiKey =
+      process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
+      ('AIzaSy' + 'CxhdH8QKTA2NI4hI1RbeGmGNNbJ4Z9Uhk')
+    try {
+      setOptions({
+        key: apiKey,
+        v: 'weekly',
+      })
+    } catch {}
+    loaderConfigured = true
+  }
+  try {
+    await importLibrary('maps')
+    await importLibrary('places')
+    await importLibrary('geometry')
+    mapsReady = true
+  } catch (err) {
+    console.warn('Google Maps importLibrary error:', err)
+  }
   return google.maps
 }
 
