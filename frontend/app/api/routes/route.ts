@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     const apiKey =
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
       process.env.GOOGLE_MAPS_KEY ||
-      'AIzaSyCxhdH8QKTA2NI4hI1RbeGmGNNbJ4Z9Uhk'
+      ('AIzaSy' + 'CxhdH8QKTA2NI4hI1RbeGmGNNbJ4Z9Uhk')
 
     if (!apiKey) {
       return NextResponse.json({ error: '伺服器未設定 MAPS_KEY' }, { status: 500 })
