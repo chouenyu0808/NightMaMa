@@ -37,3 +37,7 @@ Thumbs.db
 # Logs
 *.log
 nul 
+
+# Python 虛擬環境
+.venv/
+venv/
