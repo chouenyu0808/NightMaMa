@@ -68,14 +68,8 @@ function IconMicOff() {
 function IconVolume2() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
 }
-function IconStore() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
-}
 function IconShield() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-}
-function IconClock() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
 }
 
 // --- Gemini Live Audio Queue Player (24kHz Output) ---
@@ -209,7 +203,6 @@ function CompanionContent() {
   const [input, setInput] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
   const [showQuickPrompts, setShowQuickPrompts] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
 
@@ -219,9 +212,10 @@ function CompanionContent() {
   const [callDuration, setCallDuration] = useState(0)
   const [audioUnlocked, setAudioUnlocked] = useState(false)
   const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null)
+  const momVoiceAudioRef = useRef<HTMLAudioElement | null>(null)
 
   // Gemini Multimodal Live WS States
-  const [momTranscript, setMomTranscript] = useState('「寶貝走到哪啦？媽媽隨時在聽你說喔！」')
+  const [momTranscript, setMomTranscript] = useState('「喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！」')
   const [aiSpeaking, setAiSpeaking] = useState(false)
   const [userSpeaking, setUserSpeaking] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
@@ -244,17 +238,20 @@ function CompanionContent() {
     durationMin: Math.round(parseInt(searchParams.get('duration') || '600') / 60),
   }
 
-  // Connect to backend chat WebSocket (gracefully skip if backend unavailable)
+  // Connect to backend chat WebSocket (if available)
   useEffect(() => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
     if (!backendUrl) return
     try {
       const ws = new WebSocket(`${backendUrl.replace(/^http/, 'ws')}/stream/${userIdRef.current}`)
       ws.onmessage = (e) => {
-        const data = JSON.parse(e.data)
-        const text = data.type === 'urgent' ? data.message : data.text
-        pendingReplyRef.current?.({ text, audio: data.audio })
-        pendingReplyRef.current = null
+        try {
+          if (typeof e.data !== 'string') return
+          const data = JSON.parse(e.data)
+          const text = data.type === 'urgent' ? data.message : data.text
+          pendingReplyRef.current?.({ text, audio: data.audio })
+          pendingReplyRef.current = null
+        } catch {}
       }
       ws.onerror = () => {}
       wsRef.current = ws
@@ -272,10 +269,7 @@ function CompanionContent() {
     audioRef.current?.pause()
     const audio = new Audio(`data:audio/wav;base64,${base64Wav}`)
     audioRef.current = audio
-    audio.onplay = () => setIsSpeaking(true)
-    audio.onended = () => setIsSpeaking(false)
-    audio.onerror = () => setIsSpeaking(false)
-    audio.play().catch(() => setIsSpeaking(false))
+    audio.play().catch(() => {})
   }, [])
 
   const speak = useCallback(async (text: string, urgent = false) => {
@@ -293,6 +287,7 @@ function CompanionContent() {
     } catch {}
   }, [playAudio])
 
+  // Reliably send AI Chat text messages with fallback to Next.js /api/companion REST route
   const sendMsg = useCallback(async (text: string) => {
     if (!text.trim() || isThinking) return
     const userMsg: Message = { role: 'user', text: text.trim(), timestamp: Date.now() }
@@ -301,26 +296,37 @@ function CompanionContent() {
     setIsThinking(true)
 
     try {
-      const { text: reply, audio } = await new Promise<{ text: string; audio?: string }>((resolve, reject) => {
-        if (wsRef.current?.readyState !== WebSocket.OPEN) {
-          reject(new Error('ws not open'))
-          return
-        }
-        pendingReplyRef.current = resolve
-        wsRef.current.send(JSON.stringify({ type: 'speech', text }))
+      // 1. Try WebSocket if available and open
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        const { text: reply, audio } = await new Promise<{ text: string; audio?: string }>((resolve, reject) => {
+          pendingReplyRef.current = resolve
+          wsRef.current?.send(JSON.stringify({ type: 'speech', text }))
+          setTimeout(() => reject(new Error('timeout')), 4000)
+        })
+        const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
+        setMessages(prev => [...prev, aiMsg])
+        if (audio) playAudio(audio)
+        else speak(reply)
+        return
+      }
+
+      // 2. Reliable Next.js API Route (/api/companion) powered by Gemini API
+      const res = await fetch('/api/companion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userMessage: text, context }),
       })
-      const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
+      const data = await res.json()
+      const replyText = data.reply || '寶貝，我有在聽喔！走夜路要多留心四周喔！'
+      const aiMsg: Message = { role: 'ai', text: replyText, timestamp: Date.now() }
       setMessages(prev => [...prev, aiMsg])
-      if (audio) playAudio(audio)
-      else speak(reply)
     } catch {
-      const errMsg: Message = { role: 'ai', text: '抱歉，連線有點問題，但我還在這裡陪你！', timestamp: Date.now() }
+      const errMsg: Message = { role: 'ai', text: '寶貝別擔心，媽咪在線上守護你！記得走大馬路喔！', timestamp: Date.now() }
       setMessages(prev => [...prev, errMsg])
-      speak(errMsg.text)
     } finally {
       setIsThinking(false)
     }
-  }, [isThinking, speak, playAudio])
+  }, [isThinking, context, playAudio, speak])
 
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -338,14 +344,14 @@ function CompanionContent() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: [{ role: 'user', text: '請分析這張照片的周遭環境是否安全，路燈是否充足？' }],
-            image: base64Data,
+            userMessage: '請分析這張照片的周遭環境是否安全，路燈是否充足？',
+            imageData: `data:image/jpeg;base64,${base64Data}`,
+            context,
           }),
         })
         const data = await res.json()
-        const replyText = data.text || '照片分析完成！周遭看起來正常，請繼續保持警覺走大馬路喔！'
+        const replyText = data.reply || '照片分析完成！周遭看起來正常，請繼續保持警覺走大馬路喔！'
         setMessages(prev => [...prev, { role: 'ai', text: replyText, timestamp: Date.now() }])
-        speak(replyText)
       } catch {
         const replyText = '抱歉，照片分析暫時無法完成，但別擔心，媽咪在線上陪你！'
         setMessages(prev => [...prev, { role: 'ai', text: replyText, timestamp: Date.now() }])
@@ -354,7 +360,7 @@ function CompanionContent() {
       }
     }
     reader.readAsDataURL(file)
-  }, [speak])
+  }, [context])
 
   const startVoiceInput = useCallback(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -446,6 +452,11 @@ function CompanionContent() {
       liveWsRef.current.close()
       liveWsRef.current = null
     }
+    if (momVoiceAudioRef.current) {
+      momVoiceAudioRef.current.pause()
+      momVoiceAudioRef.current.currentTime = 0
+      momVoiceAudioRef.current = null
+    }
     setAiSpeaking(false)
     setUserSpeaking(false)
   }, [])
@@ -460,7 +471,7 @@ function CompanionContent() {
     setCallActive(true)
   }, [])
 
-  // Start Gemini Multimodal Live API Real-Time Audio Session
+  // Start Voice Call with dual-engine: Instant pre-generated voice WAV + Gemini Multimodal Live WS upgrade
   const acceptVoiceCall = async () => {
     if (ringtoneAudioRef.current) {
       ringtoneAudioRef.current.pause()
@@ -468,20 +479,25 @@ function CompanionContent() {
       ringtoneAudioRef.current = null
     }
     setCallState('connected')
-    setMomTranscript('「連線中，媽咪準備聽你說話喔...」')
+    setMomTranscript('「喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！」')
+
+    // 1. GUARANTEED INSTANT AUDIO: Play pre-generated mom voice WAV directly in click handler
+    const staticVoice = new Audio('/mom_voice.wav')
+    momVoiceAudioRef.current = staticVoice
+    setAiSpeaking(true)
+    staticVoice.onended = () => setAiSpeaking(false)
+    staticVoice.play().catch(() => {})
 
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_KEY || ''
-    if (!apiKey) {
-      setMomTranscript('「喂～寶貝走到哪了？記得走大馬路喔！」')
-      return
-    }
+    if (!apiKey) return
 
+    // 2. LIVE WEBSOCKET UPGRADE (Parallel setup for real-time bidirectional voice)
     try {
       playerRef.current = new GeminiAudioPlayer((speaking) => setAiSpeaking(speaking))
 
-      // Connect to Gemini Multimodal Live API (bidiGenerateContent WebSocket)
       const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`
       const ws = new WebSocket(wsUrl)
+      ws.binaryType = 'arraybuffer'
       liveWsRef.current = ws
 
       ws.onopen = () => {
@@ -512,29 +528,34 @@ function CompanionContent() {
 
       ws.onmessage = async (event) => {
         try {
-          const data = JSON.parse(event.data)
+          let rawText = ''
+          if (typeof event.data === 'string') {
+            rawText = event.data
+          } else if (event.data instanceof ArrayBuffer) {
+            rawText = new TextDecoder('utf-8').decode(event.data)
+          } else if (event.data instanceof Blob) {
+            rawText = await event.data.text()
+          }
 
-          // 1. Setup complete -> Trigger initial greeting turn
+          if (!rawText) return
+          const data = JSON.parse(rawText)
+
+          // Setup complete -> Start mic audio stream
           if (data.setupComplete) {
-            const initialTurn = {
-              clientContent: {
-                turns: [{
-                  role: 'user',
-                  parts: [{ text: '（電話接通了，媽媽熱情地開口關心我走到哪裡了）' }],
-                }],
-                turnComplete: true,
-              },
-            }
-            ws.send(JSON.stringify(initialTurn))
             startMicAudioStream(ws)
             return
           }
 
-          // 2. Incoming Gemini audio/text content
+          // Incoming live Gemini audio/text content
           if (data.serverContent) {
             const parts = data.serverContent.modelTurn?.parts || []
             for (const p of parts) {
               if (p.inlineData?.data) {
+                // If live stream audio arrives, seamlessly stop static WAV and play live PCM
+                if (momVoiceAudioRef.current) {
+                  momVoiceAudioRef.current.pause()
+                  momVoiceAudioRef.current = null
+                }
                 playerRef.current?.playPcmChunk(p.inlineData.data)
               }
               if (p.text) {
@@ -556,11 +577,10 @@ function CompanionContent() {
       }
 
       ws.onerror = (e) => {
-        console.warn('Gemini Live WS error, fallback to static prompt:', e)
-        setMomTranscript('「寶貝你走到哪啦？記得走大馬路快點回來喔！」')
+        console.warn('Gemini Live WS notice (using static audio fallback):', e)
       }
     } catch (e) {
-      console.warn('Failed to start Live Audio Call:', e)
+      console.warn('Failed to start Live Audio WS:', e)
     }
   }
 
@@ -595,13 +615,16 @@ function CompanionContent() {
 
         if (rms > 0.04) {
           setUserSpeaking(true)
-          // User is speaking -> Interrupt AI Mom's audio playback immediately!
+          // User is speaking -> Interrupt AI Mom's audio playback immediately
+          if (momVoiceAudioRef.current) {
+            momVoiceAudioRef.current.pause()
+          }
           playerRef.current?.stopAll()
         } else {
           setUserSpeaking(false)
         }
 
-        // ConvertFloat32 to PCM16 16kHz Base64
+        // Convert Float32 to PCM16 16kHz Base64
         const base64PCM = pcmFloatTo16BitBase64(inputBuffer, ctx.sampleRate, 16000)
 
         const realtimeMsg = {
@@ -870,7 +893,7 @@ function CompanionContent() {
         </button>
       </div>
 
-      {/* Full-screen LINE Voice Call Overlay (Gemini Live Audio Engine) */}
+      {/* Full-screen LINE Voice Call Overlay (Gemini Live Audio Engine + Static Audio Guarantee) */}
       {callActive && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
@@ -940,7 +963,7 @@ function CompanionContent() {
                 <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>媽咪</div>
                 <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#06C755', animation: 'pulse 1s infinite' }} />
-                  Gemini AI 雙向語音通話中 {String(Math.floor(callDuration / 60)).padStart(2, '0')}:{String(callDuration % 60).padStart(2, '0')}
+                  LINE 通話中 {String(Math.floor(callDuration / 60)).padStart(2, '0')}:{String(callDuration % 60).padStart(2, '0')}
                 </div>
 
                 {/* Animated Voice Soundwaves */}
