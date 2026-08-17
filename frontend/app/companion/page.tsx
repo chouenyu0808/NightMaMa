@@ -322,25 +322,9 @@ function CompanionContent() {
     }
   }, [callActive, callState])
 
-  // Play Google Gemini 3.1 Flash TTS Voice MP3 when call connected
+  // Handle Mom Voice MP3 cleanup
   useEffect(() => {
-    if (callActive && callState === 'connected') {
-      if (!momVoiceAudioRef.current) {
-        momVoiceAudioRef.current = new Audio('/api/tts')
-      }
-      momVoiceAudioRef.current.play().catch(err => {
-        console.warn('Google TTS MP3 play notice, falling back to WebSpeech:', err)
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-          window.speechSynthesis.cancel()
-          const script = '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
-          const utt = new SpeechSynthesisUtterance(script)
-          utt.lang = 'zh-TW'
-          utt.rate = 0.95
-          utt.pitch = 1.05
-          window.speechSynthesis.speak(utt)
-        }
-      })
-    } else {
+    if (!callActive || callState !== 'connected') {
       if (momVoiceAudioRef.current) {
         momVoiceAudioRef.current.pause()
         momVoiceAudioRef.current.currentTime = 0
@@ -365,6 +349,12 @@ function CompanionContent() {
       ringtoneAudioRef.current.pause()
       ringtoneAudioRef.current.currentTime = 0
     }
+    // Play MP3 voice directly inside user click handler to satisfy browser autoplay policy
+    if (!momVoiceAudioRef.current) {
+      momVoiceAudioRef.current = new Audio('/api/tts')
+    }
+    momVoiceAudioRef.current.currentTime = 0
+    momVoiceAudioRef.current.play().catch(console.warn)
     setCallState('connected')
   }
 

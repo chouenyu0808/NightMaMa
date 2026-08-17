@@ -124,25 +124,9 @@ function SOSContent() {
 
   const voiceAudioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Play Google Gemini 3.1 Flash TTS Voice MP3 when fake call is answered
+  // Handle Voice MP3 cleanup
   useEffect(() => {
-    if (fakeCallActive && fakeCallState === 'connected') {
-      if (!voiceAudioRef.current) {
-        voiceAudioRef.current = new Audio('/api/tts')
-      }
-      voiceAudioRef.current.play().catch(err => {
-        console.warn('Google TTS MP3 play notice, falling back to WebSpeech:', err)
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-          window.speechSynthesis.cancel()
-          const script = '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
-          const utt = new SpeechSynthesisUtterance(script)
-          utt.lang = 'zh-TW'
-          utt.rate = 0.95
-          utt.pitch = 1.05
-          window.speechSynthesis.speak(utt)
-        }
-      })
-    } else {
+    if (!fakeCallActive || fakeCallState !== 'connected') {
       if (voiceAudioRef.current) {
         voiceAudioRef.current.pause()
         voiceAudioRef.current.currentTime = 0
@@ -161,6 +145,11 @@ function SOSContent() {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
     }
+    if (!voiceAudioRef.current) {
+      voiceAudioRef.current = new Audio('/api/tts')
+    }
+    voiceAudioRef.current.currentTime = 0
+    voiceAudioRef.current.play().catch(console.warn)
     setFakeCallState('connected')
   }
 
