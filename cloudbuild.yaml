@@ -21,8 +21,8 @@ substitutions:
   _WEB_SERVICE: nightmama-web
   _API_SERVICE: nightmama-api
   # 前端呼叫後端、後端 CORS 白名單都用得到；服務網址穩定不會變動。
-  _API_URL: https://nightmama-api-l4hrcsampa-de.a.run.app
-  _WEB_URL: https://nightmama-web-l4hrcsampa-de.a.run.app
+  _API_URL: https://nightmama-api-321739351322.asia-east1.run.app
+  _WEB_URL: https://nightmama-web-321739351322.asia-east1.run.app
 
 availableSecrets:
   secretManager:

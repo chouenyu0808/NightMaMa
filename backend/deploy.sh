@@ -19,7 +19,7 @@ IMAGE="gcr.io/$GCP_PROJECT/$SERVICE_NAME"
 # 前端的 Cloud Run 網址，用來設定 CORS 白名單。
 # 前端若全部透過 /api/score 代理（預設作法），瀏覽器不會直連後端，
 # 這個值只是保險；仍請勿設成 "*"。
-FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://nightmama-web-l4hrcsampa-de.a.run.app}"
+FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://nightmama-web-321739351322.asia-east1.run.app}"
 # ────────────────────────────────────────────────────
 
 set -a
