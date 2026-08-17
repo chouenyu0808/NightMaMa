@@ -1,0 +1,34 @@
+# `gcloud builds submit` 的上傳排除清單。
+#
+# ⚠️ 一旦這個檔案存在，gcloud 就「不再」回退去讀 .gitignore，
+# 因此所有敏感檔案都必須在這裡再排除一次，否則 .env 會被上傳到
+# Cloud Storage 的 build source bucket。
+
+# 秘密
+.env
+.env.local
+**/.env
+**/.env.local
+**/.env*.local
+
+# 版控與依賴
+.git/
+.gitignore
+**/node_modules/
+**/.next/
+**/out/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/venv/
+**/tsconfig.tsbuildinfo
+
+# 8MB 的台北市路燈開放資料：只有一次性的 scripts/import_bigquery.py 會用到，
+# 容器建置完全不需要，排除後 build context 從 ~18MB 降到 1MB 以內。
+frontend/data/
+backend/data/
+
+# 文件與大圖
+docs/
+*.md
+images.jpg

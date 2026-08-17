@@ -11,6 +11,11 @@
 #   - 伺服器端金鑰一律用 Cloud Run 的 --set-secrets 在 runtime 掛載，
 #     不會像 --set-env-vars 那樣明文顯示在服務設定頁。
 
+# 映像標籤用 $BUILD_ID 而不是 $SHORT_SHA：
+# SHORT_SHA 只在觸發器建置時有值，手動執行 `gcloud builds submit` 時是空字串，
+# 會產生 "gcr.io/<proj>/nightmama-web:" 這種缺標籤的名稱而讓建置失敗。
+# BUILD_ID 兩種情況都一定有值，且每次建置唯一、可回查。
+
 substitutions:
   _REGION: asia-east1
   _WEB_SERVICE: nightmama-web
@@ -43,7 +48,7 @@ steps:
         set -e
         docker build \
           --build-arg NEXT_PUBLIC_GOOGLE_MAPS_KEY="$$MAPS_BROWSER_KEY" \
-          -t gcr.io/$PROJECT_ID/$_WEB_SERVICE:$SHORT_SHA \
+          -t gcr.io/$PROJECT_ID/$_WEB_SERVICE:$BUILD_ID \
           -t gcr.io/$PROJECT_ID/$_WEB_SERVICE:latest \
           frontend
 
@@ -59,7 +64,7 @@ steps:
     args:
       - build
       - -t
-      - gcr.io/$PROJECT_ID/$_API_SERVICE:$SHORT_SHA
+      - gcr.io/$PROJECT_ID/$_API_SERVICE:$BUILD_ID
       - -t
       - gcr.io/$PROJECT_ID/$_API_SERVICE:latest
       - backend
@@ -82,7 +87,7 @@ steps:
       - run
       - deploy
       - $_API_SERVICE
-      - --image=gcr.io/$PROJECT_ID/$_API_SERVICE:$SHORT_SHA
+      - --image=gcr.io/$PROJECT_ID/$_API_SERVICE:$BUILD_ID
       - --region=$_REGION
       - --platform=managed
       - --allow-unauthenticated
@@ -104,7 +109,7 @@ steps:
       - run
       - deploy
       - $_WEB_SERVICE
-      - --image=gcr.io/$PROJECT_ID/$_WEB_SERVICE:$SHORT_SHA
+      - --image=gcr.io/$PROJECT_ID/$_WEB_SERVICE:$BUILD_ID
       - --region=$_REGION
       - --platform=managed
       - --allow-unauthenticated
@@ -146,5 +151,5 @@ steps:
     waitFor: [deploy-web]
 
 images:
-  - gcr.io/$PROJECT_ID/$_WEB_SERVICE:$SHORT_SHA
-  - gcr.io/$PROJECT_ID/$_API_SERVICE:$SHORT_SHA
+  - gcr.io/$PROJECT_ID/$_WEB_SERVICE:$BUILD_ID
+  - gcr.io/$PROJECT_ID/$_API_SERVICE:$BUILD_ID
