@@ -672,16 +672,15 @@ function NavigateContent() {
         </button>
       </div>
 
-      {/* ─── Bottom Google Navigation Bar (ETA Card) ─────────────────────────── */}
-      <div style={{
-        position: 'absolute',
-        bottom: showCompanionSplit ? '38dvh' : 0,
-        left: 0, right: 0,
-        zIndex: 70,
-        padding: showCompanionSplit ? '6px 12px' : '12px 16px 28px',
-        background: showCompanionSplit ? 'rgba(10, 14, 26, 0.95)' : 'linear-gradient(to top, rgba(10,14,26,0.98) 85%, transparent)',
-        transition: 'all 0.3s ease-in-out',
-      }}>
+      {/* ─── Bottom Google Navigation Bar (ETA Card) — Hidden when AI Companion is Open ─── */}
+      {!showCompanionSplit && (
+        <div style={{
+          position: 'absolute',
+          bottom: 0, left: 0, right: 0,
+          zIndex: 50,
+          padding: '12px 16px 28px',
+          background: 'linear-gradient(to top, rgba(10,14,26,0.98) 85%, transparent)',
+        }}>
         <div style={{
           background: 'rgba(17,24,39,0.9)',
           borderRadius: 24,
@@ -789,15 +788,16 @@ function NavigateContent() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 38dvh) ───────────── */}
+      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 45dvh) ───────────── */}
       {showCompanionSplit && (
         <div style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
-          height: '38dvh',
+          height: '45dvh',
           zIndex: 60,
-          background: 'rgba(15, 17, 35, 0.96)',
+          background: 'rgba(15, 17, 35, 0.98)',
           backdropFilter: 'blur(20px)',
           borderTop: '1px solid rgba(167, 139, 250, 0.4)',
           boxShadow: '0 -10px 40px rgba(0,0,0,0.8)',
@@ -807,8 +807,8 @@ function NavigateContent() {
         }}>
           {/* Companion Drawer Header Bar */}
           <div style={{
-            padding: '12px 16px',
-            background: 'rgba(30, 27, 75, 0.9)',
+            padding: '10px 14px',
+            background: 'rgba(30, 27, 75, 0.95)',
             borderBottom: '1px solid rgba(255,255,255,0.08)',
             display: 'flex',
             alignItems: 'center',
@@ -823,32 +823,45 @@ function NavigateContent() {
                 🌙
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
                   NightMaMa AI 陪聊
                   <span style={{ fontSize: 10, background: 'rgba(16,185,129,0.2)', color: '#34d399', padding: '1px 6px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.4)' }}>
-                    🟢 線上陪伴中
+                    🟢 導航中 · {formatDuration(remainingSec)}
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>導航持續進行中 · 雙向語音守護</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+                  {formatDistance(realtimeDistanceM)} · 預計 {etaTime} 抵達
+                </div>
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                setShowCompanionSplit(false)
-                setTimeout(() => {
-                  if (mapInstance.current) {
-                    google.maps.event.trigger(mapInstance.current, 'resize')
-                  }
-                }, 320)
-              }}
-              style={{
-                background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white',
-                borderRadius: 16, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
-              }}
-            >
-              ▼ 收起
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => router.push('/sos')}
+                style={{
+                  background: '#dc2626', border: 'none', color: 'white',
+                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer'
+                }}
+              >
+                🆘 SOS
+              </button>
+              <button
+                onClick={() => {
+                  setShowCompanionSplit(false)
+                  setTimeout(() => {
+                    if (mapInstance.current) {
+                      google.maps.event.trigger(mapInstance.current, 'resize')
+                    }
+                  }, 320)
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.12)', border: 'none', color: 'white',
+                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                }}
+              >
+                ▼ 收起
+              </button>
+            </div>
           </div>
 
           {/* Companion Messages Area */}
