@@ -1,5 +1,5 @@
 /**
- * 沿途 24 小時營業超商 (7-ELEVEN / 全家) 與警察局 (派出所) 智慧過濾與地圖標記工具
+ * 沿途 24 小時營業「台灣四大超商」(7-11, 全家, 萊爾富, OK) 與警察局智慧過濾與地圖標記工具
  */
 
 export interface SafetyPlace {
@@ -8,6 +8,7 @@ export interface SafetyPlace {
   lat: number
   lng: number
   type: 'store' | 'police'
+  brand?: '7-11' | '全家' | '萊爾富' | 'OK'
   vicinity?: string
   distanceToRouteM?: number
 }
@@ -22,6 +23,32 @@ function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): num
     Math.sin(dLon / 2) * Math.sin(dLon / 2)
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return R * c
+}
+
+/** 判斷是否為台灣四大超商 (7-ELEVEN, 全家, 萊爾富, OK) */
+function isTaiwanBigFourStore(name: string): boolean {
+  const n = name.toLowerCase()
+  return (
+    n.includes('7-eleven') ||
+    n.includes('7-11') ||
+    n.includes('711') ||
+    n.includes('統一超商') ||
+    n.includes('familymart') ||
+    n.includes('全家') ||
+    n.includes('hi-life') ||
+    n.includes('萊爾富') ||
+    n.includes('ok mart') ||
+    n.includes('ok超商') ||
+    n.includes('ok便利')
+  )
+}
+
+function getStoreBrand(name: string): '7-11' | '全家' | '萊爾富' | 'OK' {
+  const n = name.toLowerCase()
+  if (n.includes('7-eleven') || n.includes('7-11') || n.includes('711') || n.includes('統一超商')) return '7-11'
+  if (n.includes('familymart') || n.includes('全家')) return '全家'
+  if (n.includes('hi-life') || n.includes('萊爾富')) return '萊爾富'
+  return 'OK'
 }
 
 /** 計算地點離 Polyline 路線的最小垂直/點距離 */
@@ -57,31 +84,34 @@ export async function searchNearbySafetyPlaces(
   const seen = new Set<string>()
 
   const searchPromises = samplePoints.flatMap(pt => [
-    // 搜尋 24 小時超商
+    // 搜尋台灣四大超商 (7-11, 全家, 萊爾富, OK)
     new Promise<void>(resolve => {
       service.nearbySearch(
-        { location: pt, radius: 300, type: 'convenience_store' },
+        { location: pt, radius: 350, type: 'convenience_store' },
         (res, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && res) {
             res.forEach(p => {
-              if (p.geometry?.location) {
-                const key = p.place_id || p.name || ''
-                if (!seen.has(key)) {
-                  seen.add(key)
-                  const lat = p.geometry.location.lat()
-                  const lng = p.geometry.location.lng()
-                  const distToRoute = getDistanceToPolyline(lat, lng, points)
-                  // 嚴格限制離路線 120m 以內
-                  if (distToRoute <= 120) {
-                    rawStores.push({
-                      id: key,
-                      name: p.name || '24h 超商',
-                      lat,
-                      lng,
-                      type: 'store',
-                      vicinity: p.vicinity,
-                      distanceToRouteM: Math.round(distToRoute),
-                    })
+              if (p.geometry?.location && p.name) {
+                // 嚴格限制四大超商
+                if (isTaiwanBigFourStore(p.name)) {
+                  const key = p.place_id || p.name
+                  if (!seen.has(key)) {
+                    seen.add(key)
+                    const lat = p.geometry.location.lat()
+                    const lng = p.geometry.location.lng()
+                    const distToRoute = getDistanceToPolyline(lat, lng, points)
+                    if (distToRoute <= 120) {
+                      rawStores.push({
+                        id: key,
+                        name: p.name,
+                        lat,
+                        lng,
+                        type: 'store',
+                        brand: getStoreBrand(p.name),
+                        vicinity: p.vicinity,
+                        distanceToRouteM: Math.round(distToRoute),
+                      })
+                    }
                   }
                 }
               }
@@ -94,7 +124,7 @@ export async function searchNearbySafetyPlaces(
     // 搜尋警察局與派出所
     new Promise<void>(resolve => {
       service.nearbySearch(
-        { location: pt, radius: 500, type: 'police' },
+        { location: pt, radius: 550, type: 'police' },
         (res, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && res) {
             res.forEach(p => {
@@ -128,19 +158,20 @@ export async function searchNearbySafetyPlaces(
 
   await Promise.all(searchPromises)
 
-  // 1. 去重間距：同類地點彼此至少相距 180 公尺，避免標記重疊死團
+  // 1. 超商同品牌/位置相距至少 160 公尺
   const filteredStores: SafetyPlace[] = []
   rawStores.sort((a, b) => (a.distanceToRouteM || 0) - (b.distanceToRouteM || 0))
   for (const s of rawStores) {
     const isTooClose = filteredStores.some(
-      existing => haversineM(s.lat, s.lng, existing.lat, existing.lng) < 180
+      existing => haversineM(s.lat, s.lng, existing.lat, existing.lng) < 160
     )
     if (!isTooClose) {
       filteredStores.push(s)
     }
-    if (filteredStores.length >= 5) break // 全線最多顯示 5 家主要超商
+    if (filteredStores.length >= 6) break // 全線最多顯示 6 家四大超商
   }
 
+  // 2. 警察局
   const filteredPolice: SafetyPlace[] = []
   rawPolice.sort((a, b) => (a.distanceToRouteM || 0) - (b.distanceToRouteM || 0))
   for (const p of rawPolice) {
@@ -150,13 +181,13 @@ export async function searchNearbySafetyPlaces(
     if (!isTooClose) {
       filteredPolice.push(p)
     }
-    if (filteredPolice.length >= 2) break // 全線最多顯示 2 警局
+    if (filteredPolice.length >= 2) break
   }
 
   return [...filteredStores, ...filteredPolice]
 }
 
-/** 在地圖上繪製精緻清爽的 24h 超商與警察局 Marker */
+/** 在地圖上繪製台灣四大超商 (7-11, 全家, 萊爾富, OK) 與警察局專屬品牌圖示 */
 export function drawSafetyPlaceMarkers(
   map: google.maps.Map,
   places: SafetyPlace[],
@@ -166,31 +197,49 @@ export function drawSafetyPlaceMarkers(
 
   places.forEach(place => {
     const isStore = place.type === 'store'
+    let iconBg = '%23F97316' // default orange
+    let brandTag = '24h 超商'
+
+    if (isStore) {
+      if (place.brand === '7-11') {
+        iconBg = '%2300843D' // 7-11 Green
+        brandTag = '7-ELEVEN (24h)'
+      } else if (place.brand === '全家') {
+        iconBg = '%23009944' // FamilyMart Green/Blue
+        brandTag = '全家 FamilyMart (24h)'
+      } else if (place.brand === '萊爾富') {
+        iconBg = '%23E60012' // Hi-Life Red
+        brandTag = '萊爾富 Hi-Life (24h)'
+      } else if (place.brand === 'OK') {
+        iconBg = '%23D9232E' // OK Mart Red
+        brandTag = 'OK Mart (24h)'
+      }
+    }
 
     const marker = new google.maps.Marker({
       position: { lat: place.lat, lng: place.lng },
       map,
-      title: place.name,
+      title: `${place.name} (${brandTag})`,
       icon: {
         url: isStore
-          ? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="12" fill="%23F97316" stroke="%23FFFFFF" stroke-width="2"/><text x="14" y="18" font-size="13" text-anchor="middle">🏪</text></svg>'
-          : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="%231E3A8A" stroke="%23FFFFFF" stroke-width="2"/><text x="15" y="19" font-size="14" text-anchor="middle">👮</text></svg>',
-        scaledSize: new google.maps.Size(26, 26),
-        anchor: new google.maps.Point(13, 13),
+          ? `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="${iconBg}" stroke="%23FFFFFF" stroke-width="2"/><text x="16" y="21" font-size="15" text-anchor="middle">🏪</text></svg>`
+          : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="%231E3A8A" stroke="%23FFFFFF" stroke-width="2"/><text x="17" y="22" font-size="16" text-anchor="middle">👮</text></svg>',
+        scaledSize: new google.maps.Size(30, 30),
+        anchor: new google.maps.Point(15, 15),
       },
-      zIndex: isStore ? 25 : 35,
+      zIndex: isStore ? 30 : 40,
     })
 
     if (infoWindow) {
       marker.addListener('click', () => {
         const content = `
-          <div style="padding: 6px 10px; color: #111827; font-family: sans-serif;">
-            <div style="font-weight: 700; font-size: 13px; margin-bottom: 2px;">
-              ${isStore ? '🏪 24h 明亮超商' : '👮 警察局 / 派出所'}
+          <div style="padding: 8px 12px; color: #111827; font-family: sans-serif;">
+            <div style="font-weight: 700; font-size: 13px; color: ${isStore ? '#059669' : '#1e3a8a'}; margin-bottom: 2px;">
+              ${isStore ? `🏪 台灣四大超商 · ${brandTag}` : '👮 警察局 / 派出所'}
             </div>
-            <div style="font-size: 13px; font-weight: 600; color: #1f2937;">${place.name}</div>
-            ${place.vicinity ? `<div style="font-size: 11px; color: #6b7280; margin-top: 2px;">${place.vicinity}</div>` : ''}
-            <div style="font-size: 10px; color: #10b981; margin-top: 4px; font-weight: 600;">● 沿線 24h 治安防護據點</div>
+            <div style="font-size: 14px; font-weight: 700; color: #111827;">${place.name}</div>
+            ${place.vicinity ? `<div style="font-size: 11px; color: #6b7280; margin-top: 3px;">${place.vicinity}</div>` : ''}
+            <div style="font-size: 11px; color: #059669; margin-top: 5px; font-weight: 600;">● 24小時明亮治安防護點</div>
           </div>
         `
         infoWindow.setContent(content)
