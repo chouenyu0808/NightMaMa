@@ -149,21 +149,19 @@ html, body {
 /* ---- Bottom sheet ---- */
 .bottom-sheet {
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
-  border-radius: 24px 24px 0 0;
-  padding: 12px 20px 32px;
-  max-height: 70dvh;
+  border-radius: 24px 24px 16px 16px;
+  padding: 12px 20px 20px;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
   transition: transform 0.35s cubic-bezier(0.32,0.72,0,1);
-  z-index: 100;
 }
 .bottom-sheet-handle {
   width: 40px;
   height: 4px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.25);
   border-radius: 2px;
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
 }
 
 /* ---- Route card ---- */

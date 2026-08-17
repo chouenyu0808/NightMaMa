@@ -236,17 +236,25 @@ export default function HomePage() {
 
       {/* Route bottom sheet */}
       {showSheet && routes.length > 0 && (
-        <div className="bottom-sheet glass" style={{ zIndex: 30 }}>
+        <div
+          className="bottom-sheet glass"
+          style={{
+            bottom: '64px',
+            paddingBottom: '20px',
+            maxHeight: '52dvh',
+            zIndex: 60,
+          }}
+        >
           <div className="bottom-sheet-handle" />
-          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
             找到 {routes.length} 條路線・依安全評分排序 ↓
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '42dvh', overflowY: 'auto' }} className="scrollable">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '32dvh', overflowY: 'auto' }} className="scrollable">
             {routes.map((route, i) => (
               <RouteCard key={i} route={route} isSelected={selectedIdx === i} onClick={() => handleSelectRoute(i)} />
             ))}
           </div>
-          <button className="btn-primary" style={{ marginTop: 14 }} onClick={handleStartNavigation}>
+          <button className="btn-primary" style={{ marginTop: 12 }} onClick={handleStartNavigation}>
             🚶 開始導航・{routes[selectedIdx]?.safety.label}路線
           </button>
         </div>
