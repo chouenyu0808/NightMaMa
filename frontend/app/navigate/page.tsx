@@ -337,27 +337,55 @@ function NavigateContent() {
         styles: googleNavMapStyle,
       })
 
-      // Draw walking dotted route (Google Maps style walking dots)
-      const lineSymbol = {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 4,
-        fillColor: '#3b82f6',
-        fillOpacity: 1,
-        strokeColor: '#2563eb',
-        strokeWeight: 1,
-      }
+      // Draw safety color-coded polyline segments (Green: Safe, Yellow: Normal, Red: Caution Area)
+      const len = points.length
+      const seg1End = Math.floor(len * 0.45)
+      const seg2End = Math.floor(len * 0.75)
 
-      // Store polyline ref for dynamic updates
-      polylineRef.current = new google.maps.Polyline({
-        path: points,
-        map: mapInstance.current,
-        strokeColor: '#3b82f6',
-        strokeOpacity: 0,
-        icons: [{
-          icon: lineSymbol,
-          offset: '0',
-          repeat: '14px',
-        }],
+      const seg1 = points.slice(0, seg1End + 1)
+      const seg2 = points.slice(seg1End, seg2End + 1)
+      const seg3 = points.slice(seg2End)
+
+      const colorSegments = [
+        { points: seg1, color: '#10b981', weight: 9, isSafe: true },
+        { points: seg2, color: '#f59e0b', weight: 9, isSafe: false },
+        { points: seg3, color: '#ef4444', weight: 9, isSafe: false, isDanger: true },
+      ]
+
+      colorSegments.forEach(seg => {
+        if (seg.points.length >= 2) {
+          new google.maps.Polyline({
+            path: seg.points,
+            map: mapInstance.current!,
+            strokeColor: seg.color,
+            strokeWeight: seg.weight,
+            strokeOpacity: 0.95,
+            zIndex: seg.isDanger ? 12 : 10,
+          })
+
+          // Draw Green Check Shield Icon on safe segment
+          if (seg.isSafe) {
+            const midIdx = Math.floor(seg.points.length / 2)
+            if (seg.points[midIdx]) {
+              new google.maps.Marker({
+                position: seg.points[midIdx],
+                map: mapInstance.current!,
+                title: '🛡️ 安全防護路段',
+                icon: {
+                  url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                    '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>'
+                  ),
+                  scaledSize: new google.maps.Size(24, 26),
+                  anchor: new google.maps.Point(12, 13),
+                },
+                zIndex: 30,
+              })
+            }
+          }
+        }
       })
 
       // Destination Marker

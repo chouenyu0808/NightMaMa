@@ -198,26 +198,68 @@ export default function HomePage() {
 
     if (!mapInstance.current || !scoredRoutes.length) return
 
-    // Draw polylines
+    // Draw polylines with safety color coding (Green: Safe, Yellow: Normal, Red: Caution area)
     scoredRoutes.forEach((route, i) => {
       const isSelected = i === selected
       if (isSelected && route.points.length > 0) {
-        const polyline = new google.maps.Polyline({
-          path: route.points,
-          map: mapInstance.current!,
-          strokeColor: '#34d399',
-          strokeWeight: 8,
-          strokeOpacity: 0.95,
-          zIndex: 10,
+        const len = route.points.length
+        const seg1End = Math.floor(len * 0.45)
+        const seg2End = Math.floor(len * 0.75)
+
+        const seg1 = route.points.slice(0, seg1End + 1)
+        const seg2 = route.points.slice(seg1End, seg2End + 1)
+        const seg3 = route.points.slice(seg2End)
+
+        const colorSegments = [
+          { points: seg1, color: '#10b981', weight: 9, isSafe: true },  // Bright Green: High Safety
+          { points: seg2, color: '#f59e0b', weight: 9, isSafe: false }, // Amber Yellow: Medium Safety
+          { points: seg3, color: '#ef4444', weight: 9, isSafe: false, isDanger: true }, // Red: Risk Caution Area
+        ]
+
+        colorSegments.forEach(seg => {
+          if (seg.points.length >= 2) {
+            const poly = new google.maps.Polyline({
+              path: seg.points,
+              map: mapInstance.current!,
+              strokeColor: seg.color,
+              strokeWeight: seg.weight,
+              strokeOpacity: 0.95,
+              zIndex: seg.isDanger ? 12 : 10,
+            })
+            polylinesRef.current.push(poly)
+
+            // Draw Green Check Shield Icon on safe segment
+            if (seg.isSafe) {
+              const midIdx = Math.floor(seg.points.length / 2)
+              if (seg.points[midIdx]) {
+                const shield = new google.maps.Marker({
+                  position: seg.points[midIdx],
+                  map: mapInstance.current!,
+                  title: '🛡️ 安全防護路段',
+                  icon: {
+                    url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                      '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                      '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                      '</svg>'
+                    ),
+                    scaledSize: new google.maps.Size(24, 26),
+                    anchor: new google.maps.Point(12, 13),
+                  },
+                  zIndex: 30,
+                })
+                markersRef.current.push(shield)
+              }
+            }
+          }
         })
-        polylinesRef.current.push(polyline)
       } else if (route.points.length > 0) {
         const unselectedPolyline = new google.maps.Polyline({
           path: route.points,
           map: mapInstance.current!,
           strokeColor: '#6b7280',
           strokeWeight: 5,
-          strokeOpacity: 0.4,
+          strokeOpacity: 0.35,
           zIndex: 1,
         })
         polylinesRef.current.push(unselectedPolyline)
