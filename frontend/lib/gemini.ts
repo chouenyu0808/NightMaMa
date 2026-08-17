@@ -1,13 +1,18 @@
 /**
  * Gemini AI 語音陪聊工具
+ *
+ * 用 Interactions API（client.interactions.create）而不是舊版 generateContent —
+ * gemini-2.0-flash 已完全停用，@google/generative-ai 也是 Google 已棄用的舊 SDK。
  */
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { GoogleGenAI } from '@google/genai'
 
-let genAI: GoogleGenerativeAI | null = null
+const MODEL = 'gemini-3.7-flash'
 
-export function getGenAI(): GoogleGenerativeAI {
+let genAI: GoogleGenAI | null = null
+
+export function getGenAI(): GoogleGenAI {
   if (!genAI) {
-    genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_KEY!)
+    genAI = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_KEY! })
   }
   return genAI
 }
@@ -42,8 +47,6 @@ export async function sendMessage(
   history: Array<{ role: 'user' | 'model'; text: string }>,
   context: CompanionContext
 ): Promise<string> {
-  const model = getGenAI().getGenerativeModel({ model: 'gemini-2.0-flash' })
-
   const contextText = `
 【目前路線資訊】
 出發地：${context.origin}
@@ -54,47 +57,12 @@ export async function sendMessage(
 ${context.currentStep ? `目前步驟：${context.currentStep}` : ''}
 `
 
-  const chat = model.startChat({
-    history: [
-      {
-        role: 'user',
-        parts: [{ text: SYSTEM_PROMPT + '\n' + contextText }],
-      },
-      {
-        role: 'model',
-        parts: [{ text: '好的，我是 NightMaMa，現在陪著你一起走。有任何問題都可以問我！' }],
-      },
-      ...history.map((h) => ({
-        role: h.role,
-        parts: [{ text: h.text }],
-      })),
-    ],
-  })
+  const historyText = history
+    .map((h) => `${h.role === 'user' ? '使用者' : 'NightMaMa'}：${h.text}`)
+    .join('\n')
 
-  const result = await chat.sendMessage(userMessage)
-  return result.response.text()
-}
+  const input = `${SYSTEM_PROMPT}\n${contextText}\n${historyText}\n使用者：${userMessage}\nNightMaMa：`
 
-/** 路線評分說明（用 Gemini 生成自然語言） */
-export async function generateRouteDescription(
-  routeType: '最安全' | '最快' | '平衡',
-  safetyScore: number,
-  durationMin: number,
-  lightCount: number,
-  cctvCount: number,
-  extraMin: number
-): Promise<string> {
-  const model = getGenAI().getGenerativeModel({ model: 'gemini-2.0-flash' })
-
-  const prompt = `用一句話（25字內）描述這條步行路線，台灣繁體中文，語氣要讓夜間獨行者感到安心：
-路線類型：${routeType}路線
-安全評分：${safetyScore}/100
-步行時間：${durationMin}分鐘
-沿途路燈：${lightCount}盞
-監視器：${cctvCount}支
-${extraMin > 0 ? `比最快路線多 ${extraMin} 分鐘` : '這是最快的路線'}
-只輸出一句話描述，不要加任何標點之外的格式。`
-
-  const result = await model.generateContent(prompt)
-  return result.response.text().trim()
+  const interaction = await getGenAI().interactions.create({ model: MODEL, input })
+  return (interaction.output_text ?? '').trim()
 }

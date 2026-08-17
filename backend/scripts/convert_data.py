@@ -10,7 +10,7 @@ import json
 import os
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'public', 'data')
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'public', 'data')
 
 
 def twd97_to_wgs84(x: float, y: float) -> tuple[float, float]:

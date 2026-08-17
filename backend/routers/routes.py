@@ -55,18 +55,25 @@ def get_routes(
         time_extra_min = max(0.0, (duration_s - fastest_duration_s) / 60)
         score = score_route(segments, time_extra_min, weights) if segments else 0.0
 
+        light_count = sum(s.light_count for s in segments)
+        store_count = sum(s.store_count for s in segments)
+        camera_count = sum(s.camera_count for s in segments)
+
         reason = gemini_service.explain_route_choice(
-            light_count=sum(s.light_count for s in segments),
-            store_count=sum(s.store_count for s in segments),
-            camera_count=sum(s.camera_count for s in segments),
+            light_count=light_count,
+            store_count=store_count,
+            camera_count=camera_count,
         )
 
         options.append(
             RouteOption(
                 duration_min=round(duration_s / 60, 1),
+                distance_m=raw.get("distanceMeters", 0),
                 score=round(score, 1),
                 polyline=raw["polyline"]["encodedPolyline"],
                 reason=reason,
+                light_count=light_count,
+                camera_count=camera_count,
             )
         )
 

@@ -2,7 +2,13 @@
  * Google Maps 路線載入與解析工具
  */
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader'
-import type { LatLng } from './safetyScore'
+
+export interface LatLng {
+  lat: number
+  lng: number
+}
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 let mapsReady = false
 
@@ -54,28 +60,29 @@ export function decodePolyline(encoded: string): LatLng[] {
 }
 
 export interface RouteResult {
+  type: string // "fastest" | "safest" | "balanced"
   polyline: string
   durationSec: number
   distanceM: number
+  score: number
+  reason: string | null
+  lightCount: number
+  cameraCount: number
   points: LatLng[]
 }
 
-/** 使用 API Route Proxy 取得路線 */
-export async function fetchRoutes(
-  origin: string,
-  destination: string,
-  alternatives = true
-): Promise<RouteResult[]> {
-  const res = await fetch('/api/routes', {
+/** 呼叫後端 /routes 取得依安全評分排序的候選路線 */
+export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<RouteResult[]> {
+  const res = await fetch(`${BACKEND_URL}/routes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ origin, destination, alternatives }),
+    body: JSON.stringify({ origin, destination }),
   })
 
   const data = await res.json()
 
   if (!res.ok) {
-    throw new Error(data.error || `路線 API 錯誤 (${res.status})`)
+    throw new Error(data.detail || data.error || `路線 API 錯誤 (${res.status})`)
   }
 
   if (!data.routes?.length) {
@@ -83,14 +90,24 @@ export async function fetchRoutes(
   }
 
   return (data.routes as Array<{
-    polyline: { encodedPolyline: string }
-    duration: string
-    distanceMeters: number
+    type: string
+    polyline: string
+    duration_min: number
+    distance_m: number
+    score: number
+    reason: string | null
+    light_count: number
+    camera_count: number
   }>).map((r) => ({
-    polyline: r.polyline.encodedPolyline,
-    durationSec: parseInt(r.duration.replace('s', '') || '0'),
-    distanceM: r.distanceMeters,
-    points: decodePolyline(r.polyline.encodedPolyline),
+    type: r.type,
+    polyline: r.polyline,
+    durationSec: Math.round(r.duration_min * 60),
+    distanceM: r.distance_m,
+    score: r.score,
+    reason: r.reason,
+    lightCount: r.light_count,
+    cameraCount: r.camera_count,
+    points: decodePolyline(r.polyline),
   }))
 }
 

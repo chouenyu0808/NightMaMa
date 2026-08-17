@@ -2,13 +2,24 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { loadMaps, fetchRoutes, formatDuration, formatDistance, type RouteResult } from '@/lib/maps'
-import { calcSafetyScore, sampleRoutePoints, type Light, type CCTV, type SafetyScore } from '@/lib/safetyScore'
-import { generateRouteDescription } from '@/lib/gemini'
+import { loadMaps, fetchRoutes, formatDuration, formatDistance, type RouteResult, type LatLng } from '@/lib/maps'
+
+interface RouteVisual {
+  total: number
+  label: '安全' | '普通' | '注意'
+  color: string
+  emoji: string
+}
+
+function scoreToVisual(score: number): RouteVisual {
+  if (score >= 65) return { total: score, label: '安全', color: '#10b981', emoji: '🟢' }
+  if (score >= 40) return { total: score, label: '普通', color: '#f59e0b', emoji: '🟡' }
+  return { total: score, label: '注意', color: '#ef4444', emoji: '🔴' }
+}
 
 interface ScoredRoute extends RouteResult {
-  safety: SafetyScore
-  type: '最安全' | '最快' | '平衡'
+  safety: RouteVisual
+  typeLabel: '最安全' | '最快' | '平衡'
   description: string
   extraMin: number
 }
@@ -29,26 +40,13 @@ export default function HomePage() {
 
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
+  const [originLatLng, setOriginLatLng] = useState<LatLng | null>(null)
+  const [destLatLng, setDestLatLng] = useState<LatLng | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [routes, setRoutes] = useState<ScoredRoute[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const [lightsData, setLightsData] = useState<Light[]>([])
-  const [cctvData, setCctvData] = useState<CCTV[]>([])
-  const [dataLoaded, setDataLoaded] = useState(false)
   const [error, setError] = useState('')
   const [showSheet, setShowSheet] = useState(false)
-
-  // Load safety data in background
-  useEffect(() => {
-    Promise.all([
-      fetch('/data/streetlights.json').then(r => r.json()),
-      fetch('/data/cctv.json').then(r => r.json()),
-    ]).then(([lights, cctv]) => {
-      setLightsData(lights)
-      setCctvData(cctv)
-      setDataLoaded(true)
-    }).catch(console.error)
-  }, [])
 
   // Init map when entering map state
   useEffect(() => {
@@ -67,21 +65,25 @@ export default function HomePage() {
         if (originInputRef.current) {
           autocompleteOriginRef.current = new google.maps.places.Autocomplete(originInputRef.current, {
             componentRestrictions: { country: 'tw' },
-            fields: ['formatted_address', 'name'],
+            fields: ['formatted_address', 'name', 'geometry'],
           })
           autocompleteOriginRef.current.addListener('place_changed', () => {
             const place = autocompleteOriginRef.current!.getPlace()
             setOrigin(place.formatted_address || place.name || '')
+            const loc = place.geometry?.location
+            setOriginLatLng(loc ? { lat: loc.lat(), lng: loc.lng() } : null)
           })
         }
         if (destInputRef.current) {
           autocompleteDestRef.current = new google.maps.places.Autocomplete(destInputRef.current, {
             componentRestrictions: { country: 'tw' },
-            fields: ['formatted_address', 'name'],
+            fields: ['formatted_address', 'name', 'geometry'],
           })
           autocompleteDestRef.current.addListener('place_changed', () => {
             const place = autocompleteDestRef.current!.getPlace()
             setDestination(place.formatted_address || place.name || '')
+            const loc = place.geometry?.location
+            setDestLatLng(loc ? { lat: loc.lat(), lng: loc.lng() } : null)
           })
         }
       }).catch(console.error)
@@ -115,33 +117,32 @@ export default function HomePage() {
       setError('請輸入出發地與目的地')
       return
     }
+    if (!originLatLng || !destLatLng) {
+      setError('請從建議清單中選擇出發地與目的地')
+      return
+    }
     setError('')
     setIsLoading(true)
     setShowSheet(false)
 
     try {
-      const rawRoutes = await fetchRoutes(origin, destination, true)
+      const rawRoutes = await fetchRoutes(originLatLng, destLatLng)
       if (!rawRoutes.length) throw new Error('找不到路線')
       const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
 
-      const scored: ScoredRoute[] = await Promise.all(
-        rawRoutes.map(async (route, i) => {
-          const samples = sampleRoutePoints(route.points, 30)
-          const safety = calcSafetyScore(samples, lightsData, cctvData, 2)
-          const extraMin = Math.round((route.durationSec - minDuration) / 60)
-          const type: ScoredRoute['type'] = i === 0 ? '最快' : extraMin <= 3 ? '平衡' : '最安全'
-          let description = ''
-          try {
-            description = await generateRouteDescription(
-              type, safety.total, Math.round(route.durationSec / 60),
-              safety.lightCount, safety.cctvCount, extraMin
-            )
-          } catch {
-            description = `${safety.emoji} 安全評分 ${safety.total} 分，沿途 ${safety.lightCount} 盞路燈`
-          }
-          return { ...route, safety, type, description, extraMin }
-        })
-      )
+      const typeLabelOf: Record<string, ScoredRoute['typeLabel']> = {
+        fastest: '最快',
+        safest: '最安全',
+        balanced: '平衡',
+      }
+
+      const scored: ScoredRoute[] = rawRoutes.map(route => {
+        const safety = scoreToVisual(route.score)
+        const extraMin = Math.round((route.durationSec - minDuration) / 60)
+        const typeLabel = typeLabelOf[route.type] ?? '平衡'
+        const description = route.reason || `${safety.emoji} 安全評分 ${safety.total} 分，沿途 ${route.lightCount} 盞路燈`
+        return { ...route, safety, typeLabel, description, extraMin }
+      })
 
       scored.sort((a, b) => b.safety.total - a.safety.total)
       setRoutes(scored)
@@ -169,14 +170,14 @@ export default function HomePage() {
       duration: String(route.durationSec),
       distance: String(route.distanceM),
       safety: String(route.safety.total),
-      lights: String(route.safety.lightCount),
-      cctv: String(route.safety.cctvCount),
+      lights: String(route.lightCount),
+      cctv: String(route.cameraCount),
     })
     router.push(`/navigate?${params}`)
   }
 
   if (appState === 'landing') {
-    return <LandingPage onStart={() => setAppState('map')} dataLoaded={dataLoaded} />
+    return <LandingPage onStart={() => setAppState('map')} />
   }
 
   return (
@@ -195,11 +196,6 @@ export default function HomePage() {
           <button onClick={() => setAppState('landing')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>←</button>
           <span style={{ fontSize: 20 }}>🌙</span>
           <span style={{ fontSize: 18, fontWeight: 900 }} className="gradient-text">NightMaMa</span>
-          {dataLoaded && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(16,185,129,0.2)' }}>
-              ● 資料已載入
-            </span>
-          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -211,7 +207,7 @@ export default function HomePage() {
               style={{ paddingLeft: 42 }}
               placeholder="出發地（例：松山車站）"
               value={origin}
-              onChange={e => setOrigin(e.target.value)}
+              onChange={e => { setOrigin(e.target.value); setOriginLatLng(null) }}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
             />
           </div>
@@ -223,13 +219,13 @@ export default function HomePage() {
               style={{ paddingLeft: 42 }}
               placeholder="目的地"
               value={destination}
-              onChange={e => setDestination(e.target.value)}
+              onChange={e => { setDestination(e.target.value); setDestLatLng(null) }}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
             />
           </div>
           {error && <p style={{ color: '#ef4444', fontSize: 13, paddingLeft: 4 }}>{error}</p>}
-          <button className="btn-primary" onClick={handleSearch} disabled={isLoading || !dataLoaded}>
-            {isLoading ? '⏳ 計算安全路線中…' : !dataLoaded ? '⏳ 載入資料中…' : '🔍 找最安全路線'}
+          <button className="btn-primary" onClick={handleSearch} disabled={isLoading}>
+            {isLoading ? '⏳ 計算安全路線中…' : '🔍 找最安全路線'}
           </button>
         </div>
       </div>
@@ -266,7 +262,7 @@ export default function HomePage() {
 }
 
 // ─── Landing Page ────────────────────────────────────────────────────────────
-function LandingPage({ onStart, dataLoaded }: { onStart: () => void; dataLoaded: boolean }) {
+function LandingPage({ onStart }: { onStart: () => void }) {
   const router = useRouter()
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -390,12 +386,6 @@ function LandingPage({ onStart, dataLoaded }: { onStart: () => void; dataLoaded:
           </div>
         </div>
 
-        {/* Data status */}
-        <div style={{ textAlign: 'center', marginTop: 20, animation: 'fadeIn 0.8s ease 0.4s both' }}>
-          <span style={{ fontSize: 12, color: dataLoaded ? '#10b981' : '#6b7280' }}>
-            {dataLoaded ? '● 路燈與監視器資料已載入完成' : '◌ 背景載入路燈資料中…'}
-          </span>
-        </div>
       </div>
 
       <NavBar active="home" />
@@ -406,7 +396,7 @@ function LandingPage({ onStart, dataLoaded }: { onStart: () => void; dataLoaded:
 // ─── Route Card ───────────────────────────────────────────────────────────────
 function RouteCard({ route, isSelected, onClick }: { route: ScoredRoute; isSelected: boolean; onClick: () => void }) {
   const scoreClass = route.safety.total >= 65 ? 'score-high' : route.safety.total >= 40 ? 'score-mid' : 'score-low'
-  const typeIcon = route.type === '最安全' ? '🛡️' : route.type === '最快' ? '⚡' : '⚖️'
+  const typeIcon = route.typeLabel === '最安全' ? '🛡️' : route.typeLabel === '最快' ? '⚡' : '⚖️'
 
   return (
     <div className={`route-card glass-light ${isSelected ? 'selected' : ''}`} onClick={onClick}
@@ -415,7 +405,7 @@ function RouteCard({ route, isSelected, onClick }: { route: ScoredRoute; isSelec
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 20 }}>{typeIcon}</span>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{route.type}路線</div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{route.typeLabel}路線</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               {formatDuration(route.durationSec)} · {formatDistance(route.distanceM)}
               {route.extraMin > 0 && <span style={{ color: 'var(--text-muted)' }}> (+{route.extraMin}分)</span>}
@@ -429,8 +419,8 @@ function RouteCard({ route, isSelected, onClick }: { route: ScoredRoute; isSelec
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{route.description}</p>
       <div style={{ display: 'flex', gap: 6 }}>
-        <span className="map-chip" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: 11 }}>💡 {route.safety.lightCount} 路燈</span>
-        <span className="map-chip" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11 }}>📹 {route.safety.cctvCount} 監視器</span>
+        <span className="map-chip" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: 11 }}>💡 {route.lightCount} 路燈</span>
+        <span className="map-chip" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11 }}>📹 {route.cameraCount} 監視器</span>
       </div>
     </div>
   )
