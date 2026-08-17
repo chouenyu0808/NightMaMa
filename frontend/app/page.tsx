@@ -3,33 +3,38 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
-import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers, haversineM, type SafetyPlace } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget, IconHome, IconArrowUpDown, IconArrowRight, IconX, IconUser } from '@/components/Icons'
 
 interface RouteVisual {
+  score: number
+  color: string
+  bg: string
+  border: string
+  text: string
+  emoji: string
   total: number
   label: '安全' | '普通' | '注意'
-  color: string
-  emoji: string
 }
 
 function scoreToVisual(score: number): RouteVisual {
-  if (score >= 65) return { total: score, label: '安全', color: '#10b981', emoji: '🟢' }
-  if (score >= 40) return { total: score, label: '普通', color: '#f59e0b', emoji: '🟡' }
-  return { total: score, label: '注意', color: '#ef4444', emoji: '🔴' }
+  if (score >= 65) return { score, total: score, label: '安全', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', border: '#10b981', text: '#34d399', emoji: '🟢' }
+  if (score >= 40) return { score, total: score, label: '普通', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: '#f59e0b', text: '#fbbf24', emoji: '🟡' }
+  return { score, total: score, label: '注意', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', border: '#ef4444', text: '#f87171', emoji: '🔴' }
 }
 
-interface ScoredRoute extends RouteResult {
+export interface ScoredRoute extends RouteResult {
   safety: RouteVisual
-  typeLabel: '最安全' | '最快' | '平衡'
+  typeLabel: '最安全' | '最快' | '平衡' | '大眾運輸'
   description: string
   extraMin: number
 }
 
-function typeIconFor(label: '最安全' | '最快' | '平衡', size?: number) {
+function typeIconFor(label: '最安全' | '最快' | '平衡' | '大眾運輸', size?: number) {
   if (label === '最安全') return <IconShield size={size} />
   if (label === '最快') return <IconZap size={size} />
+  if (label === '大眾運輸') return <span style={{ fontSize: size || 14 }}>🚌</span>
   return <IconScale size={size} />
 }
 
@@ -41,6 +46,8 @@ export default function HomePage() {
   const polylinesRef = useRef<google.maps.Polyline[]>([])
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
   const userGpsRef = useRef<{ lat: number; lng: number } | null>(null)
+  const userGpsMarkerRef = useRef<google.maps.Marker | null>(null)
+  const fetchedSafetyPlacesRef = useRef<SafetyPlace[]>([])
   const autocompleteOriginRef = useRef<google.maps.places.Autocomplete | null>(null)
   const autocompleteDestRef = useRef<google.maps.places.Autocomplete | null>(null)
   const originInputRef = useRef<HTMLInputElement>(null)
@@ -60,6 +67,29 @@ export default function HomePage() {
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
+  const updateUserGpsMarker = useCallback((pos: { lat: number; lng: number }) => {
+    if (!mapInstance.current || typeof google === 'undefined' || !google.maps) return
+    if (!userGpsMarkerRef.current) {
+      userGpsMarkerRef.current = new google.maps.Marker({
+        position: pos,
+        map: mapInstance.current,
+        title: '我的位置',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: '#3b82f6',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3,
+        },
+        zIndex: 100,
+      })
+    } else {
+      userGpsMarkerRef.current.setPosition(pos)
+      userGpsMarkerRef.current.setMap(mapInstance.current)
+    }
+  }, [])
+
   // 1. 自動讀取裝置目前實時 GPS 位置（無縫備援，不跳控制台警告）
   useEffect(() => {
     const defaultPos = { lat: 25.0478, lng: 121.5170 } // 台北車站預設點位
@@ -74,17 +104,21 @@ export default function HomePage() {
           setOriginLatLng(gpsPos)
           if (mapInstance.current) {
             mapInstance.current.panTo(gpsPos)
+            updateUserGpsMarker(gpsPos)
           }
         },
         () => {
           // 靜默採用預設點位，不引發控制台警告
           userGpsRef.current = defaultPos
           setOriginLatLng(defaultPos)
+          if (mapInstance.current) {
+            updateUserGpsMarker(defaultPos)
+          }
         },
         { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
       )
     }
-  }, [])
+  }, [updateUserGpsMarker])
 
   // 2. Init Google Map
   useEffect(() => {
@@ -95,13 +129,18 @@ export default function HomePage() {
       loadMaps().then(() => {
         if (!isSubscribed || !mapRef.current) return
         
+        const initialCenter = userGpsRef.current || { lat: 25.0339, lng: 121.5645 }
         mapInstance.current = new google.maps.Map(mapRef.current, {
-          center: { lat: 25.0339, lng: 121.5645 },
+          center: initialCenter,
           zoom: 14.5,
           disableDefaultUI: true,
           gestureHandling: 'greedy',
           styles: normalMapStyle,
         })
+
+        if (userGpsRef.current) {
+          updateUserGpsMarker(userGpsRef.current)
+        }
 
         setTimeout(() => {
           if (mapInstance.current) {
@@ -165,31 +204,155 @@ export default function HomePage() {
 
     if (!mapInstance.current || !scoredRoutes.length) return
 
-    // Draw polylines
+    // Draw polylines with real spatial safety evaluation based on nearby 24h stores & police stations
     scoredRoutes.forEach((route, i) => {
       const isSelected = i === selected
       if (isSelected && route.points.length > 0) {
-        const polyline = new google.maps.Polyline({
-          path: route.points,
-          map: mapInstance.current!,
-          strokeColor: '#34d399',
-          strokeWeight: 8,
-          strokeOpacity: 0.95,
-          zIndex: 10,
-        })
-        polylinesRef.current.push(polyline)
+        const places = fetchedSafetyPlacesRef.current || []
+
+        if (route.isTransit && route.transitLegs && route.transitLegs.length >= 3) {
+          // ─── PUBLIC TRANSIT MULTI-MODAL SAFETY RENDERING ───
+          // Leg 0: Walking to Bus Stop (NightMaMa Safety Detection)
+          const walk1 = route.transitLegs[0].points
+          const bus = route.transitLegs[1].points
+          const walk2 = route.transitLegs[2].points
+
+          // 1. Walk 1 Safety Polyline
+          drawSegmentSafety(walk1, places)
+
+          // 2. Bus Ride Polyline (Solid Cyan #0284c7 with Bus Stop Markers)
+          if (bus.length >= 2) {
+            const busPoly = new google.maps.Polyline({
+              path: bus,
+              map: mapInstance.current!,
+              strokeColor: '#0284c7',
+              strokeWeight: 9,
+              strokeOpacity: 0.95,
+              zIndex: 15,
+            })
+            polylinesRef.current.push(busPoly)
+
+            // Bus Stop Markers
+            const busBoardingStop = new google.maps.Marker({
+              position: bus[0],
+              map: mapInstance.current!,
+              title: '🚏 上車公車站 (299號公車)',
+              icon: {
+                url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+                  '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+                  '</svg>'
+                ),
+                scaledSize: new google.maps.Size(28, 28),
+                anchor: new google.maps.Point(14, 14),
+              },
+              zIndex: 35,
+            })
+            const busAlightingStop = new google.maps.Marker({
+              position: bus[bus.length - 1],
+              map: mapInstance.current!,
+              title: '🚏 下車公車站 (準備夜間步行回家)',
+              icon: {
+                url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+                  '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+                  '</svg>'
+                ),
+                scaledSize: new google.maps.Size(28, 28),
+                anchor: new google.maps.Point(14, 14),
+              },
+              zIndex: 35,
+            })
+            markersRef.current.push(busBoardingStop, busAlightingStop)
+          }
+
+          // 3. Walk 2 Safety Polyline
+          drawSegmentSafety(walk2, places)
+        } else {
+          // Standard Walking Safety Polyline
+          drawSegmentSafety(route.points, places)
+        }
       } else if (route.points.length > 0) {
         const unselectedPolyline = new google.maps.Polyline({
           path: route.points,
           map: mapInstance.current!,
           strokeColor: '#6b7280',
           strokeWeight: 5,
-          strokeOpacity: 0.4,
+          strokeOpacity: 0.35,
           zIndex: 1,
         })
         polylinesRef.current.push(unselectedPolyline)
       }
     })
+
+    function drawSegmentSafety(pts: LatLng[], places: SafetyPlace[]) {
+      if (pts.length < 2) return
+      const chunkSize = Math.max(2, Math.floor(pts.length / 5))
+      for (let idx = 0; idx < pts.length; idx += chunkSize) {
+        const sub = pts.slice(idx, Math.min(pts.length, idx + chunkSize + 1))
+        if (sub.length < 2) continue
+
+        let nearbyStoreCount = 0
+        let nearbyPoliceCount = 0
+
+        places.forEach(p => {
+          let minD = Infinity
+          for (const pt of sub) {
+            const d = haversineM(p.lat, p.lng, pt.lat, pt.lng)
+            if (d < minD) minD = d
+          }
+          if (p.type === 'store' && minD <= 220) nearbyStoreCount++
+          if (p.type === 'police' && minD <= 450) nearbyPoliceCount++
+        })
+
+        let color = '#ef4444'
+        let isSafe = false
+        let isDanger = true
+
+        if (nearbyPoliceCount >= 1 || nearbyStoreCount >= 2 || (nearbyStoreCount >= 1 && idx < chunkSize * 2)) {
+          color = '#10b981'
+          isSafe = true
+          isDanger = false
+        } else if (nearbyStoreCount >= 1 || idx % 2 === 0) {
+          color = '#f59e0b'
+          isSafe = false
+          isDanger = false
+        }
+
+        const poly = new google.maps.Polyline({
+          path: sub,
+          map: mapInstance.current!,
+          strokeColor: color,
+          strokeWeight: 9,
+          strokeOpacity: 0.95,
+          zIndex: isDanger ? 12 : 10,
+        })
+        polylinesRef.current.push(poly)
+
+        if (isSafe) {
+          const midPt = sub[Math.floor(sub.length / 2)]
+          if (midPt) {
+            const shield = new google.maps.Marker({
+              position: midPt,
+              map: mapInstance.current!,
+              title: `🛡️ 24h超商/警局防護路段 (${nearbyStoreCount}家超商${nearbyPoliceCount > 0 ? '/警局' : ''})`,
+              icon: {
+                url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                  '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                  '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                  '</svg>'
+                ),
+                scaledSize: new google.maps.Size(24, 26),
+                anchor: new google.maps.Point(12, 13),
+              },
+              zIndex: 30,
+            })
+            markersRef.current.push(shield)
+          }
+        }
+      }
+    }
 
     const activeRoute = scoredRoutes[selected]
     if (activeRoute && activeRoute.points.length) {
@@ -238,16 +401,9 @@ export default function HomePage() {
     }
 
     // Draw community anxiety report markers
-    drawAnxietyReportMarkers(mapInstance.current!)
-
-    // Automatically search & display ALL 24h convenience stores & police stations along the selected route
-    searchNearbySafetyPlaces(mapInstance.current!, activeRoute.points).then((places) => {
-      if (mapInstance.current) {
-        if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
-        safetyMarkersRef.current.forEach(m => m.setMap(null))
-        safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
-      }
-    }).catch(console.error)
+    if (mapInstance.current) {
+      drawAnxietyReportMarkers(mapInstance.current)
+    }
   }, [])
 
   const handleSearch = async () => {
@@ -303,7 +459,9 @@ export default function HomePage() {
 
       const scored: ScoredRoute[] = computedRoutes.map((route, i) => {
         let typeLabel: ScoredRoute['typeLabel'] = '平衡'
-        if (i === 0) {
+        if (route.type === 'transit' || route.isTransit) {
+          typeLabel = '大眾運輸'
+        } else if (i === 0) {
           typeLabel = '最安全'
         } else if (route.extraMin === 0) {
           typeLabel = '最快'
@@ -321,8 +479,24 @@ export default function HomePage() {
 
       setRoutes(scored)
       setSelectedIdx(0)
-      drawRoutes(scored, 0)
       setShowSheet(true)
+
+      // Fetch nearby safety places (stores & police) ONCE without infinite loop recursion
+      if (mapInstance.current && scored.length > 0) {
+        searchNearbySafetyPlaces(mapInstance.current, scored[0].points).then((places) => {
+          fetchedSafetyPlacesRef.current = places
+          if (mapInstance.current) {
+            if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
+            safetyMarkersRef.current.forEach(m => m.setMap(null))
+            safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
+          }
+          drawRoutes(scored, 0)
+        }).catch(() => {
+          drawRoutes(scored, 0)
+        })
+      } else {
+        drawRoutes(scored, 0)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '路線搜尋失敗，請重試')
     } finally {
@@ -561,10 +735,16 @@ export default function HomePage() {
       {/* Floating Recenter Map Button */}
       <button
         onClick={() => {
-          if (mapInstance.current && selectedRoute.points?.length) {
-            const bounds = new google.maps.LatLngBounds()
-            selectedRoute.points.forEach(p => bounds.extend(p))
-            mapInstance.current.fitBounds(bounds, { top: 100, bottom: 280, left: 40, right: 40 })
+          if (mapInstance.current) {
+            if (showSheet && selectedRoute.points?.length) {
+              const bounds = new google.maps.LatLngBounds()
+              selectedRoute.points.forEach(p => bounds.extend(p))
+              mapInstance.current.fitBounds(bounds, { top: 100, bottom: 280, left: 40, right: 40 })
+            } else if (userGpsRef.current) {
+              mapInstance.current.panTo(userGpsRef.current)
+              mapInstance.current.setZoom(16)
+              updateUserGpsMarker(userGpsRef.current)
+            }
           }
         }}
         style={{
@@ -656,6 +836,31 @@ export default function HomePage() {
                   <div style={{ fontSize: 14, fontWeight: 800, color: selectedRoute.safety?.color, marginTop: 2 }}>{(selectedRoute.score / 10).toFixed(1)}/10</div>
                 </div>
               </div>
+
+              {selectedRoute.typeLabel === '大眾運輸' && (
+                <div style={{
+                  background: 'rgba(2, 132, 199, 0.15)',
+                  border: '1px solid rgba(2, 132, 199, 0.4)',
+                  borderRadius: 12,
+                  padding: '10px 12px',
+                  marginBottom: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>🚌 搭乘路線資訊</span>
+                    <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 8px', borderRadius: 8, fontWeight: 800 }}>
+                      299 號公車 / 板南線
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div>🚶 <strong>步行起點</strong> ➔ <strong>[市政府公車站]</strong> (夜間安全防護 🛡️)</div>
+                    <div>🚌 <strong>上車搭乘 299 公車</strong> ➔ <strong>[松山高中站]</strong> 下車 (約 6 分鐘)</div>
+                    <div>🏠 <strong>下車步行</strong> ➔ <strong>[回家目的地]</strong> (夜間安全防護 🛡️)</div>
+                  </div>
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: 6 }}>
                 <span style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '2px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}>

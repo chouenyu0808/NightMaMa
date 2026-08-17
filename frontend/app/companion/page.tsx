@@ -156,7 +156,18 @@ function pcmFloatTo16BitBase64(input: Float32Array, fromRate: number, toRate = 1
 }
 
 
-function CompanionContent() {
+export interface CompanionContentProps {
+  embeddedInNav?: boolean
+  onCloseNav?: () => void
+  routeContext?: {
+    origin: string
+    destination: string
+    safetyScore: number
+    durationSec: number
+  }
+}
+
+export function CompanionContent({ embeddedInNav = false, onCloseNav, routeContext }: CompanionContentProps = {}) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -194,10 +205,10 @@ function CompanionContent() {
   const scriptNodeRef = useRef<ScriptProcessorNode | null>(null)
 
   const context: RouteContext = {
-    origin: searchParams.get('origin') || '我的位置',
-    destination: searchParams.get('destination') || '目的地',
-    safetyScore: parseInt(searchParams.get('safety') || '85'),
-    durationMin: Math.round(parseInt(searchParams.get('duration') || '600') / 60),
+    origin: routeContext?.origin || (searchParams ? searchParams.get('origin') : null) || '我的位置',
+    destination: routeContext?.destination || (searchParams ? searchParams.get('destination') : null) || '目的地',
+    safetyScore: routeContext?.safetyScore || parseInt((searchParams ? searchParams.get('safety') : null) || '85'),
+    durationMin: routeContext ? Math.round(routeContext.durationSec / 60) : Math.round(parseInt((searchParams ? searchParams.get('duration') : null) || '600') / 60),
   }
 
   // Connect to backend chat WebSocket (if available)
@@ -636,10 +647,12 @@ RULES:
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
-            onClick={() => router.push('/')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: '#111827' }}
+            onClick={() => (embeddedInNav ? onCloseNav?.() : router.push('/'))}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', color: '#111827', gap: 2 }}
+            title={embeddedInNav ? '收起聊天' : '返回'}
           >
             <IconChevronLeft />
+            {embeddedInNav && <span style={{ fontSize: 13, fontWeight: 700 }}>收起</span>}
           </button>
           <div style={{ fontWeight: 700, fontSize: 17, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
             媽咪 (NightMaMa AI)

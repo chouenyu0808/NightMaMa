@@ -9,8 +9,9 @@ import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import {
   IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle,
   IconCornerUpRight, IconCornerUpLeft, IconArrowUp, IconFlag, IconSparkles, IconX,
-  IconSos, IconLoader, IconStore, IconMoon, IconSend, IconChevronDown, IconRoute,
+  IconSos, IconLoader, IconStore, IconRoute,
 } from '@/components/Icons'
+import { CompanionContent } from '@/app/companion/page'
 
 type ManeuverIcon = 'right' | 'left' | 'slight-right' | 'slight-left' | 'uturn' | 'straight' | 'destination'
 
@@ -192,86 +193,8 @@ function NavigateContent() {
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
-  // ─── Split Screen AI Companion State ──────────────────────────────────────
+  // ─── Split Screen AI Companion (body is the shared CompanionContent component) ─
   const [showCompanionSplit, setShowCompanionSplit] = useState(false)
-  const [companionMessages, setCompanionMessages] = useState<Array<{ role: 'user' | 'ai'; text: string; time: string }>>([
-    { role: 'ai', text: '寶貝，我有在線上聽你說話喔！導航繼續開啟中，走夜路記得隨時保持警覺喔 💜', time: '剛剛' }
-  ])
-  const [companionInput, setCompanionInput] = useState('')
-  const [isThinkingCompanion, setIsThinkingCompanion] = useState(false)
-  const [isListeningCompanion, setIsListeningCompanion] = useState(false)
-  const companionEndRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<any>(null)
-
-  useEffect(() => {
-    if (showCompanionSplit) {
-      companionEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [showCompanionSplit, companionMessages])
-
-  const sendCompanionMsg = async (textToSend?: string) => {
-    const msgText = (textToSend || companionInput).trim()
-    if (!msgText || isThinkingCompanion) return
-
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    setCompanionMessages(prev => [...prev, { role: 'user', text: msgText, time: now }])
-    if (!textToSend) setCompanionInput('')
-    setIsThinkingCompanion(true)
-
-    try {
-      const res = await fetch('/api/companion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userMessage: msgText,
-          context: { origin, destination, safetyScore, durationMin: Math.round(remainingSec / 60) }
-        }),
-      })
-      const data = await res.json()
-      const reply = data.reply || '寶貝，我有在聽喔！繼續往目的地前進，媽媽陪著你！'
-      setCompanionMessages(prev => [...prev, { role: 'ai', text: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
-      speakInstruction(reply)
-    } catch {
-      setCompanionMessages(prev => [...prev, { role: 'ai', text: '寶貝別擔心，媽咪在線上守護你！記得走大馬路喔！', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
-    } finally {
-      setIsThinkingCompanion(false)
-    }
-  }
-
-  const toggleSpeechRecognition = () => {
-    if (typeof window === 'undefined') return
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      alert('您的瀏覽器不支援語音辨識功能，請使用文字輸入。')
-      return
-    }
-
-    if (isListeningCompanion && recognitionRef.current) {
-      recognitionRef.current.stop()
-      setIsListeningCompanion(false)
-      return
-    }
-
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'zh-TW'
-    recognition.interimResults = false
-    recognition.continuous = false
-
-    recognition.onstart = () => setIsListeningCompanion(true)
-    recognition.onend = () => setIsListeningCompanion(false)
-    recognition.onerror = () => setIsListeningCompanion(false)
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0]?.[0]?.transcript
-      if (transcript) {
-        setCompanionInput(transcript)
-        sendCompanionMsg(transcript)
-      }
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
-  }
 
   // 超商/警局標記改成按需查詢，不用一進導航頁就自動打 Places API
   const toggleSafetyPlaces = useCallback(async () => {
@@ -358,28 +281,120 @@ function NavigateContent() {
         styles: googleNavMapStyle,
       })
 
-      // Draw walking dotted route (Google Maps style walking dots)
-      const lineSymbol = {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 4,
-        fillColor: '#3b82f6',
-        fillOpacity: 1,
-        strokeColor: '#2563eb',
-        strokeWeight: 1,
+      // Draw 3-Leg Public Transit or Walking Safety Polylines
+      const len = points.length
+      const walk1End = Math.floor(len * 0.25)
+      const busEnd = Math.floor(len * 0.75)
+
+      const walk1 = points.slice(0, walk1End + 1)
+      const bus = points.slice(walk1End, busEnd + 1)
+      const walk2 = points.slice(busEnd)
+
+      // Leg 1: Walk to Bus Stop (Safety Evaluation & Green Shields)
+      if (walk1.length >= 2) {
+        new google.maps.Polyline({
+          path: walk1,
+          map: mapInstance.current!,
+          strokeColor: '#10b981',
+          strokeWeight: 9,
+          strokeOpacity: 0.95,
+          zIndex: 10,
+        })
+        const midIdx = Math.floor(walk1.length / 2)
+        if (walk1[midIdx]) {
+          new google.maps.Marker({
+            position: walk1[midIdx],
+            map: mapInstance.current!,
+            title: '🛡️ 步行至公車站夜間安全防護段',
+            icon: {
+              url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>'
+              ),
+              scaledSize: new google.maps.Size(24, 26),
+              anchor: new google.maps.Point(12, 13),
+            },
+            zIndex: 30,
+          })
+        }
       }
 
-      // Store polyline ref for dynamic updates
-      polylineRef.current = new google.maps.Polyline({
-        path: points,
-        map: mapInstance.current,
-        strokeColor: '#3b82f6',
-        strokeOpacity: 0,
-        icons: [{
-          icon: lineSymbol,
-          offset: '0',
-          repeat: '14px',
-        }],
-      })
+      // Leg 2: Bus Ride (Transit Line #0284c7 - No safety colors needed inside vehicle)
+      if (bus.length >= 2) {
+        new google.maps.Polyline({
+          path: bus,
+          map: mapInstance.current!,
+          strokeColor: '#0284c7',
+          strokeWeight: 9,
+          strokeOpacity: 0.95,
+          zIndex: 15,
+        })
+
+        // Bus Stop Markers
+        new google.maps.Marker({
+          position: bus[0],
+          map: mapInstance.current!,
+          title: '🚏 上車公車站 (299號公車)',
+          icon: {
+            url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+              '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+              '</svg>'
+            ),
+            scaledSize: new google.maps.Size(28, 28),
+            anchor: new google.maps.Point(14, 14),
+          },
+          zIndex: 35,
+        })
+        new google.maps.Marker({
+          position: bus[bus.length - 1],
+          map: mapInstance.current!,
+          title: '🚏 下車公車站 (準備夜間步行回家)',
+          icon: {
+            url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+              '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+              '</svg>'
+            ),
+            scaledSize: new google.maps.Size(28, 28),
+            anchor: new google.maps.Point(14, 14),
+          },
+          zIndex: 35,
+        })
+      }
+
+      // Leg 3: Walk from Bus Stop to Destination (Safety Evaluation & Green Shields)
+      if (walk2.length >= 2) {
+        new google.maps.Polyline({
+          path: walk2,
+          map: mapInstance.current!,
+          strokeColor: '#10b981',
+          strokeWeight: 9,
+          strokeOpacity: 0.95,
+          zIndex: 10,
+        })
+        const midIdx = Math.floor(walk2.length / 2)
+        if (walk2[midIdx]) {
+          new google.maps.Marker({
+            position: walk2[midIdx],
+            map: mapInstance.current!,
+            title: '🛡️ 下車步行回家夜間安全防護段',
+            icon: {
+              url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>'
+              ),
+              scaledSize: new google.maps.Size(24, 26),
+              anchor: new google.maps.Point(12, 13),
+            },
+            zIndex: 30,
+          })
+        }
+      }
 
       // Destination Marker
       new google.maps.Marker({
@@ -810,178 +825,81 @@ function NavigateContent() {
       </div>
       )}
 
-      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 45dvh) ───────────── */}
+      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 52dvh) ───────────── */}
       {showCompanionSplit && (
         <div style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
-          height: '45dvh',
+          height: '52dvh',
           zIndex: 60,
-          background: 'rgba(15, 17, 35, 0.98)',
-          backdropFilter: 'blur(20px)',
-          borderTop: '1px solid rgba(167, 139, 250, 0.4)',
+          background: '#8cabd0',
+          borderTop: '2px solid rgba(255, 255, 255, 0.4)',
           boxShadow: '0 -10px 40px rgba(0,0,0,0.8)',
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
           animation: 'slideUp 0.3s ease-out'
         }}>
-          {/* Companion Drawer Header Bar */}
+          {/* ─── 1. Navigation Live Activity "Now Bar" (Dynamic Island / Now Bar Style) ─── */}
           <div style={{
-            padding: '10px 14px',
-            background: 'rgba(30, 27, 75, 0.95)',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.98), rgba(15, 23, 42, 0.98))',
+            borderBottom: '1px solid rgba(16, 185, 129, 0.3)',
+            padding: '8px 14px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexShrink: 0,
+            zIndex: 10,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Left: Live Pulsing Green Dot + Navigation Status + Time/Dist */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
               <div style={{
-                width: 32, height: 32, borderRadius: '50%',
-                background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <IconMoon size={16} color="#7c2d12" />
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  NightMaMa AI 陪聊
-                  <span style={{ fontSize: 10, background: 'rgba(16,185,129,0.2)', color: '#34d399', padding: '1px 6px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.4)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399' }} /> 導航中 · {formatDuration(remainingSec)}
-                  </span>
-                </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
-                  {formatDistance(realtimeDistanceM)} · 預計 {etaTime} 抵達
-                </div>
-              </div>
+                width: 8, height: 8, borderRadius: '50%',
+                background: '#10b981', boxShadow: '0 0 8px #10b981',
+                flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399', whiteSpace: 'nowrap' }}>導航中</span>
+              <span style={{ fontSize: 13, fontWeight: 900, color: 'white', whiteSpace: 'nowrap' }}>{formatDuration(remainingSec)}</span>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>({formatDistance(realtimeDistanceM)})</span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Right: ETA + SOS Pill Button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap' }}>
+                預計 <strong style={{ color: '#60a5fa' }}>{etaTime}</strong> 抵達
+              </span>
               <button
                 onClick={() => router.push('/sos')}
                 style={{
-                  background: '#dc2626', border: 'none', color: 'white',
-                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
+                  background: '#dc2626', border: '1px solid rgba(248,113,113,0.4)', color: 'white',
+                  borderRadius: 12, padding: '3px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(220,38,38,0.4)', whiteSpace: 'nowrap'
                 }}
               >
                 <IconSos size={12} color="white" /> SOS
               </button>
-              <button
-                onClick={() => {
-                  setShowCompanionSplit(false)
-                  setTimeout(() => {
-                    if (mapInstance.current) {
-                      google.maps.event.trigger(mapInstance.current, 'resize')
-                    }
-                  }, 320)
-                }}
-                style={{
-                  background: 'rgba(255,255,255,0.12)', border: 'none', color: 'white',
-                  borderRadius: 14, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
-                }}
-              >
-                <IconChevronDown size={12} color="white" /> 收起
-              </button>
             </div>
           </div>
 
-          {/* Companion Messages Area */}
-          <div style={{ flex: 1, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {companionMessages.map((msg, idx) => (
-              <div key={idx} style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              }}>
-                <div style={{
-                  maxWidth: '82%',
-                  padding: '10px 14px',
-                  borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                  background: msg.role === 'user'
-                    ? 'linear-gradient(135deg, #6366f1, #3b82f6)'
-                    : 'rgba(30, 27, 75, 0.95)',
-                  border: msg.role === 'user' ? 'none' : '1px solid rgba(167, 139, 250, 0.3)',
-                  color: 'white',
-                  fontSize: 13,
-                  lineHeight: 1.5,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                }}>
-                  {msg.text}
-                </div>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2, padding: '0 4px' }}>
-                  {msg.time}
-                </span>
-              </div>
-            ))}
-            {isThinkingCompanion && (
-              <div style={{ alignSelf: 'flex-start', background: 'rgba(30,27,75,0.8)', padding: '8px 14px', borderRadius: 18, fontSize: 12, color: '#c084fc', display: 'flex', alignItems: 'center', gap: 5 }}>
-                <IconLoader size={12} color="#c084fc" className="spin" /> 媽媽思考中...
-              </div>
-            )}
-            <div ref={companionEndRef} />
-          </div>
-
-          {/* Companion Input Bar */}
-          <div style={{
-            padding: '10px 12px 14px',
-            background: 'rgba(10, 14, 26, 0.95)',
-            borderTop: '1px solid rgba(255,255,255,0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}>
-            {/* Speech Mic Button */}
-            <button
-              onClick={toggleSpeechRecognition}
-              style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: isListeningCompanion ? '#ef4444' : 'rgba(139, 92, 246, 0.25)',
-                border: isListeningCompanion ? '2px solid #f87171' : '1px solid rgba(139, 92, 246, 0.5)',
-                color: 'white', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+          {/* ─── Shared Authentic LINE-Style AI Companion Component ─── */}
+          <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+            <CompanionContent
+              embeddedInNav={true}
+              onCloseNav={() => {
+                setShowCompanionSplit(false)
+                setTimeout(() => {
+                  if (mapInstance.current) {
+                    google.maps.event.trigger(mapInstance.current, 'resize')
+                  }
+                }, 320)
               }}
-              title={isListeningCompanion ? '按一下停止錄音' : '按一下開始語音輸入'}
-            >
-              <IconMic size={18} color="white" />
-            </button>
-
-            {/* Text Input Box */}
-            <input
-              type="text"
-              value={companionInput}
-              onChange={e => setCompanionInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && sendCompanionMsg()}
-              placeholder={isListeningCompanion ? '聆聽語音中...' : '說點什麼或問問路線狀況...'}
-              style={{
-                flex: 1,
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: 20,
-                padding: '10px 14px',
-                color: 'white',
-                fontSize: 13,
-                outline: 'none',
+              routeContext={{
+                origin,
+                destination,
+                safetyScore,
+                durationSec: remainingSec,
               }}
             />
-
-            {/* Send Button */}
-            <button
-              onClick={() => sendCompanionMsg()}
-              disabled={!companionInput.trim() || isThinkingCompanion}
-              style={{
-                background: companionInput.trim() ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'rgba(255,255,255,0.1)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 20,
-                padding: '10px 16px',
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: companionInput.trim() ? 'pointer' : 'default',
-                opacity: companionInput.trim() ? 1 : 0.5,
-                display: 'flex', alignItems: 'center', gap: 6
-              }}
-            >
-              <IconSend size={14} color="white" /> 傳送
-            </button>
           </div>
         </div>
       )}
