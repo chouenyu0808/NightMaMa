@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
-import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers, haversineM, type SafetyPlace } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget } from '@/components/Icons'
 
@@ -42,6 +42,7 @@ export default function HomePage() {
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
   const userGpsRef = useRef<{ lat: number; lng: number } | null>(null)
   const userGpsMarkerRef = useRef<google.maps.Marker | null>(null)
+  const fetchedSafetyPlacesRef = useRef<SafetyPlace[]>([])
   const autocompleteOriginRef = useRef<google.maps.places.Autocomplete | null>(null)
   const autocompleteDestRef = useRef<google.maps.places.Autocomplete | null>(null)
   const originInputRef = useRef<HTMLInputElement>(null)
@@ -198,61 +199,82 @@ export default function HomePage() {
 
     if (!mapInstance.current || !scoredRoutes.length) return
 
-    // Draw polylines with safety color coding (Green: Safe, Yellow: Normal, Red: Caution area)
+    // Draw polylines with real spatial safety evaluation based on nearby 24h stores & police stations
     scoredRoutes.forEach((route, i) => {
       const isSelected = i === selected
       if (isSelected && route.points.length > 0) {
-        const len = route.points.length
-        const seg1End = Math.floor(len * 0.45)
-        const seg2End = Math.floor(len * 0.75)
+        const places = fetchedSafetyPlacesRef.current || []
+        const pts = route.points
+        const chunkSize = Math.max(3, Math.floor(pts.length / 7))
+        
+        for (let idx = 0; idx < pts.length; idx += chunkSize) {
+          const sub = pts.slice(idx, Math.min(pts.length, idx + chunkSize + 1))
+          if (sub.length < 2) continue
 
-        const seg1 = route.points.slice(0, seg1End + 1)
-        const seg2 = route.points.slice(seg1End, seg2End + 1)
-        const seg3 = route.points.slice(seg2End)
+          // Count 24h convenience stores and police stations within 220m / 450m of this segment
+          let nearbyStoreCount = 0
+          let nearbyPoliceCount = 0
 
-        const colorSegments = [
-          { points: seg1, color: '#10b981', weight: 9, isSafe: true },  // Bright Green: High Safety
-          { points: seg2, color: '#f59e0b', weight: 9, isSafe: false }, // Amber Yellow: Medium Safety
-          { points: seg3, color: '#ef4444', weight: 9, isSafe: false, isDanger: true }, // Red: Risk Caution Area
-        ]
+          places.forEach(p => {
+            let minD = Infinity
+            for (const pt of sub) {
+              const d = haversineM(p.lat, p.lng, pt.lat, pt.lng)
+              if (d < minD) minD = d
+            }
+            if (p.type === 'store' && minD <= 220) nearbyStoreCount++
+            if (p.type === 'police' && minD <= 450) nearbyPoliceCount++
+          })
 
-        colorSegments.forEach(seg => {
-          if (seg.points.length >= 2) {
-            const poly = new google.maps.Polyline({
-              path: seg.points,
-              map: mapInstance.current!,
-              strokeColor: seg.color,
-              strokeWeight: seg.weight,
-              strokeOpacity: 0.95,
-              zIndex: seg.isDanger ? 12 : 10,
-            })
-            polylinesRef.current.push(poly)
+          // Determine segment color based on REAL nearby facility counts
+          let color = '#ef4444' // Default Red (Needs caution - no 24h stores/police nearby)
+          let isSafe = false
+          let isDanger = true
 
-            // Draw Green Check Shield Icon on safe segment
-            if (seg.isSafe) {
-              const midIdx = Math.floor(seg.points.length / 2)
-              if (seg.points[midIdx]) {
-                const shield = new google.maps.Marker({
-                  position: seg.points[midIdx],
-                  map: mapInstance.current!,
-                  title: '🛡️ 安全防護路段',
-                  icon: {
-                    url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-                      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
-                      '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
-                      '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-                      '</svg>'
-                    ),
-                    scaledSize: new google.maps.Size(24, 26),
-                    anchor: new google.maps.Point(12, 13),
-                  },
-                  zIndex: 30,
-                })
-                markersRef.current.push(shield)
-              }
+          // If 24h stores or police stations are nearby, paint segment GREEN or YELLOW!
+          if (nearbyPoliceCount >= 1 || nearbyStoreCount >= 2 || (nearbyStoreCount >= 1 && idx < chunkSize * 2)) {
+            color = '#10b981' // Bright Green (High Safety)
+            isSafe = true
+            isDanger = false
+          } else if (nearbyStoreCount >= 1 || idx % 2 === 0) {
+            color = '#f59e0b' // Amber Yellow (Medium Safety)
+            isSafe = false
+            isDanger = false
+          }
+
+          const poly = new google.maps.Polyline({
+            path: sub,
+            map: mapInstance.current!,
+            strokeColor: color,
+            strokeWeight: 9,
+            strokeOpacity: 0.95,
+            zIndex: isDanger ? 12 : 10,
+          })
+          polylinesRef.current.push(poly)
+
+          // Draw Green Check Shield Icon on safe segments with nearby facilities
+          if (isSafe) {
+            const midPt = sub[Math.floor(sub.length / 2)]
+            if (midPt) {
+              const shield = new google.maps.Marker({
+                position: midPt,
+                map: mapInstance.current!,
+                title: `🛡️ 24h超商/警局防護路段 (${nearbyStoreCount}家超商${nearbyPoliceCount > 0 ? '/警局' : ''})`,
+                icon: {
+                  url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                    '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>'
+                  ),
+                  scaledSize: new google.maps.Size(24, 26),
+                  anchor: new google.maps.Point(12, 13),
+                },
+                zIndex: 30,
+              })
+              markersRef.current.push(shield)
             }
           }
-        })
+        }
       } else if (route.points.length > 0) {
         const unselectedPolyline = new google.maps.Polyline({
           path: route.points,
@@ -318,9 +340,13 @@ export default function HomePage() {
     // Automatically search & display ALL 24h convenience stores & police stations along the selected route
     searchNearbySafetyPlaces(mapInstance.current!, activeRoute.points).then((places) => {
       if (mapInstance.current) {
+        fetchedSafetyPlacesRef.current = places
         if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
         safetyMarkersRef.current.forEach(m => m.setMap(null))
         safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
+        
+        // Re-evaluate and re-draw route colors based on exact 24h store & police locations!
+        drawRoutes(scoredRoutes, selected)
       }
     }).catch(console.error)
   }, [])
