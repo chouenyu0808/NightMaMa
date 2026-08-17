@@ -506,9 +506,13 @@ export default function HomePage() {
   }
 
   const handleSelectRoute = (idx: number) => {
-    clearSafetyPlaces()
     setSelectedIdx(idx)
     drawRoutes(routes, idx)
+    if (mapInstance.current && fetchedSafetyPlacesRef.current.length > 0) {
+      if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
+      safetyMarkersRef.current.forEach(m => m.setMap(null))
+      safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, fetchedSafetyPlacesRef.current, infoWindowRef.current)
+    }
   }
 
   const swapOriginDest = () => {
