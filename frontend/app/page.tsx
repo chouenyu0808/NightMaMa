@@ -255,8 +255,14 @@ export default function HomePage() {
     setIsLoading(true)
 
     try {
-      const origLatLng = originLatLng || (origin === '我的位置' ? userGpsRef.current : null) || await geocodeAddress(origin)
-      const destLatLngResolved = destLatLng || await geocodeAddress(destination)
+      const origLatLng = (origin === '我的位置' && userGpsRef.current) 
+        ? userGpsRef.current 
+        : (originLatLng || await geocodeAddress(origin))
+      
+      const destLatLngResolved = (destLatLng && destination === '信義區 松智街') 
+        ? destLatLng 
+        : await geocodeAddress(destination)
+
       if (!origLatLng || !destLatLngResolved) {
         throw new Error('找不到地址，請確認出發地與目的地名稱')
       }
@@ -440,7 +446,10 @@ export default function HomePage() {
                     <input
                       ref={originInputRef}
                       value={origin}
-                      onChange={e => setOrigin(e.target.value)}
+                      onChange={e => {
+                        setOrigin(e.target.value)
+                        setOriginLatLng(null)
+                      }}
                       placeholder="請輸入出發地"
                       style={{
                         background: 'transparent', border: 'none', outline: 'none',
@@ -454,7 +463,10 @@ export default function HomePage() {
                     <input
                       ref={destInputRef}
                       value={destination}
-                      onChange={e => setDestination(e.target.value)}
+                      onChange={e => {
+                        setDestination(e.target.value)
+                        setDestLatLng(null)
+                      }}
                       placeholder="請輸入目的地"
                       style={{
                         background: 'transparent', border: 'none', outline: 'none',
