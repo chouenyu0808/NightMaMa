@@ -245,9 +245,8 @@ export async function drawAnxietyReportMarkers(
   map: google.maps.Map,
   infoWindow?: google.maps.InfoWindow
 ): Promise<google.maps.Marker[]> {
-  if (!BACKEND_URL) return []
   try {
-    const res = await fetch(`${BACKEND_URL}/report`).catch(() => null)
+    const res = await fetch('/api/report').catch(() => null)
     if (!res || !res.ok) return []
     const data = await res.json().catch(() => null)
     if (!data || !Array.isArray(data.reports)) return []
