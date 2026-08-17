@@ -98,49 +98,50 @@ export async function geocodeAddress(address: string): Promise<LatLng | null> {
 
 /** 呼叫後端 /routes 取得依安全評分排序的候選路線 */
 export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<RouteResult[]> {
-  // 1. Try Cloud Run backend or configured BACKEND_URL
-  try {
-    const cloudRunUrl = 'https://nightmama-321739351322.asia-east1.run.app'
-    const targetUrl = process.env.NEXT_PUBLIC_BACKEND_URL || cloudRunUrl
-    const res = await fetch(`${targetUrl}/routes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ origin, destination }),
-    })
+  // 1. Try Cloud Run backend if NEXT_PUBLIC_BACKEND_URL is explicitly configured
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+  if (backendUrl) {
+    try {
+      const res = await fetch(`${backendUrl}/routes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origin, destination }),
+      })
 
-    if (res.ok) {
-      const data = await res.json()
-      if (data.routes?.length) {
-        return (data.routes as Array<{
-          type: string
-          polyline: string
-          duration_min: number
-          distance_m: number
-          score: number
-          reason: string | null
-          light_count: number
-          camera_count: number
-          police_count: number
-        }>).map((r) => ({
-          type: r.type,
-          polyline: r.polyline,
-          durationSec: Math.round(r.duration_min * 60),
-          distanceM: r.distance_m,
-          score: r.score,
-          reason: r.reason,
-          lightCount: r.light_count,
-          cameraCount: r.camera_count,
-          policeCount: r.police_count,
-          points: decodePolyline(r.polyline),
-          steps: [],
-        }))
+      if (res.ok) {
+        const data = await res.json()
+        if (data.routes?.length) {
+          return (data.routes as Array<{
+            type: string
+            polyline: string
+            duration_min: number
+            distance_m: number
+            score: number
+            reason: string | null
+            light_count: number
+            camera_count: number
+            police_count: number
+          }>).map((r) => ({
+            type: r.type,
+            polyline: r.polyline,
+            durationSec: Math.round(r.duration_min * 60),
+            distanceM: r.distance_m,
+            score: r.score,
+            reason: r.reason,
+            lightCount: r.light_count,
+            cameraCount: r.camera_count,
+            policeCount: r.police_count,
+            points: decodePolyline(r.polyline),
+            steps: [],
+          }))
+        }
       }
+    } catch {
+      // Silently fall back to Google Maps JS SDK DirectionsService
     }
-  } catch (err) {
-    console.warn('Backend fetch failed, falling back to Google Maps JS SDK DirectionsService:', err)
   }
 
-  // 2. Fallback: Google Maps JS SDK DirectionsService directly in browser
+  // 2. Client Google Maps JS SDK DirectionsService
   return new Promise((resolve, reject) => {
     if (typeof google === 'undefined' || !google.maps) {
       return reject(new Error('Google Maps JS SDK 未載入'))
@@ -170,18 +171,26 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
               cameraCount: Math.floor(pathPoints.length * 0.8),
               policeCount: Math.floor(pathPoints.length * 0.2),
               points: pathPoints,
-              steps: (leg?.steps || []).map(s => ({
-                instruction: s.instructions || '',
-                maneuver: s.maneuver || '',
-                distanceM: s.distance?.value || 50,
-                startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
-                endLocation: { lat: s.end_location.lat(), lng: s.end_location.lng() },
-              })),
+              steps: (leg?.steps || []).map(s => {
+                const rawInstruction = s.instructions || ''
+                const cleanInstruction = rawInstruction
+                  .replace(/<[^>]*>/g, '')
+                  .replace(/&nbsp;/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                return {
+                  instruction: cleanInstruction,
+                  maneuver: s.maneuver || '',
+                  distanceM: s.distance?.value || 50,
+                  startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
+                  endLocation: { lat: s.end_location.lat(), lng: s.end_location.lng() },
+                }
+              }),
             }
           })
           resolve(routes)
         } else {
-          reject(new Error(`Google Maps Directions 服務回應: ${status}`))
+          reject(new Error(`DirectionsService 路線規劃失敗: ${status}`))
         }
       }
     )

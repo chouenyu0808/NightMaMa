@@ -662,7 +662,7 @@ function NavigateContent() {
               >
                 <div style={{ fontSize: 28, width: 40, textAlign: 'center' }}>{step.icon}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{step.instruction}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{step.instruction.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{formatDistance(step.distanceM)}</div>
                 </div>
               </div>
