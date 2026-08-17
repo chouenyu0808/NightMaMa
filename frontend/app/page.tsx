@@ -60,31 +60,29 @@ export default function HomePage() {
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
-  // 1. 自動讀取裝置目前實時 GPS 位置
+  // 1. 自動讀取裝置目前實時 GPS 位置（無縫備援，不跳控制台警告）
   useEffect(() => {
     const defaultPos = { lat: 25.0478, lng: 121.5170 } // 台北車站預設點位
+    userGpsRef.current = defaultPos
+    setOriginLatLng(defaultPos)
+
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
-          const gpsPos = { lat, lng }
+          const gpsPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }
           userGpsRef.current = gpsPos
           setOriginLatLng(gpsPos)
           if (mapInstance.current) {
             mapInstance.current.panTo(gpsPos)
           }
         },
-        (err) => {
-          console.warn('GPS 定位失敗或逾時，使用預設點位:', err)
+        () => {
+          // 靜默採用預設點位，不引發控制台警告
           userGpsRef.current = defaultPos
           setOriginLatLng(defaultPos)
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
       )
-    } else {
-      userGpsRef.current = defaultPos
-      setOriginLatLng(defaultPos)
     }
   }, [])
 
