@@ -41,6 +41,7 @@ export default function HomePage() {
   const polylinesRef = useRef<google.maps.Polyline[]>([])
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
   const userGpsRef = useRef<{ lat: number; lng: number } | null>(null)
+  const userGpsMarkerRef = useRef<google.maps.Marker | null>(null)
   const autocompleteOriginRef = useRef<google.maps.places.Autocomplete | null>(null)
   const autocompleteDestRef = useRef<google.maps.places.Autocomplete | null>(null)
   const originInputRef = useRef<HTMLInputElement>(null)
@@ -60,6 +61,29 @@ export default function HomePage() {
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
+  const updateUserGpsMarker = useCallback((pos: { lat: number; lng: number }) => {
+    if (!mapInstance.current || typeof google === 'undefined' || !google.maps) return
+    if (!userGpsMarkerRef.current) {
+      userGpsMarkerRef.current = new google.maps.Marker({
+        position: pos,
+        map: mapInstance.current,
+        title: '我的位置',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: '#3b82f6',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3,
+        },
+        zIndex: 100,
+      })
+    } else {
+      userGpsMarkerRef.current.setPosition(pos)
+      userGpsMarkerRef.current.setMap(mapInstance.current)
+    }
+  }, [])
+
   // 1. 自動讀取裝置目前實時 GPS 位置（無縫備援，不跳控制台警告）
   useEffect(() => {
     const defaultPos = { lat: 25.0478, lng: 121.5170 } // 台北車站預設點位
@@ -74,17 +98,21 @@ export default function HomePage() {
           setOriginLatLng(gpsPos)
           if (mapInstance.current) {
             mapInstance.current.panTo(gpsPos)
+            updateUserGpsMarker(gpsPos)
           }
         },
         () => {
           // 靜默採用預設點位，不引發控制台警告
           userGpsRef.current = defaultPos
           setOriginLatLng(defaultPos)
+          if (mapInstance.current) {
+            updateUserGpsMarker(defaultPos)
+          }
         },
         { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
       )
     }
-  }, [])
+  }, [updateUserGpsMarker])
 
   // 2. Init Google Map
   useEffect(() => {
@@ -95,13 +123,18 @@ export default function HomePage() {
       loadMaps().then(() => {
         if (!isSubscribed || !mapRef.current) return
         
+        const initialCenter = userGpsRef.current || { lat: 25.0339, lng: 121.5645 }
         mapInstance.current = new google.maps.Map(mapRef.current, {
-          center: { lat: 25.0339, lng: 121.5645 },
+          center: initialCenter,
           zoom: 14.5,
           disableDefaultUI: true,
           gestureHandling: 'greedy',
           styles: darkMapStyle,
         })
+
+        if (userGpsRef.current) {
+          updateUserGpsMarker(userGpsRef.current)
+        }
 
         setTimeout(() => {
           if (mapInstance.current) {
@@ -557,10 +590,16 @@ export default function HomePage() {
       {/* Floating Recenter Map Button */}
       <button
         onClick={() => {
-          if (mapInstance.current && selectedRoute.points?.length) {
-            const bounds = new google.maps.LatLngBounds()
-            selectedRoute.points.forEach(p => bounds.extend(p))
-            mapInstance.current.fitBounds(bounds, { top: 100, bottom: 280, left: 40, right: 40 })
+          if (mapInstance.current) {
+            if (showSheet && selectedRoute.points?.length) {
+              const bounds = new google.maps.LatLngBounds()
+              selectedRoute.points.forEach(p => bounds.extend(p))
+              mapInstance.current.fitBounds(bounds, { top: 100, bottom: 280, left: 40, right: 40 })
+            } else if (userGpsRef.current) {
+              mapInstance.current.panTo(userGpsRef.current)
+              mapInstance.current.setZoom(16)
+              updateUserGpsMarker(userGpsRef.current)
+            }
           }
         }}
         style={{
