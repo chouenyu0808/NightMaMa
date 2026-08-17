@@ -3,6 +3,13 @@
 Reuses the already-cleaned WGS84 output of convert_data.py instead of
 re-parsing the raw TWD97/Big5 CSVs. Safe to re-run (WRITE_TRUNCATE).
 
+Every destination (dataset, table, and lat/lng column names) is derived from
+config.py — the same values services/bigquery_service.py queries at runtime.
+Do not hardcode names here: they previously drifted apart (this script wrote
+`<project>.nightmama.streetlights` with lat/lng columns while the scorer
+queried `LIGHT_TAIPEI.StreetLight` expecting latitude/longitude), so the import
+appeared to succeed but every route scored 0.
+
 Run once ADC is set up (see backend-architecture.md). Must run with CWD=backend/
 so config.py picks up backend/.env, same as running the API server:
     cd backend
@@ -22,18 +29,24 @@ from config import settings  # noqa: E402
 # frontend/data/ (not public/) — these files are import sources, not web assets.
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "data")
 
+# Location of the reference tables the safety scorer reads. bigquery_service
+# queries lights by latitude/longitude and cameras by lat/lng, so the schemas
+# below must use exactly those column names.
+LIGHT_LAT_COL, LIGHT_LNG_COL = "latitude", "longitude"
+CAMERA_LAT_COL, CAMERA_LNG_COL = "lat", "lng"
+
 STREETLIGHTS_SCHEMA = [
     bigquery.SchemaField("id", "STRING"),
-    bigquery.SchemaField("lat", "FLOAT64"),
-    bigquery.SchemaField("lng", "FLOAT64"),
+    bigquery.SchemaField(LIGHT_LAT_COL, "FLOAT64"),
+    bigquery.SchemaField(LIGHT_LNG_COL, "FLOAT64"),
     bigquery.SchemaField("lux_estimate", "FLOAT64"),
     bigquery.SchemaField("source_updated_at", "TIMESTAMP"),
 ]
 
 CAMERAS_SCHEMA = [
     bigquery.SchemaField("id", "STRING"),
-    bigquery.SchemaField("lat", "FLOAT64"),
-    bigquery.SchemaField("lng", "FLOAT64"),
+    bigquery.SchemaField(CAMERA_LAT_COL, "FLOAT64"),
+    bigquery.SchemaField(CAMERA_LNG_COL, "FLOAT64"),
     bigquery.SchemaField("type", "STRING"),
     bigquery.SchemaField("source_updated_at", "TIMESTAMP"),
 ]
@@ -47,11 +60,24 @@ UNSAFE_REPORTS_SCHEMA = [
     bigquery.SchemaField("session_hash", "STRING"),
 ]
 
+# Taipei open data; keep the reference tables next to the compute region.
+BQ_LOCATION = os.environ.get("BQ_LOCATION", "asia-east1")
 
-def _load(client: bigquery.Client, table_name: str, schema: list, rows: list) -> None:
-    table_id = f"{settings.gcp_project_id}.{settings.bq_dataset}.{table_name}"
+
+def _ensure_dataset(client: bigquery.Client, dataset: str) -> None:
+    """create_table 404s if the dataset itself is missing, so create it first."""
+    dataset_id = f"{client.project}.{dataset}"
+    ds = bigquery.Dataset(dataset_id)
+    ds.location = BQ_LOCATION
+    client.create_dataset(ds, exists_ok=True)
+
+
+def _load(client: bigquery.Client, dataset: str, table_name: str, schema: list, rows: list) -> None:
+    _ensure_dataset(client, dataset)
+    table_id = f"{client.project}.{dataset}.{table_name}"
     client.create_table(bigquery.Table(table_id, schema=schema), exists_ok=True)
     if not rows:
+        print(f"[{dataset}.{table_name}] 建表完成（無資料列）")
         return
     job = client.load_table_from_json(
         rows,
@@ -59,45 +85,50 @@ def _load(client: bigquery.Client, table_name: str, schema: list, rows: list) ->
         job_config=bigquery.LoadJobConfig(schema=schema, write_disposition="WRITE_TRUNCATE"),
     )
     job.result()
-    print(f"[{table_name}] 匯入 {len(rows)} 筆")
+    print(f"[{dataset}.{table_name}] 匯入 {len(rows)} 筆")
 
 
 def main() -> None:
     client = bigquery.Client(project=settings.gcp_project_id or None)
     now = datetime.now(timezone.utc).isoformat()
 
+    print(f"專案: {client.project} / 位置: {BQ_LOCATION}")
+
     with open(os.path.join(DATA_DIR, "streetlights.json"), encoding="utf-8") as f:
         lights = json.load(f)
     light_rows = [
         {
             "id": str(uuid.uuid4()),
-            "lat": light["lat"],
-            "lng": light["lng"],
+            LIGHT_LAT_COL: light["lat"],
+            LIGHT_LNG_COL: light["lng"],
             "lux_estimate": light["watt"],
             "source_updated_at": now,
         }
         for light in lights
     ]
-    _load(client, "streetlights", STREETLIGHTS_SCHEMA, light_rows)
+    _load(client, settings.bq_dataset_lights, settings.bq_table_lights, STREETLIGHTS_SCHEMA, light_rows)
 
     with open(os.path.join(DATA_DIR, "cctv.json"), encoding="utf-8") as f:
         cameras = json.load(f)
     camera_rows = [
         {
             "id": str(uuid.uuid4()),
-            "lat": cam["lat"],
-            "lng": cam["lng"],
+            CAMERA_LAT_COL: cam["lat"],
+            CAMERA_LNG_COL: cam["lng"],
             "type": cam.get("name", ""),
             "source_updated_at": now,
         }
         for cam in cameras
     ]
-    _load(client, "cameras", CAMERAS_SCHEMA, camera_rows)
+    _load(client, settings.bq_dataset_cameras, settings.bq_table_cameras, CAMERAS_SCHEMA, camera_rows)
 
     # unsafe_reports 只建表，資料由使用者回報累積
-    _load(client, "unsafe_reports", UNSAFE_REPORTS_SCHEMA, [])
+    _load(client, settings.bq_dataset, "unsafe_reports", UNSAFE_REPORTS_SCHEMA, [])
 
-    print("完成。")
+    print()
+    print("完成。評分程式會從以下位置讀取：")
+    print(f"  路燈: {settings.bq_dataset_lights}.{settings.bq_table_lights} ({LIGHT_LAT_COL}/{LIGHT_LNG_COL})")
+    print(f"  CCTV: {settings.bq_dataset_cameras}.{settings.bq_table_cameras} ({CAMERA_LAT_COL}/{CAMERA_LNG_COL})")
 
 
 if __name__ == "__main__":
