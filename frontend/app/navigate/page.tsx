@@ -389,16 +389,11 @@ function NavigateContent() {
         )
       }
 
-      // Initial camera view — fit bounds with detailed maxZoom (18.3) for clear street detail
-      const bounds = new google.maps.LatLngBounds()
-      points.forEach(p => bounds.extend(p))
-      mapInstance.current.fitBounds(bounds, { top: 180, bottom: 180, left: 60, right: 60 })
-
-      google.maps.event.addListenerOnce(mapInstance.current, 'idle', () => {
-        if (mapInstance.current && (mapInstance.current.getZoom() || 0) > 18.8) {
-          mapInstance.current.setZoom(18.3)
-        }
-      })
+      // Initial camera view — start directly in close-up tracking view (zoom 18.3 on user start position)
+      if (mapInstance.current && points[0]) {
+        mapInstance.current.setCenter(points[0])
+        mapInstance.current.setZoom(18.3)
+      }
     })
 
     return () => {
