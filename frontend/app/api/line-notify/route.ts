@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Token and message required' }, { status: 400 })
     }
 
-    const cleanToken = token.trim()
+    const cleanToken = (token || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim()
 
     // 1. Try LINE Messaging API Push Message (https://api.line.me/v2/bot/message/push)
     if (targetId && targetId.trim()) {
