@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // 依序嘗試，第一個成功回應的就採用。
-// 注意：gemini-1.5-flash 已從 Gemini API 下線，不要再放回這個清單。
-const CHAT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash']
-const VISION_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash']
+//
+// 這個清單踩過兩次雷：gemini-1.5-flash、gemini-2.0-flash、gemini-2.5-flash
+// 都先後被 Google 下線，程式就直接回 404 停擺。寫死版號的模型遲早會退役。
+//
+// 因此最後一項固定放 gemini-flash-latest —— 那是會自動指向當前最新
+// flash 模型的別名，不會 404。前面的明確版號負責行為可預期，
+// 別名負責在它退役時讓服務自己續命，不必等人改程式碼。
+//
+// 想確認目前有哪些模型可用：
+//   curl "https://generativelanguage.googleapis.com/v1beta/models?key=$GEMINI_API_KEY"
+const CHAT_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest']
+const VISION_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest']
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,9 +100,9 @@ export async function POST(req: NextRequest) {
 
     const fullPrompt = `${systemInstruction}${historyText}\n使用者問：${userMessage}`
 
-    // 先前這裡會先打 /v1beta/interactions 搭配 model "gemini-3.6-flash"。
-    // 這個端點與這個 model 名稱在 Gemini API 都不存在，所以每次對話都固定失敗一次
-    // 才會 fallback，白白多付一個來回的延遲。已移除，直接使用 generateContent。
+    // 先前這裡會先打 /v1beta/interactions 再 fallback 到 generateContent。
+    // 那個端點不存在（模型名稱本身沒問題），所以每次對話都固定先失敗一次，
+    // 白白多付一個來回的延遲。已移除，直接使用 generateContent。
     for (const modelName of CHAT_MODELS) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
