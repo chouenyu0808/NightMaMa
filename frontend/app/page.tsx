@@ -401,20 +401,9 @@ export default function HomePage() {
     }
 
     // Draw community anxiety report markers
-    drawAnxietyReportMarkers(mapInstance.current!)
-
-    // Automatically search & display ALL 24h convenience stores & police stations along the selected route
-    searchNearbySafetyPlaces(mapInstance.current!, activeRoute.points).then((places) => {
-      if (mapInstance.current) {
-        fetchedSafetyPlacesRef.current = places
-        if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
-        safetyMarkersRef.current.forEach(m => m.setMap(null))
-        safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
-        
-        // Re-evaluate and re-draw route colors based on exact 24h store & police locations!
-        drawRoutes(scoredRoutes, selected)
-      }
-    }).catch(console.error)
+    if (mapInstance.current) {
+      drawAnxietyReportMarkers(mapInstance.current)
+    }
   }, [])
 
   const handleSearch = async () => {
@@ -490,8 +479,24 @@ export default function HomePage() {
 
       setRoutes(scored)
       setSelectedIdx(0)
-      drawRoutes(scored, 0)
       setShowSheet(true)
+
+      // Fetch nearby safety places (stores & police) ONCE without infinite loop recursion
+      if (mapInstance.current && scored.length > 0) {
+        searchNearbySafetyPlaces(mapInstance.current, scored[0].points).then((places) => {
+          fetchedSafetyPlacesRef.current = places
+          if (mapInstance.current) {
+            if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
+            safetyMarkersRef.current.forEach(m => m.setMap(null))
+            safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
+          }
+          drawRoutes(scored, 0)
+        }).catch(() => {
+          drawRoutes(scored, 0)
+        })
+      } else {
+        drawRoutes(scored, 0)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '路線搜尋失敗，請重試')
     } finally {
