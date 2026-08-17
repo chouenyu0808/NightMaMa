@@ -19,7 +19,7 @@ interface Message {
 
 const INITIAL_MESSAGE: Message = {
   role: 'ai',
-  text: '嗨！我是 NightMaMa 🌙 我會一路陪你走回家。有任何問題或感到不安都可以跟我說喔！',
+  text: '嗨！我是媽咪 🌙 我會一路陪你走回家。有任何問題或感到不安都可以跟我說喔！',
   timestamp: Date.now(),
 }
 
@@ -275,7 +275,12 @@ function stripEmojis(str: string): string {
             <IconChevronLeft />
           </button>
           <div style={{ position: 'relative' }}>
-            <Logo size={40} style={{ borderRadius: '50%', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/mom_avatar.jpg"
+              alt="媽咪"
+              style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}
+            />
             <div style={{
               position: 'absolute', right: -2, bottom: -2, width: 12, height: 12, borderRadius: '50%',
               background: '#10B981', border: '2px solid #7599bd'
@@ -283,7 +288,7 @@ function stripEmojis(str: string): string {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-              NightMaMa 陪伴媽媽
+              媽咪
             </div>
             <div style={{ fontSize: 11, opacity: 0.85, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: isSpeaking ? '#F59E0B' : '#10B981' }} />
@@ -348,7 +353,12 @@ function stripEmojis(str: string): string {
             >
               {/* AI Avatar */}
               {!isUser && (
-                <Logo size={38} style={{ borderRadius: '50%', flexShrink: 0, marginTop: 2 }} />
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src="/mom_avatar.jpg"
+                  alt="媽咪"
+                  style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginTop: 2 }}
+                />
               )}
 
               {/* User Side Timestamp & Read status */}
@@ -390,7 +400,12 @@ function stripEmojis(str: string): string {
         {/* AI Typing Indicator */}
         {isThinking && (
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <Logo size={38} style={{ borderRadius: '50%', flexShrink: 0 }} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/mom_avatar.jpg"
+              alt="媽咪"
+              style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+            />
             <div style={{
               background: '#FFFFFF',
               borderRadius: '18px 18px 18px 4px',
