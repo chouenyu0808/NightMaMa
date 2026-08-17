@@ -740,27 +740,46 @@ export default function HomePage() {
 
         {/* Floating Top Summary Bar (When candidate routes are being compared!) */}
         {showSheet && (
-          <div style={{ padding: '8px 16px 0', pointerEvents: 'auto' }}>
+          <div style={{ padding: '8px 12px 0', pointerEvents: 'auto', zIndex: 90 }}>
             <div style={{
-              background: 'rgba(17, 24, 39, 0.92)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              borderRadius: 16, padding: '10px 16px',
+              background: 'rgba(15, 23, 42, 0.94)',
+              border: '1px solid rgba(139, 92, 246, 0.35)',
+              borderRadius: 18, padding: '8px 12px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)'
+              boxShadow: '0 10px 30px rgba(0,0,0,0.6)', backdropFilter: 'blur(16px)',
+              gap: 8, overflow: 'hidden'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#8b5cf6' }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{origin}</span>
-                <IconArrowRight size={12} color="rgba(255,255,255,0.4)" />
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#f472b6' }}>{destination}</span>
+              {/* Origin -> Destination text pill */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                <span style={{
+                  fontSize: 12, fontWeight: 800, color: 'white',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                  background: 'rgba(139, 92, 246, 0.25)', padding: '2px 8px', borderRadius: 8,
+                  border: '1px solid rgba(139, 92, 246, 0.4)'
+                }}>
+                  {origin === '我的位置' ? '📍 我的位置' : origin.replace(/^\d{3,5}/, '').replace(/^臺北市|^台北市|^新北市/, '').slice(0, 6)}
+                </span>
+
+                <IconArrowRight size={12} color="rgba(255,255,255,0.4)" style={{ flexShrink: 0 }} />
+
+                <span style={{
+                  fontSize: 12, fontWeight: 800, color: '#f472b6',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  minWidth: 0, background: 'rgba(244, 114, 182, 0.15)', padding: '2px 8px', borderRadius: 8,
+                  border: '1px solid rgba(244, 114, 182, 0.3)'
+                }} title={destination}>
+                  {destination.replace(/^\d{3,5}/, '').replace(/^臺北市|^台北市|^新北市/, '').replace(/[\u4e00-\u9fa5]+[村里]/, '') || destination}
+                </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 <button
                   onClick={() => setShowAnxietyModal(true)}
                   style={{
-                    background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.5)',
-                    color: '#f87171', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 700,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3
+                    background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.5)',
+                    color: '#f87171', borderRadius: 10, padding: '5px 9px', fontSize: 11, fontWeight: 800,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap'
                   }}
                 >
                   <IconAlertTriangle size={12} color="#f87171" /> 不安通報
@@ -768,11 +787,12 @@ export default function HomePage() {
                 <button
                   onClick={() => setShowSheet(false)}
                   style={{
-                    background: 'rgba(255,255,255,0.1)', border: 'none', color: '#c4b5fd',
-                    padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#c4b5fd', padding: '5px 9px', borderRadius: 10, fontSize: 11, fontWeight: 800,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap'
                   }}
                 >
-                  <IconPencil size={12} /> 重新搜尋
+                  <IconPencil size={12} color="#c4b5fd" /> 重搜
                 </button>
               </div>
             </div>
