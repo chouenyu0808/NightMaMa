@@ -235,7 +235,7 @@ export function drawSafetyPlaceMarkers(
         const content = `
           <div style="padding: 8px 12px; color: #111827; font-family: sans-serif;">
             <div style="font-weight: 700; font-size: 13px; color: ${isStore ? '#059669' : '#1e3a8a'}; margin-bottom: 2px;">
-              ${isStore ? `🏪 台灣四大超商 · ${brandTag}` : '👮 警察局 / 派出所'}
+              ${isStore ? `🏪 24h 明亮超商 · ${place.brand || '連鎖門市'}` : '👮 警察局 / 派出所'}
             </div>
             <div style="font-size: 14px; font-weight: 700; color: #111827;">${place.name}</div>
             ${place.vicinity ? `<div style="font-size: 11px; color: #6b7280; margin-top: 3px;">${place.vicinity}</div>` : ''}
