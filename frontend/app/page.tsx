@@ -890,18 +890,24 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, textAlign: 'center', marginBottom: 8 }}>
-                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '6px', borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>路燈數量</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: 'white', marginTop: 2 }}>{selectedRoute.lightCount}</div>
+              {/* Compact Unified Safety Stats Row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
+                    💡 {selectedRoute.lightCount} 路燈
+                  </span>
+                  <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
+                    📹 {selectedRoute.cameraCount} 監視器
+                  </span>
+                  <span style={{ background: 'rgba(249,115,22,0.18)', color: '#f97316', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
+                    🏪 {selectedRoute.storeCount || 4} 家超商
+                  </span>
+                  <span style={{ background: 'rgba(30,58,138,0.35)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
+                    👮 {selectedRoute.policeCount || 2} 派出所
+                  </span>
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '6px', borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>監視器</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: 'white', marginTop: 2 }}>{selectedRoute.cameraCount}</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '6px', borderRadius: 8 }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>安全分數</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: selectedRoute.safety?.color, marginTop: 2 }}>{(selectedRoute.score / 10).toFixed(1)}/10</div>
+                <div style={{ fontSize: 12, fontWeight: 900, color: selectedRoute.safety?.color, background: 'rgba(16,185,129,0.12)', padding: '2px 8px', borderRadius: 8, border: `1px solid ${selectedRoute.safety?.color || '#10b981'}` }}>
+                  {(selectedRoute.score / 10).toFixed(1)} / 10 安心
                 </div>
               </div>
 
@@ -910,23 +916,23 @@ export default function HomePage() {
                   background: 'rgba(15, 23, 42, 0.85)',
                   border: '1px solid rgba(56, 189, 248, 0.35)',
                   borderRadius: 16,
-                  padding: '12px 14px',
-                  marginBottom: 12,
+                  padding: '10px 12px 6px',
+                  marginBottom: 8,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 10,
+                  gap: 8,
                 }}>
                   {/* Header Row */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>🚌 大眾運輸轉乘進度條</span>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>🚌 大眾運輸轉乘進度</span>
                     </div>
-                    <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 10px', borderRadius: 10, fontWeight: 800 }}>
+                    <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 9px', borderRadius: 8, fontWeight: 800 }}>
                       {selectedRoute.transitLegs?.find(l => l.mode === 'BUS')?.lineName || '公車 / 捷運'}
                     </span>
                   </div>
 
-                  {/* Horizontal 5-Step Stepper Progress Bar (1:1 Inspired by User Screenshot 2) */}
+                  {/* Horizontal 5-Step Stepper Progress Bar */}
                   {(() => {
                     const busLeg = selectedRoute.transitLegs?.find(l => l.mode === 'BUS')
                     const depStop = busLeg?.departureStop || '上車站'
@@ -946,13 +952,13 @@ export default function HomePage() {
 
                     return (
                       <div style={{
-                        position: 'relative', width: '100%', padding: '6px 2px 4px',
+                        position: 'relative', width: '100%', padding: '4px 2px 2px',
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                         boxSizing: 'border-box'
                       }}>
                         {/* Connecting Track Line behind circles */}
                         <div style={{
-                          position: 'absolute', top: 21, left: '8%', right: '8%', height: 4,
+                          position: 'absolute', top: 19, left: '8%', right: '8%', height: 4,
                           background: 'linear-gradient(90deg, #10b981 0%, #34d399 35%, #0284c7 65%, #34d399 100%)',
                           borderRadius: 2, zIndex: 1
                         }} />
@@ -962,21 +968,17 @@ export default function HomePage() {
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
                             zIndex: 2, width: '18%', boxSizing: 'border-box'
                           }}>
-                            {/* Glowing Circle Button */}
                             <div style={{
-                              width: 30, height: 30, borderRadius: '50%',
-                              background: step.bg, border: `2.5px solid ${step.ring}`,
+                              width: 28, height: 28, borderRadius: '50%',
+                              background: step.bg, border: `2px solid ${step.ring}`,
                               color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 12, fontWeight: 900, boxShadow: `0 0 10px ${step.shadow}`,
-                              transition: 'transform 0.2s ease'
+                              fontSize: 11, fontWeight: 900, boxShadow: `0 0 8px ${step.shadow}`
                             }}>
                               {step.num}
                             </div>
-                            {/* Top Title */}
-                            <span style={{ fontSize: 10, fontWeight: 800, color: 'white', marginTop: 4, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.title}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: 'white', marginTop: 3, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.title}>
                               {step.title}
                             </span>
-                            {/* Subtitle */}
                             <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.65)', marginTop: 1, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.subtitle}>
                               {step.subtitle}
                             </span>
@@ -985,27 +987,8 @@ export default function HomePage() {
                       </div>
                     )
                   })()}
-
-                  {/* Detailed Step List */}
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', display: 'flex', flexDirection: 'column', gap: 4, background: 'rgba(255,255,255,0.03)', padding: 8, borderRadius: 10 }}>
-                    {selectedRoute.steps?.map((step, sIdx) => (
-                      <div key={sIdx} style={{ lineHeight: 1.4, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-                        <span style={{ flexShrink: 0, color: '#38bdf8' }}>•</span>
-                        <span>{step.instruction}</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
-
-              <div style={{ display: 'flex', gap: 6 }}>
-                <span style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '2px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <IconStore size={12} color="#f97316" /> {selectedRoute.storeCount || 4} 家24h超商
-                </span>
-                <span style={{ background: 'rgba(30,58,138,0.3)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <IconUser size={12} color="#93c5fd" /> {selectedRoute.policeCount || 2} 派出所
-                </span>
-              </div>
             </div>
           )}
 
