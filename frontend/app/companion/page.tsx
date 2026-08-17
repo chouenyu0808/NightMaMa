@@ -355,12 +355,11 @@ function CompanionContent() {
     if (ringtoneAudioRef.current) {
       ringtoneAudioRef.current.pause()
       ringtoneAudioRef.current.currentTime = 0
-      ringtoneAudioRef.current = null // Release to avoid play/pause race
+      ringtoneAudioRef.current = null
     }
     setCallState('connected')
-    // Play MP3 voice directly inside user click handler to satisfy browser autoplay policy
-    // Create a fresh Audio instance each time to avoid stale state
-    const voice = new Audio('/api/tts')
+    // Play pre-generated Gemini TTS WAV file — instant playback, no API wait
+    const voice = new Audio('/mom_voice.wav')
     momVoiceAudioRef.current = voice
     voice.play().catch(() => {})
   }

@@ -146,7 +146,7 @@ function SOSContent() {
       audioRef.current.currentTime = 0
     }
     if (!voiceAudioRef.current) {
-      voiceAudioRef.current = new Audio('/api/tts')
+      voiceAudioRef.current = new Audio('/mom_voice.wav')
     }
     voiceAudioRef.current.currentTime = 0
     voiceAudioRef.current.play().catch(console.warn)
