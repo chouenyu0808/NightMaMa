@@ -6,9 +6,10 @@ export async function POST(req: NextRequest) {
     const text =
       body.text ||
       '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
-    const voiceName = body.voice || 'cmn-TW-Wavenet-A'
-    const pitch = body.pitch || 1.0
-    const speakingRate = body.speakingRate || 0.95
+    const prompt = body.prompt || 'Read aloud in a warm, welcoming tone.'
+    const voiceName = body.voice || 'Achernar'
+    const modelName = body.modelName || 'gemini-3.1-flash-tts-preview'
+    const languageCode = body.languageCode || 'cmn-tw'
 
     const apiKey =
       process.env.GEMINI_API_KEY ||
@@ -16,16 +17,27 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
       ''
 
-    // 1. Try official Google Cloud Text-to-Speech REST API (https://texttospeech.googleapis.com/v1/text:synthesize)
+    // 1. Exact Gemini 3.1 Flash TTS Preview REST API payload from official Google Cloud Console
     if (apiKey) {
       try {
-        const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`, {
+        const res = await fetch(`https://texttospeech.googleapis.com/v1beta1/text:synthesize?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            input: { text },
-            voice: { languageCode: 'cmn-TW', name: voiceName, ssmlGender: 'FEMALE' },
-            audioConfig: { audioEncoding: 'MP3', pitch, speakingRate },
+            audioConfig: {
+              audioEncoding: 'MP3',
+              pitch: 0,
+              speakingRate: 1,
+            },
+            input: {
+              prompt,
+              text,
+            },
+            voice: {
+              languageCode,
+              modelName,
+              name: voiceName,
+            },
           }),
         })
 
@@ -42,11 +54,11 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (err) {
-        console.warn('Google Cloud TTS API failed, falling back:', err)
+        console.warn('Gemini 3.1 Flash TTS Preview API failed, falling back:', err)
       }
     }
 
-    // 2. Fallback to Google Mandarin Neural Voice REST endpoint
+    // 2. High-quality Taiwan Mandarin Voice Fallback
     const encodedText = encodeURIComponent(text)
     const googleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=zh-TW&client=tw-ob`
     const resFallback = await fetch(googleUrl, {
