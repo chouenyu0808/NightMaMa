@@ -295,102 +295,32 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
                   }
                 })
 
-                const realTransitRoute: RouteResult = {
-                  type: 'transit',
-                  isTransit: true,
-                  transitLegs,
-                  polyline: tr.overview_polyline || routes[0]?.polyline || '',
-                  durationSec: tLeg?.duration?.value || Math.round(routes[0].durationSec * 0.85),
-                  distanceM: tLeg?.distance?.value || routes[0].distanceM,
-                  score: 92,
-                  reason: `搭乘 ${mainLineName || '大眾運輸'}（${mainDepStop || '上車站'} ➔ ${mainArrStop || '下車站'}），僅頭尾步行實施夜間安全防護`,
-                  lightCount: Math.floor(routes[0].lightCount * 0.8),
-                  cameraCount: Math.floor(routes[0].cameraCount * 0.8),
-                  policeCount: routes[0].policeCount,
-                  segmentScores: [],
-                  storeCount: routes[0].storeCount,
-                  points: (tr.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() })),
-                  steps,
+                  // Only add transit route if Google Directions Transit API actually returned a valid bus or MRT line
+                  const hasTransitVehicle = transitLegs.some(l => l.mode === 'BUS')
+                  if (hasTransitVehicle) {
+                    const realTransitRoute: RouteResult = {
+                      type: 'transit',
+                      isTransit: true,
+                      transitLegs,
+                      polyline: tr.overview_polyline || routes[0]?.polyline || '',
+                      durationSec: tLeg?.duration?.value || Math.round(routes[0]?.durationSec * 0.85 || 600),
+                      distanceM: tLeg?.distance?.value || routes[0]?.distanceM || 1000,
+                      score: 92,
+                      reason: `搭乘 ${mainLineName || '大眾運輸'}（${mainDepStop || '上車站'} ➔ ${mainArrStop || '下車站'}），僅頭尾步行實施夜間安全防護`,
+                      lightCount: Math.floor((routes[0]?.lightCount || 40) * 0.8),
+                      cameraCount: Math.floor((routes[0]?.cameraCount || 20) * 0.8),
+                      policeCount: routes[0]?.policeCount || 2,
+                      segmentScores: [],
+                      storeCount: routes[0]?.storeCount || 4,
+                      points: (tr.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() })),
+                      steps,
+                    }
+                    routes.push(realTransitRoute)
+                  }
                 }
-                routes.push(realTransitRoute)
-              } else if (routes.length > 0) {
-                // Fallback transit route if Google Transit unavailable for short distance
-                const basePts = routes[0].points
-                const len = basePts.length
-                const walk1End = Math.floor(len * 0.25)
-                const busEnd = Math.floor(len * 0.75)
-
-                const transitLegs: TransitLeg[] = [
-                  {
-                    mode: 'WALK',
-                    departureStop: '近郊公車站',
-                    points: basePts.slice(0, walk1End + 1),
-                  },
-                  {
-                    mode: 'BUS',
-                    lineName: '幹線公車 / 捷運接駁車',
-                    departureStop: '近郊公車站',
-                    arrivalStop: '目的地接駁站',
-                    points: basePts.slice(walk1End, busEnd + 1),
-                  },
-                  {
-                    mode: 'WALK',
-                    arrivalStop: '目的地接駁站',
-                    points: basePts.slice(busEnd),
-                  },
-                ]
-
-                const fallbackTransit: RouteResult = {
-                  type: 'transit',
-                  isTransit: true,
-                  transitLegs,
-                  polyline: routes[0].polyline,
-                  durationSec: Math.round(routes[0].durationSec * 0.85),
-                  distanceM: routes[0].distanceM,
-                  score: 92,
-                  reason: '搭乘幹線公車接駁，僅頭尾段步行實施夜間安全防護',
-                  lightCount: routes[0].lightCount,
-                  cameraCount: routes[0].cameraCount,
-                  policeCount: routes[0].policeCount,
-                  segmentScores: [],
-                  storeCount: routes[0].storeCount,
-                  points: basePts,
-                  steps: [
-                    {
-                      instruction: '🚶 步行前往 [近郊公車站]（夜間安全檢測防護中）',
-                      maneuver: 'turn-straight',
-                      distanceM: 250,
-                      startLocation: basePts[0],
-                      endLocation: basePts[walk1End] || basePts[0],
-                    },
-                    {
-                      instruction: '🚌 搭乘 [幹線公車 / 捷運接駁車] 車廂內安全（行駛約 6 分鐘）',
-                      maneuver: 'straight',
-                      distanceM: 600,
-                      startLocation: basePts[walk1End] || basePts[0],
-                      endLocation: basePts[busEnd] || basePts[basePts.length - 1],
-                    },
-                    {
-                      instruction: '🚏 在 [目的地接駁站] 下車準備步行',
-                      maneuver: 'turn-right',
-                      distanceM: 50,
-                      startLocation: basePts[busEnd] || basePts[basePts.length - 1],
-                      endLocation: basePts[busEnd] || basePts[basePts.length - 1],
-                    },
-                    {
-                      instruction: '🏠 步行至回家目的地（夜間安全檢測防護中）',
-                      maneuver: 'turn-left',
-                      distanceM: 200,
-                      startLocation: basePts[busEnd] || basePts[basePts.length - 1],
-                      endLocation: basePts[basePts.length - 1],
-                    },
-                  ],
-                }
-                routes.push(fallbackTransit)
+                resolve(routes)
               }
-              resolve(routes)
-            }
-          )
+            )
         } else {
           reject(new Error(`DirectionsService 路線規劃失敗: ${status}`))
         }

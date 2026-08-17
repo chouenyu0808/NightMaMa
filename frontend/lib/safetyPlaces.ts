@@ -246,10 +246,11 @@ export async function drawAnxietyReportMarkers(
   infoWindow?: google.maps.InfoWindow
 ): Promise<google.maps.Marker[]> {
   try {
-    const res = await fetch(`${BACKEND_URL}/report`)
-    if (!res.ok) return []
-    const { reports } = await res.json()
-    if (!Array.isArray(reports)) return []
+    const res = await fetch(`${BACKEND_URL}/report`).catch(() => null)
+    if (!res || !res.ok) return []
+    const data = await res.json().catch(() => null)
+    if (!data || !Array.isArray(data.reports)) return []
+    const reports = data.reports
 
     const sharedInfoWindow = infoWindow || new google.maps.InfoWindow()
     const markers: google.maps.Marker[] = []
