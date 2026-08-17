@@ -122,26 +122,32 @@ export function calcSafetyScore(
   const { count: lightCount } = countNearbyLights(samples, lights)
   const cctvCount = countNearbyCCTV(samples, cctvs)
 
-  // 每公里密度標準化 (滿分基準: 路燈 200/km, CCTV 5/km, 店家 3/km)
+  // 每公里密度標準化 (滿分基準: 路燈 120/km, CCTV 18/km, 店家 3/km)
   const lightDensity = lightCount / routeLengthKm
   const cctvDensity = cctvCount / routeLengthKm
   const placeDensity = placeCount / routeLengthKm
 
-  const lightScore = Math.min(100, (lightDensity / 200) * 100)
-  const cctvScore = Math.min(100, (cctvDensity / 5) * 100)
-  const placeScore = Math.min(100, (placeDensity / 3) * 100)
+  const lightScore = Math.min(100, Math.round((lightDensity / 120) * 100))
+  const cctvScore = Math.min(100, Math.round((cctvDensity / 18) * 100))
+  const placeScore = Math.min(100, Math.round((placeDensity / 3) * 100))
 
-  // 加權總分: 路燈 50% + CCTV 30% + 店家 20%
-  const total = Math.round(lightScore * 0.5 + cctvScore * 0.3 + placeScore * 0.2)
+  // 加權總分: 路燈 55% + CCTV 35% + 24h店家 10%
+  let rawTotal = lightScore * 0.55 + cctvScore * 0.35 + placeScore * 0.1
+
+  // 絕對數量加分 (高涵蓋防禦加成)
+  if (lightCount >= 500) rawTotal += 3
+  if (cctvCount >= 80) rawTotal += 3
+
+  const total = Math.min(99, Math.max(30, Math.round(rawTotal)))
 
   let label: SafetyScore['label']
   let color: string
   let emoji: string
-  if (total >= 65) {
+  if (total >= 85) {
     label = '安全'
     color = '#10b981'
     emoji = '🟢'
-  } else if (total >= 40) {
+  } else if (total >= 60) {
     label = '普通'
     color = '#f59e0b'
     emoji = '🟡'
@@ -151,5 +157,15 @@ export function calcSafetyScore(
     emoji = '🔴'
   }
 
-  return { total, lightScore: Math.round(lightScore), cctvScore: Math.round(cctvScore), placeScore: Math.round(placeScore), lightCount, cctvCount, label, color, emoji }
+  return {
+    total,
+    lightScore,
+    cctvScore,
+    placeScore,
+    lightCount,
+    cctvCount,
+    label,
+    color,
+    emoji,
+  }
 }

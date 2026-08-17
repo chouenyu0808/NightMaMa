@@ -232,25 +232,55 @@ export default function HomePage() {
       if (!rawRoutes.length) throw new Error('找不到路線')
       const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
 
+      // Calculate safety scores for all raw routes
+      const scoredTemp = rawRoutes.map(route => {
+        const samples = sampleRoutePoints(route.points, 30)
+        const safety = calcSafetyScore(samples, lightsData, cctvData, 2)
+        const extraMin = Math.round((route.durationSec - minDuration) / 60)
+        return { route, safety, extraMin }
+      })
+
+      // Identify highest safety score route index and fastest route index
+      let maxSafetyIdx = 0
+      let maxSafetyVal = -1
+      let minDurationIdx = 0
+      let minDurationVal = Infinity
+
+      scoredTemp.forEach((item, i) => {
+        if (item.safety.total > maxSafetyVal) {
+          maxSafetyVal = item.safety.total
+          maxSafetyIdx = i
+        }
+        if (item.route.durationSec < minDurationVal) {
+          minDurationVal = item.route.durationSec
+          minDurationIdx = i
+        }
+      })
+
+      // Assign types and generate descriptions
       const scored: ScoredRoute[] = await Promise.all(
-        rawRoutes.map(async (route, i) => {
-          const samples = sampleRoutePoints(route.points, 30)
-          const safety = calcSafetyScore(samples, lightsData, cctvData, 2)
-          const extraMin = Math.round((route.durationSec - minDuration) / 60)
-          const type: ScoredRoute['type'] = i === 0 ? '最快' : extraMin <= 3 ? '平衡' : '最安全'
+        scoredTemp.map(async (item, i) => {
+          let type: ScoredRoute['type'] = '平衡'
+          if (i === maxSafetyIdx) {
+            type = '最安全'
+          } else if (i === minDurationIdx) {
+            type = '最快'
+          }
+
           let description = ''
           try {
             description = await generateRouteDescription(
-              type, safety.total, Math.round(route.durationSec / 60),
-              safety.lightCount, safety.cctvCount, extraMin
+              type, item.safety.total, Math.round(item.route.durationSec / 60),
+              item.safety.lightCount, item.safety.cctvCount, item.extraMin
             )
           } catch {
-            description = `${safety.emoji} 安全評分 ${safety.total} 分，沿途 ${safety.lightCount} 盞路燈`
+            description = `${item.safety.emoji} 安全評分 ${item.safety.total} 分，沿途 ${item.safety.lightCount} 盞路燈`
           }
-          return { ...route, safety, type, description, extraMin }
+          return { ...item.route, safety: item.safety, type, description, extraMin: item.extraMin }
         })
       )
 
+      // Sort by Safety Total Score descending (Highest safety score at the top!)
       scored.sort((a, b) => b.safety.total - a.safety.total)
       setRoutes(scored)
       setSelectedIdx(0)
