@@ -502,7 +502,11 @@ function CompanionContent() {
             },
             systemInstruction: {
               parts: [{
-                text: '你是一位溫暖親切的台灣媽媽，正在跟晚歸的女兒/兒子撥打 LINE 陪伴電話。說話口吻親切、溫暖、關心對方走夜路的安全，講話要像在通電話一樣簡短自然（例如：『寶貝走到哪啦？』『路燈亮不亮？』『快點回來，幫你煮了熱湯喔！』）。請用極度自然的語氣和對方說話。',
+                text: `CRITICAL INSTRUCTION: You are a warm Taiwanese mother on a LINE voice call with your child who is walking home at night.
+RULES:
+1. You MUST speak ONLY in Traditional Chinese (cmn-Hant-TW).
+2. DO NOT output any English words, thinking process, reasoning steps, or markdown formatting under any circumstances.
+3. Speak directly as the mother in short, warm, caring Taiwanese conversational sentences (e.g. 「寶貝走到哪啦？」「附近路燈亮不亮？」「快點回來，幫你留了熱湯喔！」).`,
               }],
             },
           },
@@ -542,8 +546,13 @@ function CompanionContent() {
                 playerRef.current?.playPcmChunk(p.inlineData.data)
               }
               if (p.text) {
-                currentTextBuffer += p.text
-                setMomTranscript(`「${currentTextBuffer}」`)
+                // Filter out English chain-of-thought / internal monologue text
+                const text = p.text.trim()
+                const isEnglishMeta = /[a-zA-Z]/.test(text) && (text.includes('**') || text.includes('Okay') || text.includes('persona') || text.includes('audio') || text.includes('Acknowledge'))
+                if (!isEnglishMeta && !text.startsWith('**')) {
+                  currentTextBuffer += p.text
+                  setMomTranscript(`「${currentTextBuffer}」`)
+                }
               }
             }
             if (data.serverContent.turnComplete) {
