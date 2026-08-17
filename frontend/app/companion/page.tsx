@@ -58,7 +58,7 @@ function CompanionContent() {
 
   // Text-to-Speech with warm female voice selection
   const speak = useCallback((text: string) => {
-    if (!window.speechSynthesis) return
+    if (typeof window === 'undefined' || !window.speechSynthesis) return
     window.speechSynthesis.cancel()
 
     const utt = new SpeechSynthesisUtterance(text)
@@ -66,22 +66,37 @@ function CompanionContent() {
     utt.rate = 0.95
     utt.pitch = 1.25
 
+    const doSpeak = () => {
+      const voices = window.speechSynthesis.getVoices()
+      const warmVoice = voices.find(v =>
+        v.lang.includes('zh') &&
+        (v.name.includes('HsiaoChen') || v.name.includes('Yating') || v.name.includes('MeiJia') || v.name.includes('HanHan') || v.name.includes('Female') || v.name.includes('Google 國語') || v.name.includes('臺灣'))
+      ) || voices.find(v => v.lang.includes('zh-TW') || v.lang.includes('zh'))
+
+      if (warmVoice) utt.voice = warmVoice
+
+      utt.onstart = () => setIsSpeaking(true)
+      utt.onend = () => setIsSpeaking(false)
+      utt.onerror = () => setIsSpeaking(false)
+      window.speechSynthesis.speak(utt)
+    }
+
     const voices = window.speechSynthesis.getVoices()
-    const warmVoice = voices.find(v =>
-      v.lang.includes('zh') &&
-      (v.name.includes('HsiaoChen') || v.name.includes('Yating') || v.name.includes('MeiJia') || v.name.includes('HanHan') || v.name.includes('Female') || v.name.includes('Google 國語') || v.name.includes('臺灣'))
-    ) || voices.find(v => v.lang.includes('zh-TW') || v.lang.includes('zh'))
-
-    if (warmVoice) utt.voice = warmVoice
-
-    utt.onstart = () => setIsSpeaking(true)
-    utt.onend = () => setIsSpeaking(false)
-    window.speechSynthesis.speak(utt)
+    if (voices.length > 0) {
+      doSpeak()
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.onvoiceschanged = null
+        doSpeak()
+      }
+    }
   }, [])
 
-  // Auto-speak initial message
+  // Auto-speak initial message once voices are loaded
   useEffect(() => {
-    const timer = setTimeout(() => speak(INITIAL_MESSAGE.text), 500)
+    const timer = setTimeout(() => {
+      speak(INITIAL_MESSAGE.text)
+    }, 600)
     return () => clearTimeout(timer)
   }, [speak])
 
