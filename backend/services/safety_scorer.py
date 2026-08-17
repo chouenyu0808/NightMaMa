@@ -16,8 +16,10 @@ class Segment:
     length_m: float
     light_count: int
     camera_count: int
-    store_count: int
-    police_count: int = 0
+    # store/police counts are route-wide Places totals split across segments
+    # proportional to length (see routers/routes.py), so they're fractional.
+    store_count: float
+    police_count: float = 0
 
 
 @dataclass
@@ -47,6 +49,11 @@ def score_segment(segment: Segment, weights: Weights) -> float:
 # ponytail: score_segment's raw weighted density has no fixed ceiling, but the
 # API contract (see backend-architecture.md) and frontend both expect a 0-100
 MAX_RAW_SCORE = 20.0
+
+
+def score_segment_scaled(segment: Segment, weights: Weights) -> float:
+    """Single segment's score on the same 0-100 scale as score_route, for per-segment display (e.g. route coloring)."""
+    return max(0.0, min(100.0, score_segment(segment, weights) / MAX_RAW_SCORE * 100))
 
 
 def score_route(segments: list[Segment], time_extra_min: float, weights: Weights | None = None) -> float:

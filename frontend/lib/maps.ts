@@ -85,15 +85,38 @@ export interface RouteResult {
   lightCount: number
   cameraCount: number
   policeCount: number
+  segmentScores: number[]
   points: LatLng[]
   steps: RouteStep[]
 }
 
+/** 用跟後端 sample_evenly 一樣的索引取樣法，找出 segmentScores 對應的取樣點索引 */
+export function sampleIndices(pointCount: number, maxSamples: number): number[] {
+  if (pointCount <= maxSamples) return Array.from({ length: pointCount }, (_, i) => i)
+  const stride = pointCount / maxSamples
+  return Array.from({ length: maxSamples }, (_, i) =>
+    i === maxSamples - 1 ? pointCount - 1 : Math.floor(i * stride)
+  )
+}
+
+/** 安全分數 (0-100) → 顏色，暗路藍、亮路黃，單一漸層方便沿路平滑過渡 */
+export function scoreToColor(score: number): string {
+  const t = Math.max(0, Math.min(100, score)) / 100
+  const from = [59, 130, 246] // 暗 → 藍
+  const to = [250, 204, 21]   // 亮 → 黃
+  const mix = (i: number) => Math.round(from[i] + (to[i] - from[i]) * t)
+  return `rgb(${mix(0)},${mix(1)},${mix(2)})`
+}
+
 export async function geocodeAddress(address: string): Promise<LatLng | null> {
   const geocoder = new google.maps.Geocoder()
-  const { results } = await geocoder.geocode({ address, region: 'tw' })
-  const loc = results[0]?.geometry?.location
-  return loc ? { lat: loc.lat(), lng: loc.lng() } : null
+  try {
+    const { results } = await geocoder.geocode({ address, region: 'tw' })
+    const loc = results[0]?.geometry?.location
+    return loc ? { lat: loc.lat(), lng: loc.lng() } : null
+  } catch {
+    return null
+  }
 }
 
 /** 呼叫後端 /routes 取得依安全評分排序的候選路線 */
@@ -124,6 +147,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
     light_count: number
     camera_count: number
     police_count: number
+    segment_scores: number[]
   }>).map((r) => ({
     type: r.type,
     polyline: r.polyline,
@@ -134,6 +158,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
     lightCount: r.light_count,
     cameraCount: r.camera_count,
     policeCount: r.police_count,
+    segmentScores: r.segment_scores || [],
     points: decodePolyline(r.polyline),
     // Backend doesn't return turn-by-turn steps yet; navigate/page.tsx falls
     // back to generateStepsFromPoints() when this is empty.

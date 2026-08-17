@@ -30,6 +30,7 @@ class RouteOption(BaseModel):
     light_count: int = 0
     camera_count: int = 0
     police_count: int = 0
+    segment_scores: list[float] = []
 
 
 class RoutesResponse(BaseModel):

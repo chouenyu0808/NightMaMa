@@ -6,6 +6,11 @@ from models.schemas import LatLng
 
 NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
 
+# ponytail: httpx.post() opens a fresh TCP+TLS connection per call; reusing one
+# client lets concurrent requests share a connection pool (keep-alive) instead
+# of every one of the ~30 parallel Places calls paying its own handshake.
+_client = httpx.Client(timeout=10)
+
 
 def _search_nearby(point: LatLng, included_type: str, radius_m: float, field_mask: str) -> list[dict]:
     body = {
@@ -23,7 +28,7 @@ def _search_nearby(point: LatLng, included_type: str, radius_m: float, field_mas
         "X-Goog-Api-Key": settings.google_maps_api_key,
         "X-Goog-FieldMask": field_mask,
     }
-    resp = httpx.post(NEARBY_URL, json=body, headers=headers, timeout=10)
+    resp = _client.post(NEARBY_URL, json=body, headers=headers)
     resp.raise_for_status()
     return resp.json().get("places", [])
 

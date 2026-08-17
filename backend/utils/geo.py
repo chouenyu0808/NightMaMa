@@ -44,3 +44,11 @@ def sample_evenly(points: list[LatLng], max_samples: int = 6) -> list[LatLng]:
         return points
     stride = len(points) / max_samples
     return [points[int(i * stride)] for i in range(max_samples)]
+
+
+def covering_circle(points: list[LatLng], buffer_m: float = 150) -> tuple[LatLng, float]:
+    """Centroid + radius that covers every point, for one Places search per route
+    instead of one per sample point (Places has no batch/multi-point search)."""
+    center = LatLng(lat=sum(p.lat for p in points) / len(points), lng=sum(p.lng for p in points) / len(points))
+    radius = max(haversine_m(center, p) for p in points) + buffer_m
+    return center, radius

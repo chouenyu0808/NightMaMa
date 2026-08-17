@@ -144,6 +144,8 @@ function NavigateContent() {
   const polylineRef = useRef<google.maps.Polyline | null>(null)
   const watchIdRef = useRef<number | null>(null)
   const prevPosRef = useRef<{ lat: number; lng: number } | null>(null)
+  const routePointsRef = useRef<Array<{ lat: number; lng: number }>>([])
+  const safetyMarkersRef = useRef<google.maps.Marker[]>([])
 
   const polylineStr = searchParams.get('polyline') || ''
   const origin = searchParams.get('origin') || '出發地'
@@ -162,6 +164,29 @@ function NavigateContent() {
   const [showStepsDrawer, setShowStepsDrawer] = useState(false)
   const [voiceMuted, setVoiceMuted] = useState(false)
   const [isCentering, setIsCentering] = useState(true)
+  const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
+  const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
+
+  // 超商/警局標記改成按需查詢，不用一進導航頁就自動打 Places API
+  const toggleSafetyPlaces = useCallback(async () => {
+    if (showSafetyPlaces) {
+      safetyMarkersRef.current.forEach(m => m.setMap(null))
+      safetyMarkersRef.current = []
+      setShowSafetyPlaces(false)
+      return
+    }
+    if (!mapInstance.current || !routePointsRef.current.length) return
+    setIsLoadingSafetyPlaces(true)
+    try {
+      const places = await searchNearbySafetyPlaces(mapInstance.current, routePointsRef.current)
+      if (mapInstance.current) {
+        safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places)
+        setShowSafetyPlaces(true)
+      }
+    } finally {
+      setIsLoadingSafetyPlaces(false)
+    }
+  }, [showSafetyPlaces])
 
   // ETA Calculation
   const etaTime = new Date(Date.now() + remainingSec * 1000).toLocaleTimeString('zh-TW', {
@@ -266,12 +291,7 @@ function NavigateContent() {
         },
       })
 
-      // Draw nearby 24h convenience stores & police stations on navigation map
-      searchNearbySafetyPlaces(mapInstance.current!, points).then(places => {
-        if (mapInstance.current) {
-          drawSafetyPlaceMarkers(mapInstance.current, places)
-        }
-      }).catch(console.error)
+      routePointsRef.current = points
 
       let currentPoints = points
 
@@ -537,6 +557,21 @@ function NavigateContent() {
           title="重新對焦我的位置"
         >
           🎯
+        </button>
+
+        {/* Safety Places Toggle (store/police markers — fetched on demand) */}
+        <button
+          onClick={toggleSafetyPlaces}
+          disabled={isLoadingSafetyPlaces}
+          style={{
+            ...floatingControlStyle,
+            background: showSafetyPlaces ? 'rgba(16,185,129,0.25)' : 'rgba(17,24,39,0.85)',
+            borderColor: showSafetyPlaces ? 'rgba(16,185,129,0.5)' : 'rgba(255,255,255,0.15)',
+            opacity: isLoadingSafetyPlaces ? 0.6 : 1,
+          }}
+          title={showSafetyPlaces ? '隱藏超商/警局' : '顯示附近超商/警局'}
+        >
+          {isLoadingSafetyPlaces ? '⏳' : '🏪'}
         </button>
       </div>
 

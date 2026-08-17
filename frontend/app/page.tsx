@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, type RouteResult, type LatLng } from '@/lib/maps'
+import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers } from '@/lib/safetyPlaces'
 import Logo from '@/components/Logo'
 
@@ -55,6 +55,9 @@ function IconPin({ size = 14 }: { size?: number }) {
 }
 function IconFlag({ size = 14 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22V4" /><path d="M4 4h14l-2 4 2 4H4" /></svg>
+}
+function IconPencil({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
 }
 function IconSearch({ size = 16 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
@@ -139,8 +142,39 @@ export default function HomePage() {
   }, [appState])
 
   const markersRef = useRef<google.maps.Marker[]>([])
+  const safetyMarkersRef = useRef<google.maps.Marker[]>([])
   const [isSheetCollapsed, setIsSheetCollapsed] = useState(false)
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(false)
+  const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
+  const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
+
+  const clearSafetyPlaces = useCallback(() => {
+    safetyMarkersRef.current.forEach(m => m.setMap(null))
+    safetyMarkersRef.current = []
+    setShowSafetyPlaces(false)
+  }, [])
+
+  // 超商/警局標記改成按需查詢 —— 只有使用者按下按鈕才打 Places API，
+  // 不用每次畫路線就自動查一次
+  const toggleSafetyPlaces = useCallback(async () => {
+    if (showSafetyPlaces) {
+      clearSafetyPlaces()
+      return
+    }
+    const route = routes[selectedIdx]
+    if (!mapInstance.current || !route) return
+    setIsLoadingSafetyPlaces(true)
+    if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
+    try {
+      const places = await searchNearbySafetyPlaces(mapInstance.current, route.points)
+      if (mapInstance.current) {
+        safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
+        setShowSafetyPlaces(true)
+      }
+    } finally {
+      setIsLoadingSafetyPlaces(false)
+    }
+  }, [showSafetyPlaces, clearSafetyPlaces, routes, selectedIdx])
 
   const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number, sheetCollapsed = false, searchCollapsed = false) => {
     polylinesRef.current.forEach(p => p.setMap(null))
@@ -150,18 +184,50 @@ export default function HomePage() {
 
     if (!mapInstance.current || !scoredRoutes.length) return
 
-    // Draw polylines
+    // Draw polylines — selected route 依路段安全分數畫成平滑漸層（暗藍→亮黃）
     scoredRoutes.forEach((route, i) => {
       const isSelected = i === selected
-      const polyline = new google.maps.Polyline({
-        path: route.points.map(p => ({ lat: p.lat, lng: p.lng })),
-        map: mapInstance.current!,
-        strokeColor: isSelected ? route.safety.color : 'rgba(255,255,255,0.25)',
-        strokeWeight: isSelected ? 7 : 4,
-        strokeOpacity: isSelected ? 1 : 0.4,
-        zIndex: isSelected ? 10 : 1,
-      })
-      polylinesRef.current.push(polyline)
+      if (isSelected && route.segmentScores.length > 0) {
+        const idx = sampleIndices(route.points.length, route.segmentScores.length + 1)
+        const segCount = Math.min(idx.length - 1, route.segmentScores.length)
+        const scores = route.segmentScores.slice(0, segCount)
+        // 同一條路線內部相對拉伸到 0-100，確保最暗/最亮的路段色差一定明顯，
+        // 不會因為整條路線分數都擠在同一區間（例如都落在 30-60）而看起來像單色。
+        const lo = Math.min(...scores)
+        const hi = Math.max(...scores)
+        const stretch = (v: number) => (hi - lo < 1 ? 50 : ((v - lo) / (hi - lo)) * 100)
+        for (let s = 0; s < segCount; s++) {
+          const slice = route.points.slice(idx[s], idx[s + 1] + 1)
+          if (slice.length < 2) continue
+          // 跟下一段的分數做內插，逐點畫一小截一小截的顏色，銜接處平滑過渡
+          // 而不是路段跟路段之間顏色硬切。
+          const scoreStart = scores[s]
+          const scoreEnd = s < segCount - 1 ? scores[s + 1] : scores[s]
+          for (let p = 0; p < slice.length - 1; p++) {
+            const localT = slice.length > 2 ? p / (slice.length - 2) : 0
+            const blended = scoreStart + (scoreEnd - scoreStart) * localT
+            const segPolyline = new google.maps.Polyline({
+              path: [slice[p], slice[p + 1]].map(pt => ({ lat: pt.lat, lng: pt.lng })),
+              map: mapInstance.current!,
+              strokeColor: scoreToColor(stretch(blended)),
+              strokeWeight: 7,
+              strokeOpacity: 1,
+              zIndex: 10,
+            })
+            polylinesRef.current.push(segPolyline)
+          }
+        }
+      } else {
+        const polyline = new google.maps.Polyline({
+          path: route.points.map(p => ({ lat: p.lat, lng: p.lng })),
+          map: mapInstance.current!,
+          strokeColor: isSelected ? route.safety.color : 'rgba(255,255,255,0.25)',
+          strokeWeight: isSelected ? 7 : 4,
+          strokeOpacity: isSelected ? 1 : 0.4,
+          zIndex: isSelected ? 10 : 1,
+        })
+        polylinesRef.current.push(polyline)
+      }
     })
 
     const selectedRoute = scoredRoutes[selected]
@@ -183,35 +249,24 @@ export default function HomePage() {
         },
         zIndex: 20,
       })
-      // End marker (Destination)
+      // End marker (Destination) — classic red drop pin
       const endMarker = new google.maps.Marker({
         position: points[points.length - 1],
         map: mapInstance.current!,
         title: '目的地',
         icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 11,
-          fillColor: '#10b981',
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 3,
+          url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">' +
+            '<path d="M17 0C7.6 0 0 7.6 0 17c0 12.75 17 29 17 29s17-16.25 17-29C34 7.6 26.4 0 17 0z" fill="#ef4444" stroke="#ffffff" stroke-width="2"/>' +
+            '<circle cx="17" cy="17" r="6.5" fill="#ffffff"/>' +
+            '</svg>'
+          ),
+          scaledSize: new google.maps.Size(34, 46),
+          anchor: new google.maps.Point(17, 46),
         },
         zIndex: 20,
       })
       markersRef.current.push(startMarker, endMarker)
-    }
-
-    // Search and display 24h convenience stores & police stations along route
-    if (mapInstance.current) {
-      if (!infoWindowRef.current) {
-        infoWindowRef.current = new google.maps.InfoWindow()
-      }
-      searchNearbySafetyPlaces(mapInstance.current, points).then(places => {
-        if (mapInstance.current) {
-          const placeMarkers = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
-          markersRef.current.push(...placeMarkers)
-        }
-      }).catch(console.error)
     }
 
     // Auto fit bounds to full route
@@ -332,6 +387,7 @@ export default function HomePage() {
 
       // Sort by Safety Total Score descending (Highest safety score at the top!)
       scored.sort((a, b) => b.safety.total - a.safety.total)
+      clearSafetyPlaces()
       setRoutes(scored)
       setSelectedIdx(0)
       setIsSearchCollapsed(true)
@@ -345,6 +401,7 @@ export default function HomePage() {
   }
 
   const handleSelectRoute = (idx: number) => {
+    clearSafetyPlaces()
     setSelectedIdx(idx)
     drawRoutes(routes, idx, isSheetCollapsed, isSearchCollapsed)
   }
@@ -436,6 +493,30 @@ export default function HomePage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
           <button onClick={() => setAppState('landing')} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 16, borderRadius: 999, width: 32, height: 32, cursor: 'pointer' }}>←</button>
+          {routes.length > 0 && (
+            <button
+              onClick={toggleSafetyPlaces}
+              disabled={isLoadingSafetyPlaces}
+              style={{
+                marginLeft: 'auto',
+                fontSize: 11,
+                fontWeight: 700,
+                color: showSafetyPlaces ? '#34d399' : '#93c5fd',
+                background: showSafetyPlaces ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
+                padding: '4px 10px',
+                borderRadius: 999,
+                border: `1px solid ${showSafetyPlaces ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                opacity: isLoadingSafetyPlaces ? 0.6 : 1,
+              }}
+            >
+              <IconStore size={12} /><IconBadge size={12} />
+              {isLoadingSafetyPlaces ? '搜尋中…' : showSafetyPlaces ? '隱藏超商/警局' : '顯示超商/警局'}
+            </button>
+          )}
           <button
             onClick={() => setShowReportModal(true)}
             style={{
@@ -482,17 +563,16 @@ export default function HomePage() {
                 drawRoutes(routes, selectedIdx, isSheetCollapsed, false)
               }}
               style={{
-                background: 'rgba(139,92,246,0.2)',
+                background: 'none',
+                border: 'none',
                 color: '#c4b5fd',
-                border: '1px solid rgba(139,92,246,0.4)',
-                borderRadius: 999,
-                padding: '4px 10px',
-                fontSize: 11,
+                padding: 4,
                 cursor: 'pointer',
-                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
               }}
             >
-              ✏️ 編輯搜尋
+              <IconPencil size={16} />
             </button>
           </div>
         ) : (
