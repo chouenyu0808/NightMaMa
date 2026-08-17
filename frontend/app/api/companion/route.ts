@@ -8,11 +8,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message required' }, { status: 400 })
     }
 
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_KEY ||
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
-      ''
 
     // Build prompt for Gemini 3.6 Flash Interactions API
     const systemInstruction = `你是 NightMaMa，一個夜間步行陪伴好朋友。
@@ -34,6 +29,14 @@ export async function POST(req: NextRequest) {
       historyText = recent.map(h => `${h.role === 'user' ? '使用者' : 'NightMaMa'}：${h.text}`).join('\n')
       historyText = `\n【最近對話紀錄】\n${historyText}\n`
     }
+
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_KEY ||
+      process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
+      ''
+
+    let lastError = ''
 
     const fullPrompt = `${systemInstruction}${historyText}\n使用者問：${userMessage}`
 
@@ -59,9 +62,12 @@ export async function POST(req: NextRequest) {
         if (replyText && replyText.trim()) {
           return NextResponse.json({ reply: replyText.trim() })
         }
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        lastError = `[Interactions HTTP ${res.status}] ${errData.error?.message || ''}`
       }
-    } catch (err) {
-      console.warn('Interactions API fetch failed, falling back to generateContent:', err)
+    } catch (err: any) {
+      lastError = err.message || String(err)
     }
 
     // 2. Fallback to generateContent REST API
@@ -90,7 +96,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      reply: '我在這裡陪伴著你喔！請放心繼續往前走，有任何狀況都可以隨時告訴我！',
+      reply: `⚠️ Gemini AI 連線失敗 (${lastError || '無回應'})。請確認 GCP Cloud Run 環境變數已正確設定 GEMINI_API_KEY。`,
     })
   } catch (e: any) {
     return NextResponse.json({
