@@ -60,46 +60,27 @@ export interface RouteResult {
   points: LatLng[]
 }
 
-/** 使用 Routes API (REST) 取得路線 */
+/** 使用 API Route Proxy 取得路線 */
 export async function fetchRoutes(
   origin: string,
   destination: string,
   alternatives = true
 ): Promise<RouteResult[]> {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!
-
-  // NOTE: routingPreference & routeModifiers are NOT allowed with travelMode=WALK
-  const body = {
-    origin: { address: origin },
-    destination: { address: destination },
-    travelMode: 'WALK',
-    computeAlternativeRoutes: alternatives,
-    languageCode: 'zh-TW',
-    units: 'METRIC',
-  }
-
-  const res = await fetch(
-    'https://routes.googleapis.com/directions/v2:computeRoutes',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask':
-          'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline',
-      },
-      body: JSON.stringify(body),
-    }
-  )
-
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}))
-    const msg = errBody?.error?.message || errBody?.message || `HTTP ${res.status}`
-    throw new Error(`路線 API 錯誤：${msg}`)
-  }
+  const res = await fetch('/api/routes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ origin, destination, alternatives }),
+  })
 
   const data = await res.json()
-  if (!data.routes?.length) throw new Error('找不到路線，請確認地址是否正確')
+
+  if (!res.ok) {
+    throw new Error(data.error || `路線 API 錯誤 (${res.status})`)
+  }
+
+  if (!data.routes?.length) {
+    throw new Error('找不到路線，請確認地址名稱')
+  }
 
   return (data.routes as Array<{
     polyline: { encodedPolyline: string }
@@ -107,7 +88,7 @@ export async function fetchRoutes(
     distanceMeters: number
   }>).map((r) => ({
     polyline: r.polyline.encodedPolyline,
-    durationSec: parseInt(r.duration.replace('s', '')),
+    durationSec: parseInt(r.duration.replace('s', '') || '0'),
     distanceM: r.distanceMeters,
     points: decodePolyline(r.polyline.encodedPolyline),
   }))
