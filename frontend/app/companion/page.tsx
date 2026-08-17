@@ -682,23 +682,33 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     staticVoice.onended = () => setAiSpeaking(false)
     staticVoice.play().catch(() => {})
 
-    // 向伺服器換發短期 ephemeral token。長期 Gemini 金鑰留在伺服器端，
-    // 不會出現在瀏覽器 bundle 裡。換發失敗時就維持上面已經播放的靜態語音。
-    let liveToken = ''
+    // 嘗試換發 ephemeral token；如果失敗，fallback 到直接用 API key 連線。
+    // ephemeral token: v1alpha + BidiGenerateContentConstrained + access_token=
+    // API key 直連:   v1beta  + BidiGenerateContent            + key=
+    let wsUrl = ''
     try {
       const tokenRes = await fetch('/api/live-token', { method: 'POST' })
-      if (!tokenRes.ok) return
-      const tokenData = await tokenRes.json()
-      liveToken = typeof tokenData?.token === 'string' ? tokenData.token : ''
-    } catch {
-      return
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json()
+        const liveToken = typeof tokenData?.token === 'string' ? tokenData.token : ''
+        if (liveToken) {
+          wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(liveToken)}`
+        }
+      }
+    } catch {}
+
+    // Fallback: 直接使用 NEXT_PUBLIC_GEMINI_KEY 作為 API key 連線
+    if (!wsUrl) {
+      const directKey = process.env.NEXT_PUBLIC_GEMINI_KEY || ''
+      if (!directKey) return
+      wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(directKey)}`
     }
-    if (!liveToken) return
+
+    console.log('[DEBUG] Gemini Live WS connecting via:', wsUrl.includes('access_token') ? 'ephemeral token (Constrained)' : 'direct API key')
 
     try {
       playerRef.current = new GeminiAudioPlayer((speaking) => setAiSpeaking(speaking))
 
-      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=${encodeURIComponent(liveToken)}`
       const ws = new WebSocket(wsUrl)
       ws.binaryType = 'arraybuffer'
       liveWsRef.current = ws

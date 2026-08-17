@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1alpha' } })
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1beta' } })
 
     const token = await ai.authTokens.create({
       config: {
