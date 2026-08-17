@@ -10,6 +10,9 @@ import { NavBar } from '@/app/components/NavBar'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget, IconHome, IconArrowUpDown, IconArrowRight, IconX, IconUser } from '@/components/Icons'
 
+/** 定位取得前的預設中心點：台北車站 */
+const TAIPEI_STATION = { lat: 25.0478, lng: 121.5170 }
+
 interface RouteVisual {
   score: number | null
   color: string
@@ -66,7 +69,8 @@ export default function HomePage() {
 
   const [origin, setOrigin] = useState('我的位置')
   const [destination, setDestination] = useState('信義區 松智街')
-  const [originLatLng, setOriginLatLng] = useState<LatLng | null>(null)
+  // 預設台北車站；先前是在 effect body 內同步 setState，會造成串接渲染。
+  const [originLatLng, setOriginLatLng] = useState<LatLng | null>(TAIPEI_STATION)
   const [destLatLng, setDestLatLng] = useState<LatLng | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [routes, setRoutes] = useState<ScoredRoute[]>([])
@@ -106,9 +110,7 @@ export default function HomePage() {
 
   // 1. 自動讀取裝置目前實時 GPS 位置（雙策略定位 + 持續監聽）
   useEffect(() => {
-    const defaultPos = { lat: 25.0478, lng: 121.5170 } // 台北車站預設點位
-    userGpsRef.current = defaultPos
-    setOriginLatLng(defaultPos)
+    userGpsRef.current = TAIPEI_STATION
 
     if (typeof window === 'undefined' || !navigator.geolocation) return
 
@@ -177,10 +179,10 @@ export default function HomePage() {
           }
         }, 150)
 
-        // Draw routes if present
-        if (routes.length > 0) {
-          drawRoutes(routes, selectedIdx)
-        }
+        // 這裡原本有一段「若已有路線就重畫」的程式碼，但它永遠不會執行：
+        // 本 effect 的依賴是 []，closure 捕捉到的 routes 恆為初次 render 的空陣列。
+        // 而且它在 drawRoutes 宣告之前就引用了它。路線是在 handleSearch 內
+        // 取得後直接呼叫 drawRoutes 繪製的，不需要這段。
 
         if (originInputRef.current) {
           autocompleteOriginRef.current = new google.maps.places.Autocomplete(originInputRef.current, {
@@ -1161,7 +1163,7 @@ export default function HomePage() {
 }
 
 // ─── Normal (Light) Map Style — 與導航頁一致的自然色地圖 ──────────────────────
-const normalMapStyle: any[] = [
+const normalMapStyle: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },

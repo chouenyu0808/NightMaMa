@@ -261,7 +261,6 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
   const pendingReplyRef = useRef<((data: { text: string; audio?: string }) => void) | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const userIdRef = useRef<string>('')
-  if (!userIdRef.current) userIdRef.current = getUserId() || crypto.randomUUID()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null)
 
@@ -298,6 +297,13 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     safetyScore: resolveSafetyScore(routeContext?.safetyScore, searchParams ? searchParams.get('safety') : null),
     durationMin: routeContext ? Math.round(routeContext.durationSec / 60) : Math.round(parseInt((searchParams ? searchParams.get('duration') : null) || '600') / 60),
   }
+
+  // 匿名 user_id 在掛載後才初始化。先前是在 render 期間直接寫 ref，
+  // 而 getUserId() 依賴 localStorage，在 SSR 期間本來就取不到值。
+  // 這個 effect 宣告在其他 effect 之前，因此它們都能讀到已設定的值。
+  useEffect(() => {
+    if (!userIdRef.current) userIdRef.current = getUserId() || crypto.randomUUID()
+  }, [])
 
   // Fire-and-forget: persist a message to Firestore via backend
   const saveMessageToFirestore = useCallback((role: string, text: string) => {

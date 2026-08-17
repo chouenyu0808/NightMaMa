@@ -77,7 +77,7 @@ function calculateHeading(lat1: number, lng1: number, lat2: number, lng2: number
   const lat2Rad = lat2 * Math.PI / 180
   const y = Math.sin(dLng) * Math.cos(lat2Rad)
   const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLng)
-  let brng = Math.atan2(y, x) * 180 / Math.PI
+  const brng = Math.atan2(y, x) * 180 / Math.PI
   return (brng + 360) % 360
 }
 
@@ -218,12 +218,9 @@ function NavigateContent() {
     }
   }, [showSafetyPlaces])
 
-  // ETA Calculation
-  const etaTime = new Date(Date.now() + remainingSec * 1000).toLocaleTimeString('zh-TW', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+  // ETA 由計時器算好存進 state。先前是在 render 期間直接呼叫 Date.now()，
+  // 那是不純的：同一份 state 在不同次 render 會得到不同結果。
+  const [etaTime, setEtaTime] = useState('')
 
   // Speech output for turns
   const speakInstruction = useCallback((text: string) => {
@@ -235,10 +232,21 @@ function NavigateContent() {
     window.speechSynthesis.speak(utt)
   }, [voiceMuted])
 
-  // Timer countdown
+  // Timer countdown（順便更新抵達時刻）
   useEffect(() => {
+    const formatEta = (secondsLeft: number) =>
+      new Date(Date.now() + secondsLeft * 1000).toLocaleTimeString('zh-TW', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+
     const t = setInterval(() => {
-      setRemainingSec(r => Math.max(0, r - 1))
+      setRemainingSec(r => {
+        const next = Math.max(0, r - 1)
+        setEtaTime(formatEta(next))
+        return next
+      })
     }, 1000)
     return () => clearInterval(t)
   }, [])
@@ -963,7 +971,7 @@ const floatingControlStyle: React.CSSProperties = {
 }
 
 // Google Navigation style map — standard, natural (green) colors
-const googleNavMapStyle: any[] = [
+const googleNavMapStyle: google.maps.MapTypeStyle[] = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
