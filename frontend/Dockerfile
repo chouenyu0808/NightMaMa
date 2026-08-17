@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm i --legacy-peer-deps
 COPY . .
 
 # Build args for API keys (injected at build time for Next.js NEXT_PUBLIC_ vars)
