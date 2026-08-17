@@ -250,7 +250,6 @@ function NavigateContent() {
         center: points[0],
         zoom: 18.3,
         heading: 0,
-        tilt: 45,
         disableDefaultUI: true,
         gestureHandling: 'greedy',
         styles: googleNavMapStyle,
