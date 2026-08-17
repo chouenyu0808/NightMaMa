@@ -90,9 +90,9 @@ export default function HomePage() {
   }, [appState])
 
   const markersRef = useRef<google.maps.Marker[]>([])
-  const [isSheetCollapsed, setIsSheetCollapsed] = useState(false)
+  const [isSearchCollapsed, setIsSearchCollapsed] = useState(false)
 
-  const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number, collapsed = false) => {
+  const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number, sheetCollapsed = false, searchCollapsed = false) => {
     // Clear old polylines & markers
     polylinesRef.current.forEach(p => p.setMap(null))
     polylinesRef.current = []
@@ -156,14 +156,16 @@ export default function HomePage() {
     const bounds = new google.maps.LatLngBounds()
     points.forEach(p => bounds.extend(p))
 
-    // Top padding: ~250px for search bar, Bottom padding: ~240px (or ~100px if collapsed)
-    const topPad = 250
-    const bottomPad = collapsed ? 100 : 250
+    // Top padding: ~110px if collapsed, ~240px if expanded
+    const topPad = searchCollapsed ? 110 : 240
+    // Bottom padding: ~90px if collapsed, ~240px if expanded
+    const bottomPad = sheetCollapsed ? 90 : 240
+
     mapInstance.current!.fitBounds(bounds, {
       top: topPad,
       bottom: bottomPad,
-      left: 45,
-      right: 45,
+      left: 35,
+      right: 35,
     })
   }, [])
 
@@ -203,7 +205,8 @@ export default function HomePage() {
       scored.sort((a, b) => b.safety.total - a.safety.total)
       setRoutes(scored)
       setSelectedIdx(0)
-      drawRoutes(scored, 0)
+      setIsSearchCollapsed(true)
+      drawRoutes(scored, 0, false, true)
       setShowSheet(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '路線搜尋失敗，請重試')
@@ -214,14 +217,14 @@ export default function HomePage() {
 
   const handleSelectRoute = (idx: number) => {
     setSelectedIdx(idx)
-    drawRoutes(routes, idx, isSheetCollapsed)
+    drawRoutes(routes, idx, isSheetCollapsed, isSearchCollapsed)
   }
 
   const toggleCollapse = () => {
     const nextState = !isSheetCollapsed
     setIsSheetCollapsed(nextState)
     if (routes.length > 0) {
-      drawRoutes(routes, selectedIdx, nextState)
+      drawRoutes(routes, selectedIdx, nextState, isSearchCollapsed)
     }
   }
 
@@ -267,36 +270,73 @@ export default function HomePage() {
           )}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>📍</span>
-            <input
-              ref={originInputRef}
-              className="input-field"
-              style={{ paddingLeft: 42 }}
-              placeholder="出發地（例：松山車站）"
-              value={origin}
-              onChange={e => setOrigin(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            />
+        {isSearchCollapsed && routes.length > 0 ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justify: 'space-between',
+              padding: '8px 14px',
+              background: 'rgba(17,24,39,0.85)',
+              borderRadius: 16,
+              border: '1px solid rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, paddingRight: 8 }}>
+              📍 {origin.split('區')[1] || origin.slice(0, 10)} → 🏠 {destination.split('區')[1] || destination.slice(0, 10)}
+            </div>
+            <button
+              onClick={() => {
+                setIsSearchCollapsed(false)
+                drawRoutes(routes, selectedIdx, isSheetCollapsed, false)
+              }}
+              style={{
+                background: 'rgba(139,92,246,0.2)',
+                color: '#c4b5fd',
+                border: '1px solid rgba(139,92,246,0.4)',
+                borderRadius: 999,
+                padding: '4px 10px',
+                fontSize: 11,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ✏️ 編輯搜尋
+            </button>
           </div>
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>🏠</span>
-            <input
-              ref={destInputRef}
-              className="input-field"
-              style={{ paddingLeft: 42 }}
-              placeholder="目的地"
-              value={destination}
-              onChange={e => setDestination(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>📍</span>
+              <input
+                ref={originInputRef}
+                className="input-field"
+                style={{ paddingLeft: 42 }}
+                placeholder="出發地（例：松山車站）"
+                value={origin}
+                onChange={e => setOrigin(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>🏠</span>
+              <input
+                ref={destInputRef}
+                className="input-field"
+                style={{ paddingLeft: 42 }}
+                placeholder="目的地"
+                value={destination}
+                onChange={e => setDestination(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            {error && <p style={{ color: '#ef4444', fontSize: 13, paddingLeft: 4 }}>{error}</p>}
+            <button className="btn-primary" onClick={handleSearch} disabled={isLoading || !dataLoaded}>
+              {isLoading ? '⏳ 計算安全路線中…' : !dataLoaded ? '⏳ 載入資料中…' : '🔍 找最安全路線'}
+            </button>
           </div>
-          {error && <p style={{ color: '#ef4444', fontSize: 13, paddingLeft: 4 }}>{error}</p>}
-          <button className="btn-primary" onClick={handleSearch} disabled={isLoading || !dataLoaded}>
-            {isLoading ? '⏳ 計算安全路線中…' : !dataLoaded ? '⏳ 載入資料中…' : '🔍 找最安全路線'}
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Route bottom sheet */}
