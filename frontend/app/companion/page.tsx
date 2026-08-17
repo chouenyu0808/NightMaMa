@@ -77,15 +77,18 @@ function stripEmojis(str: string): string {
 
     const utt = new SpeechSynthesisUtterance(cleanText)
     utt.lang = 'zh-TW'
-    utt.rate = 0.95
-    utt.pitch = 1.25
+    utt.rate = 1.0
+    utt.pitch = 1.05
 
     const doSpeak = () => {
       const voices = window.speechSynthesis.getVoices()
-      const warmVoice = voices.find(v =>
-        v.lang.includes('zh') &&
-        (v.name.includes('HsiaoChen') || v.name.includes('Yating') || v.name.includes('MeiJia') || v.name.includes('HanHan') || v.name.includes('Female') || v.name.includes('Google 國語') || v.name.includes('臺灣'))
-      ) || voices.find(v => v.lang.includes('zh-TW') || v.lang.includes('zh'))
+
+      // Prioritize natural / neural / online high quality Taiwan Chinese female voices
+      const warmVoice =
+        voices.find(v => (v.lang.includes('zh-TW') || v.lang.includes('zh_TW') || v.lang.includes('TW')) && (v.name.includes('Natural') || v.name.includes('Online') || v.name.includes('Neural') || v.name.includes('Enhanced') || v.name.includes('Premium'))) ||
+        voices.find(v => (v.lang.includes('zh') || v.lang.includes('TW')) && (v.name.includes('Yating') || v.name.includes('HsiaoChen') || v.name.includes('HanHan') || v.name.includes('MeiJia') || v.name.includes('SinJi') || v.name.includes('Google 國語') || v.name.includes('臺灣'))) ||
+        voices.find(v => v.lang.includes('zh-TW') || v.lang.includes('zh_TW')) ||
+        voices.find(v => v.lang.startsWith('zh'))
 
       if (warmVoice) utt.voice = warmVoice
 
