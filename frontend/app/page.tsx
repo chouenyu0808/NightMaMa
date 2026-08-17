@@ -578,21 +578,23 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Route bottom sheet — 支援拖曳拉高展開全部路線卡片 (85dvh) */}
+      {/* Route bottom sheet — 滿版(92dvh)展開顯示所有路線完整詳細資訊 */}
       {showSheet && routes.length > 0 && (
         <div
           className="bottom-sheet"
           style={{
-            bottom: '12px',
+            bottom: '0px',
             background: '#111827',
-            border: '1px solid rgba(255,255,255,0.12)',
-            paddingBottom: isSheetCollapsed ? '12px' : '20px',
-            maxHeight: isSheetCollapsed ? '70px' : isFullExpanded ? '85dvh' : '52dvh',
+            borderTop: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '24px 24px 0 0',
+            paddingBottom: isSheetCollapsed ? '12px' : '24px',
+            height: isSheetCollapsed ? '70px' : isFullExpanded ? '92dvh' : 'auto',
+            maxHeight: isSheetCollapsed ? '70px' : isFullExpanded ? '92dvh' : '56dvh',
             zIndex: 60,
             overflow: 'hidden',
             touchAction: 'none',
-            transition: draggingRef.current ? 'none' : 'all 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
-            boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',
+            transition: draggingRef.current ? 'none' : 'all 0.35s cubic-bezier(0.32, 0.72, 0, 1)',
+            boxShadow: '0 -10px 50px rgba(0,0,0,0.7)',
           }}
         >
           <div
@@ -605,12 +607,12 @@ export default function HomePage() {
               }
             }}
             onPointerDown={onSheetDragStart}
-            style={{ cursor: 'grab', padding: '4px 0 10px' }}
+            style={{ cursor: 'grab', padding: '6px 0 10px' }}
           >
             <div className="bottom-sheet-handle" />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                找到 {displayRoutes.length} 條路線 · 依安全評分排序 ↓
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                {isFullExpanded ? `所有候選路線詳細指標對比 (${displayRoutes.length} 條)` : `預設推薦路線 (共 ${displayRoutes.length} 條選項)`}
               </p>
               <button
                 onClick={(e) => {
@@ -636,34 +638,64 @@ export default function HomePage() {
                   gap: 4
                 }}
               >
-                {isSheetCollapsed ? '▲ 展開卡片' : isFullExpanded ? '▼ 收合介面' : '▲ 拉開查看全部選項'}
+                {isSheetCollapsed ? '▲ 展開卡片' : isFullExpanded ? '▼ 收合回單條' : '▲ 滿版拉開看全部3條詳細資訊'}
               </button>
             </div>
           </div>
 
           {!isSheetCollapsed && (
-            <>
+            <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 40px)', justifyContent: 'space-between' }}>
               <div
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 10,
-                  maxHeight: isFullExpanded ? '62dvh' : '30dvh',
+                  gap: 12,
+                  maxHeight: isFullExpanded ? '72dvh' : '36dvh',
                   overflowY: 'auto',
-                  paddingRight: 4
+                  paddingRight: 2
                 }}
                 className="scrollable"
               >
-                {[...displayRoutes]
-                  .sort((a, b) => (a.idx === selectedIdx ? -1 : 0) - (b.idx === selectedIdx ? -1 : 0))
-                  .map(({ route, idx }) =>
-                    idx === selectedIdx ? (
-                      <RouteCard key={idx} route={route} onClick={() => handleSelectRoute(idx)} />
-                    ) : (
-                      <RouteRow key={idx} route={route} onClick={() => handleSelectRoute(idx)} />
-                    )
-                  )}
+                {isFullExpanded ? (
+                  // 滿版拉上來時：顯示「所有三條路線」的完整 RouteCard 詳細數據
+                  routes.map((route, idx) => (
+                    <RouteCard
+                      key={idx}
+                      route={route}
+                      isSelected={idx === selectedIdx}
+                      onClick={() => handleSelectRoute(idx)}
+                    />
+                  ))
+                ) : (
+                  // 收下去時：只留使用者選中的那 1 條路線 RouteCard 資訊
+                  <>
+                    {routes[selectedIdx] && (
+                      <RouteCard
+                        route={routes[selectedIdx]}
+                        isSelected={true}
+                        onClick={() => {}}
+                      />
+                    )}
+                    <button
+                      onClick={() => setIsFullExpanded(true)}
+                      style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px dashed rgba(255,255,255,0.2)',
+                        color: 'rgba(255,255,255,0.7)',
+                        borderRadius: 14,
+                        padding: '8px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                      }}
+                    >
+                      ▲ 點擊或向上滑動，滿版展開查看其他 2 條路線詳細指標
+                    </button>
+                  </>
+                )}
               </div>
+
               <button
                 className="btn-primary"
                 style={{
@@ -676,13 +708,14 @@ export default function HomePage() {
                   fontWeight: 800,
                   background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
                   boxShadow: '0 4px 20px rgba(139,92,246,0.4)',
-                  padding: '14px'
+                  padding: '14px',
+                  borderRadius: 16
                 }}
                 onClick={handleStartNavigation}
               >
-                <IconWalk size={18} /> 開始導航 · {routes[selectedIdx]?.safety.label}路線
+                <IconWalk size={18} /> 開始導航 · {routes[selectedIdx]?.typeLabel}路線 ({formatDuration(routes[selectedIdx]?.durationSec || 0)})
               </button>
-            </>
+            </div>
           )}
         </div>
       )}
@@ -907,28 +940,53 @@ function StatBox({ icon, value, label, color }: { icon: React.ReactNode; value: 
   )
 }
 
-function RouteCard({ route, onClick }: { route: ScoredRoute; onClick: () => void }) {
+function RouteCard({ route, isSelected = true, onClick }: { route: ScoredRoute; isSelected?: boolean; onClick: () => void }) {
   return (
-    <div className="route-card glass-light selected" onClick={onClick}
-      style={{ border: `2px solid ${route.safety.color}66`, background: `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.08)` }}>
+    <div
+      className={`route-card glass-light ${isSelected ? 'selected' : ''}`}
+      onClick={onClick}
+      style={{
+        border: isSelected ? `2px solid ${route.safety.color}` : '1px solid rgba(255,255,255,0.12)',
+        background: isSelected
+          ? `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.12)`
+          : 'rgba(255,255,255,0.04)',
+        borderRadius: 18,
+        padding: '14px 16px',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        boxShadow: isSelected ? `0 4px 20px ${route.safety.color}33` : 'none',
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {typeIconFor(route.typeLabel, 18)}
-          <span style={{ fontWeight: 800, fontSize: 15 }}>{route.typeLabel}路線</span>
+          <span style={{ fontWeight: 800, fontSize: 16, color: 'white' }}>{route.typeLabel}路線</span>
+          {isSelected && (
+            <span style={{ background: route.safety.color, color: '#111827', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
+              ✓ 已選擇
+            </span>
+          )}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>
           {formatDuration(route.durationSec)}
-          <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}> ({formatDistance(route.distanceM)})</span>
+          <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}> ({formatDistance(route.distanceM)})</span>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-        <StatBox icon={<IconBulb size={15} />} value={route.lightCount} label="路燈" />
-        <StatBox icon={<IconCamera size={15} />} value={route.cameraCount} label="監視器" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+        <StatBox icon={<IconBulb size={15} />} value={route.lightCount} label="路燈數量" />
+        <StatBox icon={<IconCamera size={15} />} value={route.cameraCount} label="監視器數量" />
         <StatBox icon={<IconShield size={15} />} value={`${(route.safety.total / 10).toFixed(1)}/10`} label="安全評分" color={route.safety.color} />
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11 }}><IconStore size={12} /> 24h超商</span>
-        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11 }}><IconBadge size={12} /> {route.policeCount} 派出所</span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '3px 9px', borderRadius: 999 }}>
+          <IconStore size={12} /> 24h超商門市
+        </span>
+        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11, padding: '3px 9px', borderRadius: 999 }}>
+          <IconBadge size={12} /> {route.policeCount} 派出所/警局
+        </span>
+        {route.extraMin === 0 && (
+          <span style={{ fontSize: 11, color: '#10b981', marginLeft: 'auto', fontWeight: 700 }}>⚡ 費時最短</span>
+        )}
       </div>
     </div>
   )
