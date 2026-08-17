@@ -222,9 +222,9 @@ function NavigateContent() {
 
       mapInstance.current = new google.maps.Map(mapRef.current, {
         center: points[0],
-        zoom: 18,
+        zoom: 16.5,
         heading: 0,
-        tilt: 45,
+        tilt: 35,
         disableDefaultUI: true,
         gestureHandling: 'greedy',
         styles: googleNavMapStyle,
@@ -369,10 +369,16 @@ function NavigateContent() {
         )
       }
 
-      // Initial camera view
+      // Initial camera view — fit bounds with comfortable maxZoom (16.5) so surrounding streets are clearly visible
       const bounds = new google.maps.LatLngBounds()
       points.forEach(p => bounds.extend(p))
-      mapInstance.current.fitBounds(bounds, { top: 220, bottom: 180, left: 30, right: 30 })
+      mapInstance.current.fitBounds(bounds, { top: 160, bottom: 160, left: 50, right: 50 })
+
+      google.maps.event.addListenerOnce(mapInstance.current, 'idle', () => {
+        if (mapInstance.current && (mapInstance.current.getZoom() || 0) > 16.8) {
+          mapInstance.current.setZoom(16.5)
+        }
+      })
     })
 
     return () => {
@@ -385,7 +391,7 @@ function NavigateContent() {
     setIsCentering(true)
     if (userPos && mapInstance.current) {
       mapInstance.current.panTo(userPos)
-      mapInstance.current.setZoom(18)
+      mapInstance.current.setZoom(16.5)
     }
   }
 
