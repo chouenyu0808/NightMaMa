@@ -1,7 +1,14 @@
-"""Gemini wrapper — route reasoning text and voice-companion chat/urgency detection."""
+"""Gemini wrapper — route reasoning text and voice-companion chat/urgency detection.
+
+Uses the Interactions API (client.interactions.create), the current
+recommended entry point — the older generate_content models are being
+retired for new API keys.
+"""
 from google import genai
 
 from config import settings
+
+MODEL = "gemini-3.7-flash"
 
 _client: genai.Client | None = None
 
@@ -18,14 +25,14 @@ def explain_route_choice(light_count: int, store_count: int, camera_count: int) 
         "用一句話（20字內、繁體中文）說明為什麼這條路線比較安全："
         f"沿途路燈 {light_count} 盞、24H店家 {store_count} 家、監視器 {camera_count} 個。"
     )
-    response = _client_instance().models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return response.text.strip()
+    interaction = _client_instance().interactions.create(model=MODEL, input=prompt)
+    return interaction.output_text.strip()
 
 
 def chat_reply(user_text: str) -> str:
     prompt = f"你是夜間步行陪伴語音助理，簡短溫暖地回應（30字內、繁體中文）：{user_text}"
-    response = _client_instance().models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return response.text.strip()
+    interaction = _client_instance().interactions.create(model=MODEL, input=prompt)
+    return interaction.output_text.strip()
 
 
 def detect_urgent_tone(transcript: str) -> bool:
