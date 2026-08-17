@@ -612,7 +612,7 @@ export default function HomePage() {
             <div className="bottom-sheet-handle" />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {isFullExpanded ? `所有候選路線詳細指標對比 (${displayRoutes.length} 條)` : `預設推薦路線 (共 ${displayRoutes.length} 條選項)`}
+                {isFullExpanded ? `全線指標對比 (${displayRoutes.length} 條)` : `候選路線 (${displayRoutes.length} 條)`}
               </p>
               <button
                 onClick={(e) => {
@@ -638,7 +638,7 @@ export default function HomePage() {
                   gap: 4
                 }}
               >
-                {isSheetCollapsed ? '▲ 展開卡片' : isFullExpanded ? '▼ 收合回單條' : '▲ 滿版拉開看全部3條詳細資訊'}
+                {isSheetCollapsed ? '▲ 展開卡片' : isFullExpanded ? '▼ 收合地圖' : '▲ 詳細比較'}
               </button>
             </div>
           </div>
