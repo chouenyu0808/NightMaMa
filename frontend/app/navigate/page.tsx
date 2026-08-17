@@ -550,47 +550,49 @@ function NavigateContent() {
         }}
       />
 
-      {/* ─── Top Google Navigation Banner (Dark Teal) ────────────────────────── */}
+      {/* ─── Top Floating Google Navigation Banner (Transparent Glassmorphism) ───── */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
         zIndex: 50,
-        padding: '52px 16px 12px',
-        background: 'linear-gradient(to bottom, rgba(2, 44, 34, 0.98) 85%, transparent)',
+        padding: '48px 12px 0',
+        pointerEvents: 'none',
       }}>
         {/* Main Turn Banner */}
         <div style={{
-          background: '#024738',
+          background: 'rgba(2, 44, 34, 0.92)',
+          backdropFilter: 'blur(16px)',
           borderRadius: 20,
-          padding: '16px 20px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          border: '1px solid rgba(16,185,129,0.3)',
+          padding: '14px 18px',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+          border: '1px solid rgba(16,185,129,0.4)',
           color: 'white',
           display: 'flex',
           alignItems: 'center',
-          gap: 16,
+          gap: 14,
+          pointerEvents: 'auto',
         }}>
           {/* Big direction icon */}
           <div style={{
-            fontSize: 38,
-            width: 56,
-            height: 56,
-            borderRadius: 16,
+            fontSize: 34,
+            width: 50,
+            height: 50,
+            borderRadius: 14,
             background: 'rgba(255,255,255,0.12)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
           }}>
-            <StepIcon icon={currentStep.icon} size={30} color="white" />
+            <StepIcon icon={currentStep.icon} size={28} color="white" />
           </div>
 
           {/* Turn text */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
               前往
             </div>
             <div style={{
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: 900,
               color: '#ffffff',
               whiteSpace: 'nowrap',
@@ -606,8 +608,8 @@ function NavigateContent() {
           <button
             onClick={() => router.push(`/companion?origin=${origin}&destination=${destination}&safety=${safetyScore}&duration=${remainingSec}`)}
             style={{
-              width: 44,
-              height: 44,
+              width: 42,
+              height: 42,
               borderRadius: '50%',
               background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
               border: 'none',
@@ -620,7 +622,7 @@ function NavigateContent() {
               flexShrink: 0,
             }}
           >
-            <IconSparkles size={20} color="white" />
+            <IconSparkles size={18} color="white" />
           </button>
         </div>
 
@@ -629,19 +631,21 @@ function NavigateContent() {
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 8,
+            gap: 6,
             marginTop: 8,
-            marginLeft: 8,
-            padding: '6px 14px',
-            background: '#013328',
+            marginLeft: 6,
+            padding: '5px 12px',
+            background: 'rgba(1, 51, 40, 0.9)',
+            backdropFilter: 'blur(12px)',
             borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.15)',
             color: 'rgba(255,255,255,0.9)',
-            fontSize: 13,
-            fontWeight: 600,
+            fontSize: 12,
+            fontWeight: 700,
+            pointerEvents: 'auto',
           }}>
             <span>接下來</span>
-            <StepIcon icon={nextStep.icon} size={16} />
+            <StepIcon icon={nextStep.icon} size={14} />
             <span>{nextStep.streetName}</span>
           </div>
         )}
@@ -649,8 +653,8 @@ function NavigateContent() {
 
       {/* ─── Right Floating Control Column (Google Maps Floating Icons) ───────── */}
       <div style={{
-        position: 'absolute', right: 16, top: '230px',
-        display: 'flex', flexDirection: 'column', gap: 12,
+        position: 'absolute', right: 14, top: '190px',
+        display: 'flex', flexDirection: 'column', gap: 10,
         zIndex: 40,
       }}>
         {/* Compass Button */}
@@ -714,20 +718,21 @@ function NavigateContent() {
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
           zIndex: 50,
-          padding: '12px 16px 28px',
-          background: 'linear-gradient(to top, rgba(10,14,26,0.98) 85%, transparent)',
+          padding: '0 12px 16px',
+          pointerEvents: 'none',
         }}>
-        <div style={{
-          background: 'rgba(17,24,39,0.9)',
-          borderRadius: 24,
-          padding: '14px 18px',
-          border: '1px solid rgba(255,255,255,0.12)',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 14,
-        }}>
+          <div style={{
+            background: 'rgba(15,23,42,0.92)',
+            borderRadius: 22,
+            padding: '12px 16px',
+            border: '1px solid rgba(255,255,255,0.15)',
+            backdropFilter: 'blur(16px)',
+            boxShadow: '0 10px 35px rgba(0,0,0,0.6)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            pointerEvents: 'auto',
+          }}>
           {/* Main Info Line */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             {/* End Navigation Button */}
