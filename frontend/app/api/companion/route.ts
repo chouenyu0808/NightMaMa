@@ -88,13 +88,14 @@ function generateSmartFallback(userMsg: string, context: Record<string, any>): s
 
 export async function POST(req: NextRequest) {
   try {
-    const { userMessage, history = [], context = {} } = await req.json()
+    const { userMessage, history = [], context = {}, customApiKey = '' } = await req.json()
 
     if (!userMessage) {
       return NextResponse.json({ error: 'Message required' }, { status: 400 })
     }
 
     const apiKey =
+      customApiKey.trim() ||
       process.env.NEXT_PUBLIC_GEMINI_KEY ||
       process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
       ('AQ.Ab8RN' + '6Jfua2DdjO65bLz6wiS2zWmYZbUWRJtK8cGyaiGFeDUvw')

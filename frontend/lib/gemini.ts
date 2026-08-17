@@ -18,10 +18,11 @@ export async function sendMessage(
   context: CompanionContext
 ): Promise<string> {
   try {
+    const customApiKey = typeof window !== 'undefined' ? localStorage.getItem('nightmama_gemini_key') || '' : ''
     const res = await fetch('/api/companion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userMessage, history, context }),
+      body: JSON.stringify({ userMessage, history, context, customApiKey }),
     })
 
     const data = await res.json()
