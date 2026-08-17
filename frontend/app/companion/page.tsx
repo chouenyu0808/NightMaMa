@@ -662,7 +662,7 @@ function CompanionContent() {
             <IconChevronLeft />
           </button>
           <div style={{ fontWeight: 700, fontSize: 17, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
-            2026 Dev jam go... (3)
+            媽咪 (NightMaMa AI)
           </div>
         </div>
 
@@ -716,10 +716,10 @@ function CompanionContent() {
                   overflow: 'hidden', flexShrink: 0
                 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/mom_avatar.jpg" alt="yuki yang" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src="/mom_avatar.jpg" alt="媽咪" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2, fontWeight: 500 }}>yuki yang</span>
+                  <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2, fontWeight: 500 }}>媽咪</span>
                   <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
                     <div style={{
                       background: '#FFFFFF', borderRadius: 18, padding: '20px 20px', width: 250,
@@ -767,12 +767,12 @@ function CompanionContent() {
                   overflow: 'hidden', flexShrink: 0
                 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/mom_avatar.jpg" alt="yuki yang" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <img src="/mom_avatar.jpg" alt="媽咪" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '72%' }}>
                 {msg.role === 'ai' && (
-                  <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2, fontWeight: 500 }}>yuki yang</span>
+                  <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2, fontWeight: 500 }}>媽咪</span>
                 )}
                 <div style={{ display: 'flex', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 6 }}>
                   <div style={{
@@ -801,10 +801,10 @@ function CompanionContent() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/mom_avatar.jpg" alt="yuki yang" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src="/mom_avatar.jpg" alt="媽咪" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2 }}>yuki yang</span>
+              <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2 }}>媽咪</span>
               <div style={{ background: '#FFFFFF', padding: '10px 16px', borderRadius: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <ThinkingDots />
               </div>
@@ -912,10 +912,10 @@ function CompanionContent() {
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/mom_avatar.jpg"
-                  alt="yuki yang"
+                  alt="媽咪"
                   style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover', border: '4px solid rgba(255,255,255,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
                 />
-                <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>yuki yang</div>
+                <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
                 <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   💬 LINE 語音來電…
                 </div>
@@ -941,7 +941,7 @@ function CompanionContent() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="/mom_avatar.jpg"
-                    alt="yuki yang"
+                    alt="媽咪"
                     style={{
                       width: 110, height: 110, borderRadius: '50%', objectFit: 'cover',
                       border: aiSpeaking ? '4px solid #06C755' : userSpeaking ? '4px solid #8B5CF6' : '4px solid rgba(255,255,255,0.3)',
@@ -961,7 +961,7 @@ function CompanionContent() {
                   )}
                 </div>
 
-                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>yuki yang</div>
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>媽咪</div>
                 <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#06C755', animation: 'pulse 1s infinite' }} />
                   LINE 通話中 {String(Math.floor(callDuration / 60)).padStart(2, '0')}:{String(callDuration % 60).padStart(2, '0')}
