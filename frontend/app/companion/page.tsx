@@ -271,6 +271,128 @@ function CompanionContent() {
     setIsListening(true)
   }, [isListening, sendMsg])
 
+  // Voice call states
+  const [callActive, setCallActive] = useState(false)
+  const [callState, setCallState] = useState<'ringing' | 'connected'>('ringing')
+  const [callDuration, setCallDuration] = useState(0)
+  const [audioUnlocked, setAudioUnlocked] = useState(false)
+  const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null)
+  const momVoiceAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Call duration counter when connected
+  useEffect(() => {
+    if (!callActive || callState !== 'connected') return
+    const timer = setInterval(() => setCallDuration(d => d + 1), 1000)
+    return () => clearInterval(timer)
+  }, [callActive, callState])
+
+  const triggerAudioPlay = () => {
+    setAudioUnlocked(true)
+    if (ringtoneAudioRef.current && callState === 'ringing') {
+      ringtoneAudioRef.current.play().catch(console.warn)
+    } else if (callState === 'ringing') {
+      ringtoneAudioRef.current = new Audio('/line_ringtone.mp3')
+      ringtoneAudioRef.current.loop = true
+      ringtoneAudioRef.current.play().catch(console.warn)
+    }
+  }
+
+  // Play authentic 320k LINE ringtone MP3 while ringing
+  useEffect(() => {
+    if (callActive && callState === 'ringing') {
+      if (!ringtoneAudioRef.current) {
+        ringtoneAudioRef.current = new Audio('/line_ringtone.mp3')
+        ringtoneAudioRef.current.loop = true
+      }
+      ringtoneAudioRef.current.play().then(() => setAudioUnlocked(true)).catch(err => {
+        console.warn('Browser autoplay notice:', err)
+        setAudioUnlocked(false)
+      })
+    } else {
+      if (ringtoneAudioRef.current) {
+        ringtoneAudioRef.current.pause()
+        ringtoneAudioRef.current.currentTime = 0
+      }
+    }
+    return () => {
+      if (ringtoneAudioRef.current) {
+        ringtoneAudioRef.current.pause()
+        ringtoneAudioRef.current.currentTime = 0
+      }
+    }
+  }, [callActive, callState])
+
+  // Play Google Neural TTS Voice MP3 when call connected
+  useEffect(() => {
+    if (callActive && callState === 'connected') {
+      if (!momVoiceAudioRef.current) {
+        momVoiceAudioRef.current = new Audio('/mom_voice.mp3')
+      }
+      momVoiceAudioRef.current.play().catch(err => {
+        console.warn('Google TTS MP3 play notice, falling back to WebSpeech:', err)
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          window.speechSynthesis.cancel()
+          const script = '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
+          const utt = new SpeechSynthesisUtterance(script)
+          utt.lang = 'zh-TW'
+          utt.rate = 0.95
+          utt.pitch = 1.05
+          window.speechSynthesis.speak(utt)
+        }
+      })
+    } else {
+      if (momVoiceAudioRef.current) {
+        momVoiceAudioRef.current.pause()
+        momVoiceAudioRef.current.currentTime = 0
+      }
+    }
+    return () => {
+      if (momVoiceAudioRef.current) {
+        momVoiceAudioRef.current.pause()
+        momVoiceAudioRef.current.currentTime = 0
+      }
+    }
+  }, [callActive, callState])
+
+  const startVoiceCall = useCallback(() => {
+    setCallState('ringing')
+    setCallDuration(0)
+    setCallActive(true)
+  }, [])
+
+  const acceptVoiceCall = () => {
+    if (ringtoneAudioRef.current) {
+      ringtoneAudioRef.current.pause()
+      ringtoneAudioRef.current.currentTime = 0
+    }
+    setCallState('connected')
+  }
+
+  const endVoiceCall = () => {
+    if (ringtoneAudioRef.current) {
+      ringtoneAudioRef.current.pause()
+      ringtoneAudioRef.current.currentTime = 0
+    }
+    if (momVoiceAudioRef.current) {
+      momVoiceAudioRef.current.pause()
+      momVoiceAudioRef.current.currentTime = 0
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+    }
+    setCallActive(false)
+
+    // Append LINE-style Voice Call Ended card in chat history
+    setMessages(prev => [
+      ...prev,
+      {
+        role: 'ai',
+        text: '📞 LINE 語音通話已結束。',
+        timestamp: Date.now(),
+      },
+    ])
+  }
+
   return (
     <div style={{
       display: 'flex',
@@ -323,16 +445,18 @@ function CompanionContent() {
           </div>
         </div>
 
-        {/* Right Action Icons (LINE Style) */}
+        {/* Right Action Icons (LINE Style - Matches user screenshot) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="搜尋"><IconSearch /></button>
           <button
             style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-            onClick={() => router.push('/sos?fakeCall=1')}
-            title="撥打假電話"
+            onClick={startVoiceCall}
+            title="語音通話"
           >
-            ☰
+            <IconPhoneCall />
           </button>
+          <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="行事曆"><IconCalendar /></button>
+          <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="選單"><IconMenu /></button>
         </div>
       </div>
 
@@ -460,11 +584,11 @@ function CompanionContent() {
             { id: 'store', label: '附近有超商嗎？', icon: <IconStore /> },
             { id: 'fear', label: '我有點害怕', icon: <IconShield /> },
             { id: 'time', label: '還要走多久？', icon: <IconClock /> },
-            { id: 'call', label: '撥打假電話', icon: <IconPhoneCall /> },
+            { id: 'call', label: '語音通話', icon: <IconPhoneCall /> },
           ].map(p => (
             <button
               key={p.id}
-              onClick={() => p.id === 'call' ? router.push('/sos?fakeCall=1') : sendMsg(p.label)}
+              onClick={() => p.id === 'call' ? startVoiceCall() : sendMsg(p.label)}
               style={{
                 whiteSpace: 'nowrap',
                 padding: '6px 12px',
@@ -586,6 +710,73 @@ function CompanionContent() {
           <IconMic />
         </button>
       </div>
+
+      {/* Full-screen LINE Voice Call Overlay */}
+      {callActive && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: '#111827', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white'
+        }} onClick={triggerAudioPlay}>
+          {callState === 'ringing' ? (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/mom_avatar.jpg"
+                  alt="媽咪"
+                  style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover', border: '4px solid rgba(255,255,255,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+                />
+                <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
+                <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  💬 LINE 語音來電…
+                </div>
+                {!audioUnlocked && (
+                  <div style={{ fontSize: 11, background: 'rgba(6,199,85,0.2)', color: '#06C755', padding: '4px 12px', borderRadius: 999, border: '1px solid rgba(6,199,85,0.3)', marginTop: 4 }}>
+                    🔔 點擊螢幕解鎖鈴聲
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <button onClick={endVoiceCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}>📵</button>
+                  <span style={{ fontSize: 12, opacity: 0.8 }}>拒絕</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <button onClick={acceptVoiceCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)' }}>📞</button>
+                  <span style={{ fontSize: 12, opacity: 0.8 }}>接聽</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/mom_avatar.jpg"
+                  alt="媽咪"
+                  style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '4px solid #06C755', boxShadow: '0 0 20px rgba(6,199,85,0.4)' }}
+                />
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>媽咪</div>
+                <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600 }}>
+                  LINE 通話中 {String(Math.floor(callDuration / 60)).padStart(2, '0')}:{String(callDuration % 60).padStart(2, '0')}
+                </div>
+                <div className="glass-light" style={{ color: '#F3F4F6', textAlign: 'center', fontSize: 15, marginTop: 14, padding: '14px 20px', borderRadius: 18, lineHeight: 1.6, maxWidth: 300, background: 'rgba(255,255,255,0.08)' }}>
+                  「喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！」
+                </div>
+              </div>
+
+              <button
+                onClick={endVoiceCall}
+                style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}
+              >
+                📵
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
