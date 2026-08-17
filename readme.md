@@ -152,7 +152,10 @@ cd frontend
 bash deploy.sh
 ```
 
-- **線上展示網址**：[https://nightmama-321739351322.asia-east1.run.app](https://nightmama-321739351322.asia-east1.run.app)
+- **線上展示網址**：[https://nightmama-web-l4hrcsampa-de.a.run.app](https://nightmama-web-l4hrcsampa-de.a.run.app)
+
+> 部署到的服務名稱是 `nightmama-web`（見 `frontend/deploy.sh` 的 `SERVICE_NAME`）。
+> 專案內若還有其他同名前綴的 Cloud Run 服務，那是未設定金鑰的殘留，請勿對外散布。
 
 ### 🔐 金鑰處理原則
 
