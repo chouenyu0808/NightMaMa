@@ -849,15 +849,18 @@ export default function HomePage() {
                   gap: 6,
                 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>🚌 搭乘路線資訊</span>
+                    <span>🚌 Real-time Google 大眾運輸搭乘資訊</span>
                     <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 8px', borderRadius: 8, fontWeight: 800 }}>
-                      299 號公車 / 板南線
+                      {selectedRoute.transitLegs?.find(l => l.mode === 'BUS')?.lineName || '公車 / 捷運 / 幹線'}
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div>🚶 <strong>步行起點</strong> ➔ <strong>[市政府公車站]</strong> (夜間安全防護 🛡️)</div>
-                    <div>🚌 <strong>上車搭乘 299 公車</strong> ➔ <strong>[松山高中站]</strong> 下車 (約 6 分鐘)</div>
-                    <div>🏠 <strong>下車步行</strong> ➔ <strong>[回家目的地]</strong> (夜間安全防護 🛡️)</div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {selectedRoute.steps?.map((step, sIdx) => (
+                      <div key={sIdx} style={{ lineHeight: 1.4, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+                        <span style={{ flexShrink: 0 }}>•</span>
+                        <span>{step.instruction}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
