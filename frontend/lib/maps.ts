@@ -192,145 +192,148 @@ export async function fetchRoutes(
           })
 
           // Query Real Google Maps Directions TRANSIT Mode for true bus / MRT lines and stop names!
+          // We pass provideRouteAlternatives: true to get multiple transit candidates
           dirService.route(
             {
               origin: originParam,
               destination: destParam,
               travelMode: google.maps.TravelMode.TRANSIT,
+              provideRouteAlternatives: true,
             },
             (transitRes, transitStatus) => {
               if (transitStatus === google.maps.DirectionsStatus.OK && transitRes?.routes?.length) {
-                const tr = transitRes.routes[0]
-                const tLeg = tr.legs[0]
-                const transitLegs: TransitLeg[] = []
-                const steps: RouteStep[] = []
+                // Get the true destination point from the walking route overview_path
+                const walkingTargetPt = routes[0]?.points?.[routes[0]?.points?.length - 1]
 
-                let mainLineName = ''
-                let mainDepStop = ''
-                let mainArrStop = ''
+                // Iterate candidate transit routes from Google to find a usable transit route
+                for (const tr of transitRes.routes) {
+                  const tLeg = tr.legs[0]
+                  if (!tLeg) continue
 
-                ;(tLeg.steps || []).forEach(s => {
-                  const sPts: LatLng[] = (s.path || []).map(p => ({ lat: p.lat(), lng: p.lng() }))
-                  // Check if this step is a transit leg
-                  if (s.transit) {
-                    const lName = s.transit.line?.short_name || s.transit.line?.name || '公車/大眾運輸'
-                    const depStop = s.transit.departure_stop?.name || '轉乘站'
-                    const arrStop = s.transit.arrival_stop?.name || '下車站'
+                  const transitLegs: TransitLeg[] = []
+                  const steps: RouteStep[] = []
 
-                    if (!mainLineName) {
-                      mainLineName = lName
-                      mainDepStop = depStop
-                      mainArrStop = arrStop
-                    }
+                  let mainLineName = ''
+                  let mainDepStop = ''
+                  let mainArrStop = ''
 
-                    transitLegs.push({
-                      mode: 'BUS',
-                      lineName: lName,
-                      departureStop: depStop,
-                      arrivalStop: arrStop,
-                      points: sPts,
-                    })
+                  ;(tLeg.steps || []).forEach(s => {
+                    const sPts: LatLng[] = (s.path || []).map(p => ({ lat: p.lat(), lng: p.lng() }))
+                    if (s.transit) {
+                      const lName = s.transit.line?.short_name || s.transit.line?.name || '公車/大眾運輸'
+                      const depStop = s.transit.departure_stop?.name || '轉乘站'
+                      const arrStop = s.transit.arrival_stop?.name || '下車站'
 
-                    steps.push({
-                      instruction: `🚌 搭乘 [${lName}]（${depStop} 上車 ➔ ${arrStop} 下車，車廂內安全）`,
-                      maneuver: 'straight',
-                      distanceM: s.distance?.value || 500,
-                      startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
-                      endLocation: { lat: s.end_location.lat(), lng: s.end_location.lng() },
-                    })
-                  } else {
-                    // WALKING leg
-                    transitLegs.push({
-                      mode: 'WALK',
-                      points: sPts,
-                    })
-
-                    const rawIns = s.instructions || ''
-                    const cleanIns = rawIns.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
-
-                    steps.push({
-                      instruction: `🚶 ${cleanIns || '步行前往'}（夜間安全檢測防護中 🛡️）`,
-                      maneuver: s.maneuver || 'turn-straight',
-                      distanceM: s.distance?.value || 100,
-                      startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
-                      endLocation: { lat: s.end_location.lat(), lng: s.end_location.lng() },
-                    })
-                  }
-                })
-
-                  // Validate transit route with common sense:
-                  // 1. Must contain at least one transit vehicle leg (BUS / MRT)
-                  // 2. The final transit vehicle alighting stop MUST be within 1200m of the destination!
-                  const busLegs = transitLegs.filter(l => l.mode === 'BUS' && l.points && l.points.length > 0)
-                  const hasTransitVehicle = busLegs.length > 0
-
-                  let isTransitUsable = false
-                  if (hasTransitVehicle) {
-                    const lastBus = busLegs[busLegs.length - 1]
-                    const lastStopPt = lastBus.points[lastBus.points.length - 1]
-                    const destPt = { lat: tLeg.end_location.lat(), lng: tLeg.end_location.lng() }
-                    const R = 6371000
-                    const dLat = (destPt.lat - lastStopPt.lat) * Math.PI / 180
-                    const dLon = (destPt.lng - lastStopPt.lng) * Math.PI / 180
-                    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                      Math.cos(lastStopPt.lat * Math.PI / 180) * Math.cos(destPt.lat * Math.PI / 180) *
-                      Math.sin(dLon / 2) * Math.sin(dLon / 2)
-                    const distFromLastStopToDest = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-
-                    // If the bus alighting stop is within 1200m (1.2 km) of destination, it's valid!
-                    if (distFromLastStopToDest <= 1200) {
-                      isTransitUsable = true
-                    }
-                  }
-
-                  if (isTransitUsable) {
-                    const allBusLines = busLegs.map(b => b.lineName).filter(Boolean)
-                    const busSummary = allBusLines.join(' ➔ ')
-                    const firstDep = busLegs[0]?.departureStop || '上車站'
-                    const finalArr = busLegs[busLegs.length - 1]?.arrivalStop || '下車站'
-
-                    // Calculate transit safety score based on walking segment distance
-                    const walkLegs = transitLegs.filter(l => l.mode === 'WALK')
-                    const totalWalkPts = walkLegs.reduce((sum, l) => sum + (l.points?.length || 0), 0)
-                    // Transit is inherently safer (vehicle), but walking segments reduce the score
-                    // Short walks (<500m total) = high score, long walks = lower score
-                    const totalWalkDistM = walkLegs.reduce((sum, l) => {
-                      if (!l.points || l.points.length < 2) return sum
-                      let d = 0
-                      for (let k = 1; k < l.points.length; k++) {
-                        const R2 = 6371000
-                        const dLa = (l.points[k].lat - l.points[k-1].lat) * Math.PI / 180
-                        const dLo = (l.points[k].lng - l.points[k-1].lng) * Math.PI / 180
-                        const aa = Math.sin(dLa/2)*Math.sin(dLa/2) + Math.cos(l.points[k-1].lat*Math.PI/180)*Math.cos(l.points[k].lat*Math.PI/180)*Math.sin(dLo/2)*Math.sin(dLo/2)
-                        d += R2 * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa))
+                      if (!mainLineName) {
+                        mainLineName = lName
+                        mainDepStop = depStop
+                        mainArrStop = arrStop
                       }
-                      return sum + d
-                    }, 0)
-                    const transitScore = Math.max(30, Math.min(95, 90 - Math.floor(totalWalkDistM / 100)))
 
-                    const realTransitRoute: RouteResult = {
-                      type: 'transit',
-                      isTransit: true,
-                      transitLegs,
-                      polyline: tr.overview_polyline || '',
-                      durationSec: tLeg?.duration?.value || 600,
-                      distanceM: tLeg?.distance?.value || 1000,
-                      score: transitScore,
-                      reason: `搭乘 ${busSummary || '大眾運輸'}（${firstDep} 上車 ➔ ${finalArr} 下車），僅頭尾步行實施夜間安全防護`,
-                      lightCount: totalWalkPts * 2,
-                      cameraCount: totalWalkPts,
-                      policeCount: 0,
-                      segmentScores: [],
-                      storeCount: 0,
-                      points: (tr.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() })),
-                      steps,
+                      transitLegs.push({
+                        mode: 'BUS',
+                        lineName: lName,
+                        departureStop: depStop,
+                        arrivalStop: arrStop,
+                        points: sPts,
+                      })
+
+                      steps.push({
+                        instruction: `🚌 搭乘 [${lName}]（${depStop} 上車 ➔ ${arrStop} 下車，車廂內安全）`,
+                        maneuver: 'straight',
+                        distanceM: s.distance?.value || 500,
+                        startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
+                        endLocation: { lat: s.end_location.lat(), lng: s.end_location.lng() },
+                      })
+                    } else {
+                      transitLegs.push({
+                        mode: 'WALK',
+                        points: sPts,
+                      })
+
+                      const rawIns = s.instructions || ''
+                      const cleanIns = rawIns.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+
+                      steps.push({
+                        instruction: `🚶 ${cleanIns || '步行前往'}（夜間安全檢測防護中 🛡️）`,
+                        maneuver: s.maneuver || 'turn-straight',
+                        distanceM: s.distance?.value || 100,
+                        startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
+                        endLocation: { lat: s.end_location.lat(), lng: s.end_location.lng() },
+                      })
                     }
-                    routes.push(realTransitRoute)
+                  })
+
+                  // Common sense validation:
+                  // 1. Must contain at least one transit vehicle leg (BUS / MRT)
+                  // 2. The final transit vehicle alighting stop MUST be within 1200m of the TRUE target destination!
+                  const busLegs = transitLegs.filter(l => l.mode === 'BUS' && l.points && l.points.length > 0)
+                  if (!busLegs.length) continue
+
+                  const lastBus = busLegs[busLegs.length - 1]
+                  const lastStopPt = lastBus.points[lastBus.points.length - 1]
+
+                  let distFromLastStopToDest = 0
+                  if (walkingTargetPt) {
+                    const R = 6371000
+                    const dLat = (walkingTargetPt.lat - lastStopPt.lat) * Math.PI / 180
+                    const dLon = (walkingTargetPt.lng - lastStopPt.lng) * Math.PI / 180
+                    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lastStopPt.lat * Math.PI / 180) * Math.cos(walkingTargetPt.lat * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2)
+                    distFromLastStopToDest = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
                   }
+
+                  // If alighting stop is > 1200m away from the true destination, skip this bad route option!
+                  if (distFromLastStopToDest > 1200) {
+                    continue
+                  }
+
+                  const allBusLines = busLegs.map(b => b.lineName).filter(Boolean)
+                  const busSummary = allBusLines.join(' ➔ ')
+                  const firstDep = busLegs[0]?.departureStop || '上車站'
+                  const finalArr = busLegs[busLegs.length - 1]?.arrivalStop || '下車站'
+
+                  const walkLegs = transitLegs.filter(l => l.mode === 'WALK')
+                  const totalWalkPts = walkLegs.reduce((sum, l) => sum + (l.points?.length || 0), 0)
+                  const totalWalkDistM = walkLegs.reduce((sum, l) => {
+                    if (!l.points || l.points.length < 2) return sum
+                    let d = 0
+                    for (let k = 1; k < l.points.length; k++) {
+                      const R2 = 6371000
+                      const dLa = (l.points[k].lat - l.points[k-1].lat) * Math.PI / 180
+                      const dLo = (l.points[k].lng - l.points[k-1].lng) * Math.PI / 180
+                      const aa = Math.sin(dLa/2)*Math.sin(dLa/2) + Math.cos(l.points[k-1].lat*Math.PI/180)*Math.cos(l.points[k].lat*Math.PI/180)*Math.sin(dLo/2)*Math.sin(dLo/2)
+                      d += R2 * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa))
+                    }
+                    return sum + d
+                  }, 0)
+                  const transitScore = Math.max(30, Math.min(95, 90 - Math.floor(totalWalkDistM / 100)))
+
+                  const realTransitRoute: RouteResult = {
+                    type: 'transit',
+                    isTransit: true,
+                    transitLegs,
+                    polyline: tr.overview_polyline || '',
+                    durationSec: tLeg?.duration?.value || 600,
+                    distanceM: tLeg?.distance?.value || 1000,
+                    score: transitScore,
+                    reason: `搭乘 ${busSummary || '大眾運輸'}（${firstDep} 上車 ➔ ${finalArr} 下車），僅頭尾步行實施夜間安全防護`,
+                    lightCount: totalWalkPts * 2,
+                    cameraCount: totalWalkPts,
+                    policeCount: 0,
+                    segmentScores: [],
+                    storeCount: 0,
+                    points: (tr.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() })),
+                    steps,
+                  }
+                  routes.push(realTransitRoute)
+                  break // Found a valid, common-sense transit route! Stop looping.
                 }
-                resolve(routes)
               }
-            )
+              resolve(routes)
+            }
+          )
         } else {
           reject(new Error(`DirectionsService 路線規劃失敗: ${status}`))
         }

@@ -1064,10 +1064,13 @@ export default function HomePage() {
 
                   {/* Horizontal 5-Step Stepper Progress Bar */}
                   {(() => {
-                    const busLeg = selectedRoute.transitLegs?.find(l => l.mode === 'BUS')
-                    const depStop = busLeg?.departureStop || '上車站'
-                    const arrStop = busLeg?.arrivalStop || '下車站'
-                    const lineName = busLeg?.lineName || '大眾運輸'
+                    const busLegs = selectedRoute.transitLegs?.filter(l => l.mode === 'BUS') || []
+                    const firstBus = busLegs[0]
+                    const lastBus = busLegs[busLegs.length - 1]
+
+                    const depStop = firstBus?.departureStop || '上車站'
+                    const arrStop = lastBus?.arrivalStop || '下車站'
+                    const lineName = busLegs.map(b => b.lineName).filter(Boolean).join('/') || '大眾運輸'
 
                     const origShort = origin.replace(/臺北市|台北市|新北市|市|區|路|街/g, '').slice(0, 4) || '起點'
                     const destShort = destination.replace(/臺北市|台北市|新北市|市|區|路|街/g, '').slice(0, 4) || '終點'
