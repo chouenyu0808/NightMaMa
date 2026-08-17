@@ -301,8 +301,8 @@ function NavigateContent() {
               }
             })
 
-            // If user strays > 60m off route, trigger dynamic reroute
-            if (minDistance > 60) {
+            // If user strays > 35m off route, trigger dynamic reroute from current position
+            if (minDistance > 35) {
               fetchRoutes(`${current.lat},${current.lng}`, destination, false).then((newRoutes: RouteResult[]) => {
                 if (newRoutes.length && mapInstance.current) {
                   currentPoints = newRoutes[0].points

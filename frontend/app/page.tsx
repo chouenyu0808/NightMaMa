@@ -25,6 +25,7 @@ export default function HomePage() {
   const mapInstance = useRef<google.maps.Map | null>(null)
   const polylinesRef = useRef<google.maps.Polyline[]>([])
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
+  const userGpsRef = useRef<{ lat: number; lng: number } | null>(null)
   const autocompleteOriginRef = useRef<google.maps.places.Autocomplete | null>(null)
   const autocompleteDestRef = useRef<google.maps.places.Autocomplete | null>(null)
   const originInputRef = useRef<HTMLInputElement>(null)
@@ -186,23 +187,19 @@ export default function HomePage() {
     })
   }, [])
 
-  // Auto-detect GPS location as default origin
+  // Continuous GPS tracking with high accuracy
   useEffect(() => {
-    if (appState === 'map' && !origin) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          pos => {
-            const { latitude, longitude } = pos.coords
-            setOrigin('我的位置')
-            if (mapInstance.current) {
-              mapInstance.current.setCenter({ lat: latitude, lng: longitude })
-            }
-          },
-          () => setOrigin('我的位置')
-        )
-      } else {
-        setOrigin('我的位置')
-      }
+    if (appState === 'map' && navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        pos => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          userGpsRef.current = coords
+          if (!origin) setOrigin('我的位置')
+        },
+        err => console.warn('GPS tracking notice:', err),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+      )
+      return () => navigator.geolocation.clearWatch(watchId)
     }
   }, [appState, origin])
 
@@ -218,13 +215,24 @@ export default function HomePage() {
     try {
       let originQuery = origin
       if (origin === '我的位置') {
-        const pos = await new Promise<GeolocationPosition | null>(res => {
-          navigator.geolocation?.getCurrentPosition(res, () => res(null), { timeout: 3000 })
-        })
-        if (pos) {
-          originQuery = `${pos.coords.latitude},${pos.coords.longitude}`
+        if (userGpsRef.current) {
+          originQuery = `${userGpsRef.current.lat},${userGpsRef.current.lng}`
         } else {
-          originQuery = '25.0478,121.5319' // Taipei Station fallback
+          const pos = await new Promise<GeolocationPosition | null>(res => {
+            navigator.geolocation?.getCurrentPosition(
+              res,
+              () => res(null),
+              { enableHighAccuracy: true, timeout: 10000 }
+            )
+          })
+          if (pos) {
+            originQuery = `${pos.coords.latitude},${pos.coords.longitude}`
+            userGpsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          } else {
+            setError('⚠️ 無法取得您的精確 GPS 位置，請確認已授權定位權限或手動輸入起點。')
+            setIsLoading(false)
+            return
+          }
         }
       }
 
