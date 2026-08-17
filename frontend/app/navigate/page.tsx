@@ -377,6 +377,7 @@ function NavigateContent() {
 
     return () => {
       if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
+      mapInstance.current = null
     }
   }, [polylineStr, destination, distanceM, isCentering])
 

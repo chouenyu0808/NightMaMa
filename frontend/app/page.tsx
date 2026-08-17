@@ -97,10 +97,13 @@ export default function HomePage() {
   // Init map when entering map state
   useEffect(() => {
     if (appState !== 'map') return
+    let isSubscribed = true
+
     const timer = setTimeout(() => {
       if (!mapRef.current) return
       loadMaps().then(() => {
-        if (!mapRef.current || mapInstance.current) return
+        if (!isSubscribed || !mapRef.current) return
+        
         mapInstance.current = new google.maps.Map(mapRef.current, {
           center: { lat: 25.0478, lng: 121.5319 },
           zoom: 14,
@@ -108,7 +111,18 @@ export default function HomePage() {
           gestureHandling: 'greedy',
           styles: darkMapStyle,
         })
-        google.maps.event.trigger(mapInstance.current, 'resize')
+
+        setTimeout(() => {
+          if (mapInstance.current) {
+            google.maps.event.trigger(mapInstance.current, 'resize')
+          }
+        }, 150)
+
+        // If routes were already present, redraw them immediately on the fresh map
+        if (routes.length > 0) {
+          drawRoutes(routes, selectedIdx, isSheetCollapsed, isSearchCollapsed)
+        }
+
         if (originInputRef.current) {
           autocompleteOriginRef.current = new google.maps.places.Autocomplete(originInputRef.current, {
             componentRestrictions: { country: 'tw' },
@@ -135,7 +149,12 @@ export default function HomePage() {
         }
       }).catch(console.error)
     }, 100)
-    return () => clearTimeout(timer)
+
+    return () => {
+      isSubscribed = false
+      clearTimeout(timer)
+      mapInstance.current = null
+    }
   }, [appState])
 
   const markersRef = useRef<google.maps.Marker[]>([])
