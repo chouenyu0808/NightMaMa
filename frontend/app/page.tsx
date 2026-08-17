@@ -90,6 +90,7 @@ export default function HomePage() {
   }, [appState])
 
   const markersRef = useRef<google.maps.Marker[]>([])
+  const [isSheetCollapsed, setIsSheetCollapsed] = useState(false)
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(false)
 
   const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number, sheetCollapsed = false, searchCollapsed = false) => {
@@ -275,7 +276,7 @@ export default function HomePage() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              justify: 'space-between',
+              justifyContent: 'space-between',
               padding: '8px 14px',
               background: 'rgba(17,24,39,0.85)',
               borderRadius: 16,
