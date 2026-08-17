@@ -30,6 +30,12 @@ availableSecrets:
       env: MAPS_BROWSER_KEY
 
 options:
+  # CLOUD_LOGGING_ONLY 表示日誌只進 Cloud Logging，不寫 Cloud Storage。
+  # 副作用：`gcloud builds submit` 只會串流 GCS 的日誌，所以手動執行時
+  # 畫面會一路停在 "Waiting for build to complete" 而看不到任何輸出。
+  # 想看即時日誌就用 `gcloud beta builds submit`，或在另一個分頁跑：
+  #   gcloud builds list --ongoing --format="value(id)" | head -1 \
+  #     | xargs -I{} gcloud beta builds log {} --stream
   logging: CLOUD_LOGGING_ONLY
   machineType: E2_HIGHCPU_8
 
