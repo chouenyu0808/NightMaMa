@@ -84,15 +84,30 @@ function SOSContent() {
   }
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [audioUnlocked, setAudioUnlocked] = useState(false)
 
-  // Play authentic LINE Ringtone MP3 when fake call ringing
+  const triggerAudioPlay = () => {
+    setAudioUnlocked(true)
+    if (audioRef.current) {
+      audioRef.current.play().catch(console.warn)
+    } else {
+      audioRef.current = new Audio('/line_ringtone.wav')
+      audioRef.current.loop = true
+      audioRef.current.play().catch(console.warn)
+    }
+  }
+
+  // Play authentic LINE Ringtone WAV when fake call ringing
   useEffect(() => {
     if (fakeCallActive && fakeCallTimer > 0) {
       if (!audioRef.current) {
-        audioRef.current = new Audio('/line_ringtone.mp3')
+        audioRef.current = new Audio('/line_ringtone.wav')
         audioRef.current.loop = true
       }
-      audioRef.current.play().catch(err => console.warn('Audio play notice:', err))
+      audioRef.current.play().then(() => setAudioUnlocked(true)).catch(err => {
+        console.warn('Browser autoplay notice:', err)
+        setAudioUnlocked(false)
+      })
     } else {
       if (audioRef.current) {
         audioRef.current.pause()
@@ -123,7 +138,10 @@ function SOSContent() {
 
   if (fakeCallActive && fakeCallTimer > 0) {
     return (
-      <div style={{ height: '100dvh', background: '#111827', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white' }}>
+      <div
+        onClick={triggerAudioPlay}
+        style={{ height: '100dvh', background: '#111827', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white', cursor: 'pointer' }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -135,6 +153,11 @@ function SOSContent() {
           <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             💬 LINE 語音來電 ({fakeCallTimer}s)
           </div>
+          {!audioUnlocked && (
+            <div style={{ fontSize: 11, background: 'rgba(6,199,85,0.2)', color: '#06C755', padding: '4px 12px', borderRadius: 999, border: '1px solid rgba(6,199,85,0.3)', marginTop: 4 }}>
+              🔔 點擊螢幕任意處即刻響起 LINE 鈴聲
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
