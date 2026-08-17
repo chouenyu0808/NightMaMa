@@ -75,34 +75,34 @@ export default function SettingsPage() {
 
 
 
-        {/* LINE Notify setup */}
+        {/* LINE Notify / Messaging API setup */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>💚 LINE 通知設定</div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>💚 LINE 緊急求救通知設定</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 16 }}>
-            新增緊急聯絡人後，SOS 時自動發送 LINE 通知含即時定位
+            支援最新 LINE Messaging API (官方帳號推播) 與 LINE Notify，觸發 SOS 時發送即時 GPS 定位。
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <input
               className="input-field"
-              placeholder="聯絡人姓名（例：媽媽）"
+              placeholder="聯絡人姓名（例：媽媽、家人群組）"
               value={name}
               onChange={e => setName(e.target.value)}
             />
             <input
               className="input-field"
-              placeholder="LINE Notify Token"
+              placeholder="LINE Token / Channel Access Token"
               value={lineToken}
               onChange={e => setLineToken(e.target.value)}
               type="password"
             />
 
             <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              📌 取得 Token：前往{' '}
-              <a href="https://notify-bot.line.me" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>
-                notify-bot.line.me
+              📌 官方帳號推播：造訪{' '}
+              <a href="https://developers.line.biz" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>
+                developers.line.biz
               </a>
-              {' '}→「發行權杖」→ 輸入房間名稱 → 複製 Token
+              {' '}→ 建立 Messaging API Channel 取得 Access Token
             </div>
 
             <button className="btn-primary" onClick={saveContact}>
