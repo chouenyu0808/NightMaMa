@@ -128,7 +128,14 @@ function SOSContent() {
         </div>
       </div>
 
-      <div className="scrollable" style={{ flex: 1, padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
+      <div className="scrollable" style={{
+        flex: 1,
+        padding: '24px 20px calc(88px + env(safe-area-inset-bottom))',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 24,
+      }}>
         {/* SOS Button */}
         {!sosSent ? (
           <>
