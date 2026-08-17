@@ -1129,7 +1129,10 @@ export default function HomePage() {
           <button
             onClick={() => {
               setShowSheet(false)
-              router.push(`/navigate?polyline=${encodeURIComponent(selectedRoute.polyline || '')}&dest=${encodeURIComponent(destination)}&dist=${selectedRoute.distanceM || 1000}&dur=${selectedRoute.durationSec || 600}&safety=${selectedRoute.score || 88}&orig=${encodeURIComponent(origin)}`)
+              const stepsParam = selectedRoute.steps && selectedRoute.steps.length > 0
+                ? `&steps=${encodeURIComponent(JSON.stringify(selectedRoute.steps))}`
+                : ''
+              router.push(`/navigate?polyline=${encodeURIComponent(selectedRoute.polyline || '')}&dest=${encodeURIComponent(destination)}&dist=${selectedRoute.distanceM || 1000}&dur=${selectedRoute.durationSec || 600}&safety=${selectedRoute.score || 88}&orig=${encodeURIComponent(origin)}${stepsParam}`)
             }}
             style={{
               width: '100%', height: 48, borderRadius: 14,

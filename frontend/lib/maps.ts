@@ -217,9 +217,13 @@ export async function fetchRoutes(
                   let mainDepStop = ''
                   let mainArrStop = ''
 
-                  ;(tLeg.steps || []).forEach(s => {
+                  let transitBusCount = 0
+                  const totalStepsCount = tLeg.steps?.length || 0
+
+                  ;(tLeg.steps || []).forEach((s, stepIdx) => {
                     const sPts: LatLng[] = (s.path || []).map(p => ({ lat: p.lat(), lng: p.lng() }))
                     if (s.transit) {
+                      transitBusCount++
                       const lName = s.transit.line?.short_name || s.transit.line?.name || '公車/大眾運輸'
                       const depStop = s.transit.departure_stop?.name || '轉乘站'
                       const arrStop = s.transit.arrival_stop?.name || '下車站'
@@ -239,7 +243,7 @@ export async function fetchRoutes(
                       })
 
                       steps.push({
-                        instruction: `🚌 搭乘 [${lName}]（${depStop} 上車 ➔ ${arrStop} 下車，車廂內安全）`,
+                        instruction: `🚌 在「${depStop}」搭乘 [${lName}] 到「${arrStop}」下車`,
                         maneuver: 'straight',
                         distanceM: s.distance?.value || 500,
                         startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
@@ -254,8 +258,15 @@ export async function fetchRoutes(
                       const rawIns = s.instructions || ''
                       const cleanIns = rawIns.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
 
+                      let walkInstruction = ''
+                      if (transitBusCount === 0) {
+                        walkInstruction = `🚶 步行前往「${mainDepStop || '公車站'}」準備搭車`
+                      } else {
+                        walkInstruction = `🚶 在「${mainArrStop || '下車站'}」下車後，${cleanIns || '繼續步行前往目的地'}`
+                      }
+
                       steps.push({
-                        instruction: `🚶 ${cleanIns || '步行前往'}（夜間安全檢測防護中 🛡️）`,
+                        instruction: walkInstruction,
                         maneuver: s.maneuver || 'turn-straight',
                         distanceM: s.distance?.value || 100,
                         startLocation: { lat: s.start_location.lat(), lng: s.start_location.lng() },
