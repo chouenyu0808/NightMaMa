@@ -295,9 +295,36 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
                   }
                 })
 
-                  // Only add transit route if Google Directions Transit API actually returned a valid bus or MRT line
-                  const hasTransitVehicle = transitLegs.some(l => l.mode === 'BUS')
+                  // Validate transit route with common sense:
+                  // 1. Must contain at least one transit vehicle leg (BUS / MRT)
+                  // 2. The final transit vehicle alighting stop MUST be within 1200m of the destination!
+                  const busLegs = transitLegs.filter(l => l.mode === 'BUS' && l.points && l.points.length > 0)
+                  const hasTransitVehicle = busLegs.length > 0
+
+                  let isTransitUsable = false
                   if (hasTransitVehicle) {
+                    const lastBus = busLegs[busLegs.length - 1]
+                    const lastStopPt = lastBus.points[lastBus.points.length - 1]
+                    const R = 6371000
+                    const dLat = (destination.lat - lastStopPt.lat) * Math.PI / 180
+                    const dLon = (destination.lng - lastStopPt.lng) * Math.PI / 180
+                    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lastStopPt.lat * Math.PI / 180) * Math.cos(destination.lat * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2)
+                    const distFromLastStopToDest = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+                    // If the bus alighting stop is within 1200m (1.2 km) of destination, it's valid!
+                    if (distFromLastStopToDest <= 1200) {
+                      isTransitUsable = true
+                    }
+                  }
+
+                  if (isTransitUsable) {
+                    const allBusLines = busLegs.map(b => b.lineName).filter(Boolean)
+                    const busSummary = allBusLines.join(' ➔ ')
+                    const firstDep = busLegs[0]?.departureStop || '上車站'
+                    const finalArr = busLegs[busLegs.length - 1]?.arrivalStop || '下車站'
+
                     const realTransitRoute: RouteResult = {
                       type: 'transit',
                       isTransit: true,
@@ -306,7 +333,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
                       durationSec: tLeg?.duration?.value || Math.round(routes[0]?.durationSec * 0.85 || 600),
                       distanceM: tLeg?.distance?.value || routes[0]?.distanceM || 1000,
                       score: 92,
-                      reason: `搭乘 ${mainLineName || '大眾運輸'}（${mainDepStop || '上車站'} ➔ ${mainArrStop || '下車站'}），僅頭尾步行實施夜間安全防護`,
+                      reason: `搭乘 ${busSummary || '大眾運輸'}（${firstDep} 上車 ➔ ${finalArr} 下車），僅頭尾步行實施夜間安全防護`,
                       lightCount: Math.floor((routes[0]?.lightCount || 40) * 0.8),
                       cameraCount: Math.floor((routes[0]?.cameraCount || 20) * 0.8),
                       policeCount: routes[0]?.policeCount || 2,
