@@ -140,6 +140,7 @@ export default function HomePage() {
 
   const markersRef = useRef<google.maps.Marker[]>([])
   const [isSheetCollapsed, setIsSheetCollapsed] = useState(false)
+  const [isFullExpanded, setIsFullExpanded] = useState(false)
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(false)
 
   const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number, sheetCollapsed = false, searchCollapsed = false) => {
@@ -362,7 +363,7 @@ export default function HomePage() {
 
   const toggleCollapse = () => setSheetCollapsed(!isSheetCollapsed)
 
-  // 底部路線卡片可上下拖曳展開/收合
+  // 底部路線卡片可上下拖曳展開/完全拉高/收合 (3段式拖曳)
   const draggingRef = useRef(false)
   const dragMovedRef = useRef(false)
   const onSheetDragStart = (e: React.PointerEvent) => {
@@ -370,15 +371,30 @@ export default function HomePage() {
     dragMovedRef.current = false
     const startY = e.clientY
     const onMove = (ev: PointerEvent) => {
-      if (Math.abs(ev.clientY - startY) > 10) dragMovedRef.current = true
+      if (Math.abs(ev.clientY - startY) > 8) dragMovedRef.current = true
     }
     const onUp = (ev: PointerEvent) => {
       draggingRef.current = false
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       const delta = ev.clientY - startY
-      if (delta > 40 && !isSheetCollapsed) setSheetCollapsed(true)
-      else if (delta < -40 && isSheetCollapsed) setSheetCollapsed(false)
+
+      if (delta < -30) {
+        // Dragged UP
+        if (isSheetCollapsed) {
+          setIsSheetCollapsed(false)
+          setIsFullExpanded(false)
+        } else {
+          setIsFullExpanded(true)
+        }
+      } else if (delta > 30) {
+        // Dragged DOWN
+        if (isFullExpanded) {
+          setIsFullExpanded(false)
+        } else {
+          setIsSheetCollapsed(true)
+        }
+      }
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -543,51 +559,82 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Route bottom sheet — 只比較「安心路線」vs「最快路線」兩條 */}
+      {/* Route bottom sheet — 支援拖曳拉高展開全部路線卡片 (85dvh) */}
       {showSheet && routes.length > 0 && (
         <div
           className="bottom-sheet"
           style={{
-            bottom: '16px',
+            bottom: '12px',
             background: '#111827',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.12)',
             paddingBottom: isSheetCollapsed ? '12px' : '20px',
-            maxHeight: isSheetCollapsed ? '70px' : '40dvh',
+            maxHeight: isSheetCollapsed ? '70px' : isFullExpanded ? '85dvh' : '52dvh',
             zIndex: 60,
             overflow: 'hidden',
             touchAction: 'none',
             transition: draggingRef.current ? 'none' : 'all 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
+            boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',
           }}
         >
           <div
-            onClick={() => { if (dragMovedRef.current) return; toggleCollapse() }}
+            onClick={() => {
+              if (dragMovedRef.current) return
+              if (isSheetCollapsed) {
+                setIsSheetCollapsed(false)
+              } else {
+                setIsFullExpanded(!isFullExpanded)
+              }
+            }}
             onPointerDown={onSheetDragStart}
-            style={{ cursor: 'grab', padding: '4px 0 8px' }}
+            style={{ cursor: 'grab', padding: '4px 0 10px' }}
           >
             <div className="bottom-sheet-handle" />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
                 找到 {displayRoutes.length} 條路線 · 依安全評分排序 ↓
               </p>
               <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (isSheetCollapsed) {
+                    setIsSheetCollapsed(false)
+                    setIsFullExpanded(false)
+                  } else {
+                    setIsFullExpanded(!isFullExpanded)
+                  }
+                }}
                 style={{
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.15)',
+                  background: isFullExpanded ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.1)',
+                  border: isFullExpanded ? '1px solid #8b5cf6' : '1px solid rgba(255,255,255,0.2)',
                   color: 'white',
                   borderRadius: 999,
-                  padding: '3px 10px',
-                  fontSize: 11,
+                  padding: '4px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
                   cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4
                 }}
               >
-                {isSheetCollapsed ? '📋 展開卡片' : '🗺️ 看全景地圖'}
+                {isSheetCollapsed ? '▲ 展開卡片' : isFullExpanded ? '▼ 收合介面' : '▲ 拉開查看全部選項'}
               </button>
             </div>
           </div>
 
           {!isSheetCollapsed && (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '22dvh', overflowY: 'auto' }} className="scrollable">
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  maxHeight: isFullExpanded ? '62dvh' : '30dvh',
+                  overflowY: 'auto',
+                  paddingRight: 4
+                }}
+                className="scrollable"
+              >
                 {[...displayRoutes]
                   .sort((a, b) => (a.idx === selectedIdx ? -1 : 0) - (b.idx === selectedIdx ? -1 : 0))
                   .map(({ route, idx }) =>
@@ -598,8 +645,23 @@ export default function HomePage() {
                     )
                   )}
               </div>
-              <button className="btn-primary" style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={handleStartNavigation}>
-                <IconWalk size={16} /> 開始導航 · {routes[selectedIdx]?.safety.label}路線
+              <button
+                className="btn-primary"
+                style={{
+                  marginTop: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  fontSize: 16,
+                  fontWeight: 800,
+                  background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
+                  boxShadow: '0 4px 20px rgba(139,92,246,0.4)',
+                  padding: '14px'
+                }}
+                onClick={handleStartNavigation}
+              >
+                <IconWalk size={18} /> 開始導航 · {routes[selectedIdx]?.safety.label}路線
               </button>
             </>
           )}
