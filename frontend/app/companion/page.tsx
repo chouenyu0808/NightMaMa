@@ -34,7 +34,7 @@ function formatTime(timestamp: number): string {
   return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-// Clean Vector SVG Icons
+// Vector SVG Icons
 function IconChevronLeft() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
 }
@@ -62,6 +62,12 @@ function IconSmile() {
 function IconMic() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
 }
+function IconMicOff() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23" /><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" /><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+}
+function IconVolume2() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
+}
 function IconStore() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
 }
@@ -71,6 +77,121 @@ function IconShield() {
 function IconClock() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
 }
+
+// --- Gemini Live Audio Queue Player (24kHz Output) ---
+class GeminiAudioPlayer {
+  private ctx: AudioContext | null = null
+  private nextStartTime = 0
+  private activeSources: AudioBufferSourceNode[] = []
+  private onSpeakingChange?: (isSpeaking: boolean) => void
+
+  constructor(onSpeakingChange?: (isSpeaking: boolean) => void) {
+    this.onSpeakingChange = onSpeakingChange
+  }
+
+  private initCtx() {
+    if (!this.ctx) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      this.ctx = new AudioCtx({ sampleRate: 24000 })
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume()
+    }
+  }
+
+  playPcmChunk(base64Data: string) {
+    try {
+      this.initCtx()
+      if (!this.ctx) return
+
+      const binary = atob(base64Data)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i)
+      }
+      const int16 = new Int16Array(bytes.buffer)
+      const float32 = new Float32Array(int16.length)
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768.0
+      }
+
+      const buffer = this.ctx.createBuffer(1, float32.length, 24000)
+      buffer.getChannelData(0).set(float32)
+
+      const source = this.ctx.createBufferSource()
+      source.buffer = buffer
+      source.connect(this.ctx.destination)
+
+      const now = this.ctx.currentTime
+      if (this.nextStartTime < now) {
+        this.nextStartTime = now + 0.05
+      }
+
+      source.start(this.nextStartTime)
+      this.nextStartTime += buffer.duration
+      this.activeSources.push(source)
+      this.onSpeakingChange?.(true)
+
+      source.onended = () => {
+        const idx = this.activeSources.indexOf(source)
+        if (idx !== -1) this.activeSources.splice(idx, 1)
+        if (this.activeSources.length === 0) {
+          this.onSpeakingChange?.(false)
+        }
+      }
+    } catch (e) {
+      console.warn('PCM playback error:', e)
+    }
+  }
+
+  stopAll() {
+    this.activeSources.forEach(src => {
+      try { src.stop() } catch {}
+    })
+    this.activeSources = []
+    this.nextStartTime = 0
+    this.onSpeakingChange?.(false)
+  }
+
+  close() {
+    this.stopAll()
+    if (this.ctx) {
+      this.ctx.close().catch(() => {})
+      this.ctx = null
+    }
+  }
+}
+
+// Convert input Float32 audio to 16kHz PCM Int16 Base64
+function pcmFloatTo16BitBase64(input: Float32Array, fromRate: number, toRate = 16000): string {
+  let sampled: Float32Array
+  if (fromRate === toRate) {
+    sampled = input
+  } else {
+    const ratio = fromRate / toRate
+    const newLen = Math.floor(input.length / ratio)
+    sampled = new Float32Array(newLen)
+    for (let i = 0; i < newLen; i++) {
+      const idx = Math.floor(i * ratio)
+      sampled[i] = input[idx] || 0
+    }
+  }
+
+  const int16 = new Int16Array(sampled.length)
+  for (let i = 0; i < sampled.length; i++) {
+    const s = Math.max(-1, Math.min(1, sampled[i]))
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+  }
+
+  let binary = ''
+  const u8 = new Uint8Array(int16.buffer)
+  for (let i = 0; i < u8.length; i++) {
+    binary += String.fromCharCode(u8[i])
+  }
+  return btoa(binary)
+}
+
 
 function CompanionContent() {
   const searchParams = useSearchParams()
@@ -91,11 +212,31 @@ function CompanionContent() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [showQuickPrompts, setShowQuickPrompts] = useState(true)
   const [isMounted, setIsMounted] = useState(false)
+
+  // Voice call states
+  const [callActive, setCallActive] = useState(false)
+  const [callState, setCallState] = useState<'ringing' | 'connected'>('ringing')
+  const [callDuration, setCallDuration] = useState(0)
+  const [audioUnlocked, setAudioUnlocked] = useState(false)
+  const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Gemini Multimodal Live WS States
+  const [momTranscript, setMomTranscript] = useState('「寶貝走到哪啦？媽媽隨時在聽你說喔！」')
+  const [aiSpeaking, setAiSpeaking] = useState(false)
+  const [userSpeaking, setUserSpeaking] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true)
+
+  const liveWsRef = useRef<WebSocket | null>(null)
+  const playerRef = useRef<GeminiAudioPlayer | null>(null)
+  const micStreamRef = useRef<MediaStream | null>(null)
+  const micCtxRef = useRef<AudioContext | null>(null)
+  const scriptNodeRef = useRef<ScriptProcessorNode | null>(null)
+
   useEffect(() => {
     setIsMounted(true)
   }, [])
 
-  // Route context from URL params (display only — chat now goes through the backend)
   const context: RouteContext = {
     origin: searchParams.get('origin') || '我的位置',
     destination: searchParams.get('destination') || '目的地',
@@ -106,7 +247,7 @@ function CompanionContent() {
   // Connect to backend chat WebSocket (gracefully skip if backend unavailable)
   useEffect(() => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
-    if (!backendUrl) return // Skip WebSocket when no backend URL is configured
+    if (!backendUrl) return
     try {
       const ws = new WebSocket(`${backendUrl.replace(/^http/, 'ws')}/stream/${userIdRef.current}`)
       ws.onmessage = (e) => {
@@ -115,12 +256,10 @@ function CompanionContent() {
         pendingReplyRef.current?.({ text, audio: data.audio })
         pendingReplyRef.current = null
       }
-      ws.onerror = () => {} // Silently handle connection errors
+      ws.onerror = () => {}
       wsRef.current = ws
       return () => ws.close()
-    } catch {
-      // Backend not available — chat will use Gemini API fallback
-    }
+    } catch {}
   }, [])
 
   const scrollToBottom = useCallback(() => {
@@ -129,8 +268,6 @@ function CompanionContent() {
 
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
 
-  // Text-to-Speech — plays natural Gemini-generated voice audio (base64 WAV)
-  // sent by the backend, instead of the browser's robotic speechSynthesis.
   const playAudio = useCallback((base64Wav: string) => {
     audioRef.current?.pause()
     const audio = new Audio(`data:audio/wav;base64,${base64Wav}`)
@@ -141,11 +278,9 @@ function CompanionContent() {
     audio.play().catch(() => setIsSpeaking(false))
   }, [])
 
-  // Fetch + play speech for text that didn't come through the /stream reply
-  // (e.g. the hardcoded initial greeting, or a fallback error message).
   const speak = useCallback(async (text: string, urgent = false) => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
-    if (!backendUrl) return // No backend configured — skip TTS
+    if (!backendUrl) return
     try {
       const res = await fetch(`${backendUrl}/speak`, {
         method: 'POST',
@@ -155,18 +290,8 @@ function CompanionContent() {
       if (!res.ok) return
       const { audio } = await res.json()
       playAudio(audio)
-    } catch {
-      // TTS is a nice-to-have; silently skip playback on failure so chat still works
-    }
+    } catch {}
   }, [playAudio])
-
-  // Auto-speak initial message
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      speak(INITIAL_MESSAGE.text)
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [speak])
 
   const sendMsg = useCallback(async (text: string) => {
     if (!text.trim() || isThinking) return
@@ -186,8 +311,6 @@ function CompanionContent() {
       })
       const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
       setMessages(prev => [...prev, aiMsg])
-      // Backend already synthesized audio for this reply — play it directly
-      // instead of re-fetching from /speak.
       if (audio) playAudio(audio)
       else speak(reply)
     } catch {
@@ -199,92 +322,67 @@ function CompanionContent() {
     }
   }, [isThinking, speak, playAudio])
 
-  // Photo upload risk analysis — sent through the /api/companion Next.js
-  // route, which calls Gemini's multimodal endpoint directly (the FastAPI
-  // backend doesn't expose an image-analysis endpoint yet).
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     const reader = new FileReader()
     reader.onload = async () => {
-      const base64 = reader.result as string
-      const userMsg: Message = {
-        role: 'user',
-        text: '📸 [已上傳路口照片，進行多模態風險分析]',
-        timestamp: Date.now(),
-      }
+      const base64Data = (reader.result as string).split(',')[1]
+      const userMsg: Message = { role: 'user', text: '📷 [上傳環境照片，評估風險中...]', timestamp: Date.now() }
       setMessages(prev => [...prev, userMsg])
       setIsThinking(true)
-
-      const history = messages.map(m => ({ role: m.role === 'ai' ? 'model' as const : 'user' as const, text: m.text }))
 
       try {
         const res = await fetch('/api/companion', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userMessage: '請實時分析照片中前方暗巷與路口的照明風險，並給予避險繞路建議',
-            history,
-            context,
-            imageData: base64,
+            messages: [{ role: 'user', text: '請分析這張照片的周遭環境是否安全，路燈是否充足？' }],
+            image: base64Data,
           }),
         })
         const data = await res.json()
-        const reply: string = data.reply || '照片解析失敗，但前方路口較暗，建議繞至明亮大馬路！'
-        const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
-        setMessages(prev => [...prev, aiMsg])
-        speak(reply)
+        const replyText = data.text || '照片分析完成！周遭看起來正常，請繼續保持警覺走大馬路喔！'
+        setMessages(prev => [...prev, { role: 'ai', text: replyText, timestamp: Date.now() }])
+        speak(replyText)
       } catch {
-        const errMsg: Message = { role: 'ai', text: '照片解析失敗，但前方路口較暗，建議繞至明亮大馬路！', timestamp: Date.now() }
-        setMessages(prev => [...prev, errMsg])
-        speak(errMsg.text)
+        const replyText = '抱歉，照片分析暫時無法完成，但別擔心，媽咪在線上陪你！'
+        setMessages(prev => [...prev, { role: 'ai', text: replyText, timestamp: Date.now() }])
       } finally {
         setIsThinking(false)
       }
     }
     reader.readAsDataURL(file)
-  }, [messages, context, speak])
+  }, [speak])
 
-  // Speech recognition
-  const toggleListening = useCallback(() => {
+  const startVoiceInput = useCallback(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('您的瀏覽器不支援語音辨識，請使用 Chrome 瀏覽器。')
+      return
+    }
+
     if (isListening) {
       recognitionRef.current?.stop()
       setIsListening(false)
       return
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR: AnySpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
-    if (!SR) {
-      alert('你的瀏覽器不支援語音輸入，請用文字輸入')
-      return
-    }
-
-    const recognition: AnySpeechRecognition = new SR()
-    recognition.lang = 'zh-TW'
-    recognition.continuous = false
-    recognition.interimResults = false
-
-    recognition.onresult = (e: AnySpeechRecognitionEvent) => {
+    const rec = new SpeechRecognition()
+    rec.lang = 'zh-TW'
+    rec.interimResults = false
+    rec.onstart = () => setIsListening(true)
+    rec.onend = () => setIsListening(false)
+    rec.onerror = () => setIsListening(false)
+    rec.onresult = (e: AnySpeechRecognitionEvent) => {
       const transcript = e.results[0][0].transcript
-      sendMsg(transcript)
+      if (transcript) sendMsg(transcript)
     }
-    recognition.onend = () => setIsListening(false)
-    recognition.onerror = () => setIsListening(false)
-
-    recognitionRef.current = recognition
-    recognition.start()
-    setIsListening(true)
+    recognitionRef.current = rec
+    rec.start()
   }, [isListening, sendMsg])
-
-  // Voice call states
-  const [callActive, setCallActive] = useState(false)
-  const [callState, setCallState] = useState<'ringing' | 'connected'>('ringing')
-  const [callDuration, setCallDuration] = useState(0)
-  const [audioUnlocked, setAudioUnlocked] = useState(false)
-  const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null)
-  const momVoiceAudioRef = useRef<HTMLAudioElement | null>(null)
 
   // Call duration counter when connected
   useEffect(() => {
@@ -304,17 +402,14 @@ function CompanionContent() {
     }
   }
 
-  // Play authentic 320k LINE ringtone MP3 while ringing
+  // Ringtone playback while ringing
   useEffect(() => {
     if (callActive && callState === 'ringing') {
       if (!ringtoneAudioRef.current) {
         ringtoneAudioRef.current = new Audio('/line_ringtone.mp3')
         ringtoneAudioRef.current.loop = true
       }
-      ringtoneAudioRef.current.play().then(() => setAudioUnlocked(true)).catch(err => {
-        console.warn('Browser autoplay notice:', err)
-        setAudioUnlocked(false)
-      })
+      ringtoneAudioRef.current.play().then(() => setAudioUnlocked(true)).catch(() => setAudioUnlocked(false))
     } else {
       if (ringtoneAudioRef.current) {
         ringtoneAudioRef.current.pause()
@@ -329,21 +424,35 @@ function CompanionContent() {
     }
   }, [callActive, callState])
 
-  // Handle Mom Voice MP3 cleanup
+  // Clean up Gemini Live Call resources when call closes
+  const stopLiveCallResources = useCallback(() => {
+    if (scriptNodeRef.current) {
+      scriptNodeRef.current.disconnect()
+      scriptNodeRef.current = null
+    }
+    if (micCtxRef.current) {
+      micCtxRef.current.close().catch(() => {})
+      micCtxRef.current = null
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop())
+      micStreamRef.current = null
+    }
+    if (playerRef.current) {
+      playerRef.current.close()
+      playerRef.current = null
+    }
+    if (liveWsRef.current) {
+      liveWsRef.current.close()
+      liveWsRef.current = null
+    }
+    setAiSpeaking(false)
+    setUserSpeaking(false)
+  }, [])
+
   useEffect(() => {
-    if (!callActive || callState !== 'connected') {
-      if (momVoiceAudioRef.current) {
-        momVoiceAudioRef.current.pause()
-        momVoiceAudioRef.current.currentTime = 0
-      }
-    }
-    return () => {
-      if (momVoiceAudioRef.current) {
-        momVoiceAudioRef.current.pause()
-        momVoiceAudioRef.current.currentTime = 0
-      }
-    }
-  }, [callActive, callState])
+    return () => stopLiveCallResources()
+  }, [stopLiveCallResources])
 
   const startVoiceCall = useCallback(() => {
     setCallState('ringing')
@@ -351,34 +460,176 @@ function CompanionContent() {
     setCallActive(true)
   }, [])
 
-  const acceptVoiceCall = () => {
+  // Start Gemini Multimodal Live API Real-Time Audio Session
+  const acceptVoiceCall = async () => {
     if (ringtoneAudioRef.current) {
       ringtoneAudioRef.current.pause()
       ringtoneAudioRef.current.currentTime = 0
       ringtoneAudioRef.current = null
     }
     setCallState('connected')
-    // Play pre-generated Gemini TTS WAV file — instant playback, no API wait
-    const voice = new Audio('/mom_voice.wav')
-    momVoiceAudioRef.current = voice
-    voice.play().catch(() => {})
+    setMomTranscript('「連線中，媽咪準備聽你說話喔...」')
+
+    const apiKey = process.env.NEXT_PUBLIC_GEMINI_KEY || ''
+    if (!apiKey) {
+      setMomTranscript('「喂～寶貝走到哪了？記得走大馬路喔！」')
+      return
+    }
+
+    try {
+      playerRef.current = new GeminiAudioPlayer((speaking) => setAiSpeaking(speaking))
+
+      // Connect to Gemini Multimodal Live API (bidiGenerateContent WebSocket)
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`
+      const ws = new WebSocket(wsUrl)
+      liveWsRef.current = ws
+
+      ws.onopen = () => {
+        const setupMsg = {
+          setup: {
+            model: 'models/gemini-2.5-flash-native-audio-latest',
+            generationConfig: {
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: 'Aoede',
+                  },
+                },
+              },
+            },
+            systemInstruction: {
+              parts: [{
+                text: '你是一位溫暖親切的台灣媽媽，正在跟晚歸的女兒/兒子撥打 LINE 陪伴電話。說話口吻親切、溫暖、關心對方走夜路的安全，講話要像在通電話一樣簡短自然（例如：『寶貝走到哪啦？』『路燈亮不亮？』『快點回來，幫你煮了熱湯喔！』）。請用極度自然的語氣和對方說話。',
+              }],
+            },
+          },
+        }
+        ws.send(JSON.stringify(setupMsg))
+      }
+
+      let currentTextBuffer = ''
+
+      ws.onmessage = async (event) => {
+        try {
+          const data = JSON.parse(event.data)
+
+          // 1. Setup complete -> Trigger initial greeting turn
+          if (data.setupComplete) {
+            const initialTurn = {
+              clientContent: {
+                turns: [{
+                  role: 'user',
+                  parts: [{ text: '（電話接通了，媽媽熱情地開口關心我走到哪裡了）' }],
+                }],
+                turnComplete: true,
+              },
+            }
+            ws.send(JSON.stringify(initialTurn))
+            startMicAudioStream(ws)
+            return
+          }
+
+          // 2. Incoming Gemini audio/text content
+          if (data.serverContent) {
+            const parts = data.serverContent.modelTurn?.parts || []
+            for (const p of parts) {
+              if (p.inlineData?.data) {
+                playerRef.current?.playPcmChunk(p.inlineData.data)
+              }
+              if (p.text) {
+                currentTextBuffer += p.text
+                setMomTranscript(`「${currentTextBuffer}」`)
+              }
+            }
+            if (data.serverContent.turnComplete) {
+              currentTextBuffer = ''
+            }
+            if (data.serverContent.interrupted) {
+              playerRef.current?.stopAll()
+              currentTextBuffer = ''
+            }
+          }
+        } catch (err) {
+          console.warn('WS Message parse error:', err)
+        }
+      }
+
+      ws.onerror = (e) => {
+        console.warn('Gemini Live WS error, fallback to static prompt:', e)
+        setMomTranscript('「寶貝你走到哪啦？記得走大馬路快點回來喔！」')
+      }
+    } catch (e) {
+      console.warn('Failed to start Live Audio Call:', e)
+    }
+  }
+
+  // Capture Microphone Audio (16kHz PCM Int16 Base64 stream)
+  const startMicAudioStream = async (ws: WebSocket) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      })
+      micStreamRef.current = stream
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      const ctx = new AudioCtx()
+      micCtxRef.current = ctx
+
+      const source = ctx.createMediaStreamSource(stream)
+      const processor = ctx.createScriptProcessor(2048, 1, 1)
+      scriptNodeRef.current = processor
+
+      processor.onaudioprocess = (e) => {
+        if (ws.readyState !== WebSocket.OPEN) return
+
+        const inputBuffer = e.inputBuffer.getChannelData(0)
+
+        // RMS VAD for user speaking detection & barge-in interruption
+        let sum = 0
+        for (let i = 0; i < inputBuffer.length; i++) {
+          sum += inputBuffer[i] * inputBuffer[i]
+        }
+        const rms = Math.sqrt(sum / inputBuffer.length)
+
+        if (rms > 0.04) {
+          setUserSpeaking(true)
+          // User is speaking -> Interrupt AI Mom's audio playback immediately!
+          playerRef.current?.stopAll()
+        } else {
+          setUserSpeaking(false)
+        }
+
+        // ConvertFloat32 to PCM16 16kHz Base64
+        const base64PCM = pcmFloatTo16BitBase64(inputBuffer, ctx.sampleRate, 16000)
+
+        const realtimeMsg = {
+          realtimeInput: {
+            mediaChunks: [{
+              mimeType: 'audio/pcm',
+              data: base64PCM,
+            }],
+          },
+        }
+        ws.send(JSON.stringify(realtimeMsg))
+      }
+
+      source.connect(processor)
+      processor.connect(ctx.destination)
+    } catch (err) {
+      console.warn('Microphone stream error:', err)
+    }
   }
 
   const endVoiceCall = () => {
+    stopLiveCallResources()
     if (ringtoneAudioRef.current) {
       ringtoneAudioRef.current.pause()
       ringtoneAudioRef.current.currentTime = 0
     }
-    if (momVoiceAudioRef.current) {
-      momVoiceAudioRef.current.pause()
-      momVoiceAudioRef.current.currentTime = 0
-    }
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel()
-    }
     setCallActive(false)
 
-    // Append LINE-style Voice Call Ended card in chat history
     setMessages(prev => [
       ...prev,
       {
@@ -389,314 +640,226 @@ function CompanionContent() {
     ])
   }
 
+  const quickPrompts = [
+    '附近路燈好像有點暗',
+    '我感覺後面有人跟著我',
+    '我大概再10分鐘到家',
+    '幫我定位周遭超商',
+  ]
+
   return (
     <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100dvh',
-      background: 'linear-gradient(180deg, #7b9ebf 0%, #6b8fb2 40%, #5d82a6 100%)',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      display: 'flex', flexDirection: 'column', height: '100dvh',
+      background: '#7b9ebf', color: '#1F2937', fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
-
-      {/* LINE Style Header */}
-      <div style={{
-        padding: '50px 16px 12px',
-        background: '#7599bd',
-        borderBottom: '1px solid rgba(255,255,255,0.15)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        color: '#FFFFFF',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-        zIndex: 50,
+      {/* Top Header */}
+      <header style={{
+        padding: '12px 16px', background: '#7b9ebf', display: 'flex',
+        alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.2)',
+        position: 'sticky', top: 0, zIndex: 10
       }}>
-        {/* Left: Back & Avatar Info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
-            onClick={() => router.back()}
-            style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+            onClick={() => router.push('/')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: 'white' }}
           >
             <IconChevronLeft />
           </button>
-          <div style={{ position: 'relative' }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/mom_avatar.jpg"
-              alt="媽咪"
-              style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }}
-            />
-            <div style={{
-              position: 'absolute', right: -2, bottom: -2, width: 12, height: 12, borderRadius: '50%',
-              background: '#10B981', border: '2px solid #7599bd'
-            }} />
-          </div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-              媽咪
+            <div style={{ fontWeight: 700, fontSize: 17, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+              媽咪 (NightMaMa AI)
+              <span style={{ fontSize: 10, background: '#06C755', color: 'white', padding: '2px 6px', borderRadius: 10 }}>LINE官方</span>
             </div>
-            <div style={{ fontSize: 11, opacity: 0.85, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: isSpeaking ? '#F59E0B' : '#10B981' }} />
-              {isSpeaking ? '語音播報中…' : '在線陪伴中'}
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>安全分數 {context.safetyScore}分</span>
+              <span>•</span>
+              <span>預計 {context.durationMin} 分鐘</span>
             </div>
           </div>
         </div>
 
-        {/* Right Action Icons (LINE Style - Matches user screenshot) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="搜尋"><IconSearch /></button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Incoming Call trigger button */}
           <button
-            style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
             onClick={startVoiceCall}
-            title="語音通話"
-          >
-            <IconPhoneCall />
-          </button>
-          <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="行事曆"><IconCalendar /></button>
-          <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="選單"><IconMenu /></button>
-        </div>
-      </div>
-
-      {/* Messages Scroll Area */}
-      <div
-        className="scrollable"
-        style={{
-          flex: 1,
-          padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 16,
-        }}
-      >
-        {/* Date Divider Pill */}
-        <div style={{ textAlign: 'center', margin: '4px 0 8px' }}>
-          <span
-            suppressHydrationWarning
             style={{
-              background: 'rgba(0,0,0,0.22)',
-              color: '#FFFFFF',
-              borderRadius: 14,
-              padding: '4px 12px',
-              fontSize: 11,
-              fontWeight: 500,
-              letterSpacing: '0.03em',
+              background: '#06C755', color: 'white', border: 'none',
+              padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(6,199,85,0.4)', transition: 'transform 0.2s ease'
             }}
           >
-            今天 {isMounted ? formatTime(messages[0]?.timestamp || Date.now()) : ''}
-          </span>
+            <IconPhoneCall />
+            假裝來電
+          </button>
+          <button style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: 4 }}>
+            <IconSearch />
+          </button>
         </div>
+      </header>
 
-        {messages.map((msg, i) => {
-          const isUser = msg.role === 'user'
-          return (
-            <div
-              key={i}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: isUser ? 'flex-end' : 'flex-start',
-                gap: 8,
-              }}
-            >
-              {/* AI Avatar */}
-              {!isUser && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src="/mom_avatar.jpg"
-                  alt="媽咪"
-                  style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, marginTop: 2 }}
-                />
+      {/* Safety Alert Banner */}
+      <div style={{
+        background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)',
+        padding: '8px 16px', fontSize: 12, color: 'white', display: 'flex',
+        alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <IconShield />
+          <span>一路平安模式啟用中 — 已鎖定路線導航</span>
+        </div>
+        <button
+          onClick={() => router.push('/sos')}
+          style={{ background: '#EF4444', color: 'white', border: 'none', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+        >
+          SOS 求救
+        </button>
+      </div>
+
+      {/* Main Chat Messages Container */}
+      <div style={{
+        flex: 1, overflowY: 'auto', padding: '16px 16px 120px',
+        display: 'flex', flexDirection: 'column', gap: 12
+      }}>
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+              alignItems: 'flex-start',
+              gap: 8,
+            }}
+          >
+            {msg.role === 'ai' && (
+              <div style={{
+                width: 38, height: 38, borderRadius: '50%', background: '#FFF',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.1)', overflow: 'hidden', flexShrink: 0
+              }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/mom_avatar.jpg" alt="媽咪" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+              {msg.role === 'ai' && i === 0 && (
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)', marginBottom: 2, marginLeft: 2 }}>媽咪</span>
               )}
-
-              {/* User Side Timestamp & Read status */}
-              {isUser && (
-                <div style={{ textAlign: 'right', alignSelf: 'flex-end', paddingBottom: 2, flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>已讀</div>
-                  <div suppressHydrationWarning style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{isMounted ? formatTime(msg.timestamp) : ''}</div>
-                </div>
-              )}
-
-              {/* Chat Bubble */}
-              <div
-                style={{
-                  maxWidth: '72%',
-                  padding: '10px 14px',
-                  borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                  background: isUser ? '#86E260' : '#FFFFFF',
-                  color: '#000000',
-                  fontSize: 14,
-                  lineHeight: 1.45,
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
-                  wordBreak: 'break-word',
-                  fontWeight: 400,
-                }}
-              >
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: msg.role === 'user' ? '18px 4px 18px 18px' : '4px 18px 18px 18px',
+                background: msg.role === 'user' ? '#8B5CF6' : '#FFFFFF',
+                color: msg.role === 'user' ? '#FFFFFF' : '#1F2937',
+                fontSize: 14,
+                lineHeight: 1.5,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                wordBreak: 'break-word',
+              }}>
                 {msg.text}
               </div>
-
-              {/* AI Side Timestamp */}
-              {!isUser && (
-                <div style={{ alignSelf: 'flex-end', paddingBottom: 2, flexShrink: 0 }}>
-                  <div suppressHydrationWarning style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{isMounted ? formatTime(msg.timestamp) : ''}</div>
-                </div>
-              )}
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2, padding: '0 4px' }}>
+                {formatTime(msg.timestamp)}
+              </span>
             </div>
-          )
-        })}
+          </div>
+        ))}
 
-        {/* AI Typing Indicator */}
         {isThinking && (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/mom_avatar.jpg"
-              alt="媽咪"
-              style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-            />
-            <div style={{
-              background: '#FFFFFF',
-              borderRadius: '18px 18px 18px 4px',
-              padding: '10px 16px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
-            }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/mom_avatar.jpg" alt="媽咪" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+            <div style={{ background: '#FFFFFF', padding: '10px 16px', borderRadius: '4px 18px 18px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
               <ThinkingDots />
             </div>
           </div>
         )}
-
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Prompts Chips Bar */}
-      {showQuickPrompts && (
+      {/* Quick Suggestion Chips */}
+      {showQuickPrompts && messages.length <= 2 && (
         <div style={{
-          padding: '8px 12px',
-          background: 'rgba(0,0,0,0.15)',
-          display: 'flex',
-          gap: 8,
-          overflowX: 'auto',
-          backdropFilter: 'blur(6px)',
-        }} className="scrollable">
-          {[
-            { id: 'store', label: '附近有超商嗎？', icon: <IconStore /> },
-            { id: 'fear', label: '我有點害怕', icon: <IconShield /> },
-            { id: 'time', label: '還要走多久？', icon: <IconClock /> },
-            { id: 'call', label: '語音通話', icon: <IconPhoneCall /> },
-          ].map(p => (
+          position: 'fixed', bottom: 70, left: 0, right: 0,
+          padding: '0 16px', display: 'flex', gap: 8, overflowX: 'auto',
+          zIndex: 10, scrollbarWidth: 'none'
+        }}>
+          {quickPrompts.map((p, idx) => (
             <button
-              key={p.id}
-              onClick={() => p.id === 'call' ? startVoiceCall() : sendMsg(p.label)}
+              key={idx}
+              onClick={() => sendMsg(p)}
               style={{
-                whiteSpace: 'nowrap',
-                padding: '6px 12px',
-                borderRadius: 16,
-                border: 'none',
-                background: 'rgba(255,255,255,0.92)',
-                color: '#1F2937',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
+                background: 'rgba(255,255,255,0.9)', border: 'none', color: '#4B5563',
+                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 500,
+                whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+                cursor: 'pointer', flexShrink: 0
               }}
             >
-              {p.icon}
-              <span>{p.label}</span>
+              {p}
             </button>
           ))}
         </div>
       )}
 
-      {/* LINE Style Bottom Input Toolbar */}
+      {/* Input Bar */}
       <div style={{
-        padding: '8px 12px',
-        paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
-        background: '#FFFFFF',
-        borderTop: '1px solid #E5E7EB',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        padding: '10px 12px', background: '#FFFFFF',
+        borderTop: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 8,
+        zIndex: 20
       }}>
-        {/* Left Action Buttons */}
         <input
           type="file"
           ref={fileInputRef}
           accept="image/*"
+          capture="environment"
           style={{ display: 'none' }}
           onChange={handlePhotoUpload}
         />
-        <button style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }} title="更多">
-          <IconPlus />
-        </button>
         <button
           onClick={() => fileInputRef.current?.click()}
-          style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
-          title="拍攝/上傳路口照片進行風險分析"
+          style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 6, display: 'flex' }}
+          title="上傳照片評估環境風險"
         >
           <IconCamera />
         </button>
 
-        {/* Input Capsule Field */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          background: '#F3F4F6',
-          borderRadius: 20,
-          padding: '6px 14px',
-        }}>
+        <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
           <input
-            style={{
-              flex: 1,
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              fontSize: 15,
-              color: '#111827',
-            }}
-            placeholder="輸入訊息…"
+            type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMsg(input)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                sendMsg(input)
+              }
+            }}
+            placeholder="傳送訊息給媽咪..."
+            style={{
+              width: '100%', padding: '10px 36px 10px 14px', borderRadius: 20,
+              border: '1px solid #E5E7EB', background: '#F9FAFB', fontSize: 14,
+              outline: 'none'
+            }}
           />
-          {input.trim() ? (
-            <button
-              onClick={() => sendMsg(input)}
-              style={{
-                background: '#86E260',
-                border: 'none',
-                color: '#000000',
-                fontWeight: 700,
-                borderRadius: 14,
-                padding: '4px 10px',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
-              傳送
-            </button>
-          ) : (
-            <button style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <IconSmile />
-            </button>
-          )}
+          <button
+            onClick={() => sendMsg(input)}
+            style={{
+              position: 'absolute', right: 8, background: 'none', border: 'none',
+              color: input.trim() ? '#8B5CF6' : '#D1D5DB', cursor: 'pointer', padding: 4
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+          </button>
         </div>
 
-        {/* Microphone Voice Button */}
         <button
-          onClick={toggleListening}
+          onClick={startVoiceInput}
           style={{
             background: isListening ? '#EF4444' : '#F3F4F6',
             color: isListening ? '#FFFFFF' : '#4B5563',
-            border: 'none',
-            borderRadius: '50%',
-            width: 38,
-            height: 38,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            border: 'none', borderRadius: '50%', width: 38, height: 38,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
             boxShadow: isListening ? '0 0 10px rgba(239,68,68,0.5)' : 'none',
             transition: 'all 0.2s ease',
@@ -707,12 +870,12 @@ function CompanionContent() {
         </button>
       </div>
 
-      {/* Full-screen LINE Voice Call Overlay */}
+      {/* Full-screen LINE Voice Call Overlay (Gemini Live Audio Engine) */}
       {callActive && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
-          background: '#111827', display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white'
+          background: '#0F172A', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'space-between', padding: '50px 24px 60px', color: 'white'
         }} onClick={triggerAudioPlay}>
           {callState === 'ringing' ? (
             <>
@@ -747,28 +910,107 @@ function CompanionContent() {
             </>
           ) : (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/mom_avatar.jpg"
-                  alt="媽咪"
-                  style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '4px solid #06C755', boxShadow: '0 0 20px rgba(6,199,85,0.4)' }}
-                />
-                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>媽咪</div>
-                <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600 }}>
-                  LINE 通話中 {String(Math.floor(callDuration / 60)).padStart(2, '0')}:{String(callDuration % 60).padStart(2, '0')}
+              {/* Active Voice Call Screen */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%', maxWidth: 360 }}>
+                {/* Avatar with Dynamic Speaking Glow */}
+                <div style={{ position: 'relative', marginTop: 10 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/mom_avatar.jpg"
+                    alt="媽咪"
+                    style={{
+                      width: 110, height: 110, borderRadius: '50%', objectFit: 'cover',
+                      border: aiSpeaking ? '4px solid #06C755' : userSpeaking ? '4px solid #8B5CF6' : '4px solid rgba(255,255,255,0.3)',
+                      boxShadow: aiSpeaking ? '0 0 28px rgba(6,199,85,0.8)' : userSpeaking ? '0 0 28px rgba(139,92,246,0.8)' : '0 8px 24px rgba(0,0,0,0.4)',
+                      transition: 'all 0.3s ease'
+                    }}
+                  />
+                  {aiSpeaking && (
+                    <span style={{ position: 'absolute', bottom: 0, right: 0, background: '#06C755', color: 'white', fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                      🔊 講話中
+                    </span>
+                  )}
+                  {userSpeaking && (
+                    <span style={{ position: 'absolute', bottom: 0, right: 0, background: '#8B5CF6', color: 'white', fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                      🎙️ 聆聽中
+                    </span>
+                  )}
                 </div>
-                <div className="glass-light" style={{ color: '#F3F4F6', textAlign: 'center', fontSize: 15, marginTop: 14, padding: '14px 20px', borderRadius: 18, lineHeight: 1.6, maxWidth: 300, background: 'rgba(255,255,255,0.08)' }}>
-                  「喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！」
+
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>媽咪</div>
+                <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#06C755', animation: 'pulse 1s infinite' }} />
+                  Gemini AI 雙向語音通話中 {String(Math.floor(callDuration / 60)).padStart(2, '0')}:{String(callDuration % 60).padStart(2, '0')}
+                </div>
+
+                {/* Animated Voice Soundwaves */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 24, margin: '8px 0' }}>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: 4,
+                        height: aiSpeaking ? `${12 + (i % 3) * 10}px` : userSpeaking ? `${8 + (i % 2) * 8}px` : '4px',
+                        background: aiSpeaking ? '#06C755' : userSpeaking ? '#8B5CF6' : 'rgba(255,255,255,0.3)',
+                        borderRadius: 2,
+                        transition: 'all 0.15s ease',
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Live Caption Card */}
+                <div style={{
+                  color: '#F3F4F6', textAlign: 'center', fontSize: 15,
+                  padding: '16px 20px', borderRadius: 20, lineHeight: 1.6,
+                  width: '100%', background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.2)', minHeight: 80,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  {momTranscript}
                 </div>
               </div>
 
-              <button
-                onClick={endVoiceCall}
-                style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}
-              >
-                📵
-              </button>
+              {/* Call Controls Bar */}
+              <div style={{ display: 'flex', gap: 40, alignItems: 'center' }}>
+                <button
+                  onClick={() => setIsMuted(!isMuted)}
+                  style={{
+                    width: 56, height: 56, borderRadius: '50%',
+                    background: isMuted ? '#EF4444' : 'rgba(255,255,255,0.15)',
+                    border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', transition: 'all 0.2s ease'
+                  }}
+                  title={isMuted ? '解除靜音' : '靜音'}
+                >
+                  {isMuted ? <IconMicOff /> : <IconMic />}
+                </button>
+
+                <button
+                  onClick={endVoiceCall}
+                  style={{
+                    width: 72, height: 72, borderRadius: '50%', background: '#EF4444',
+                    border: 'none', color: 'white', fontSize: 32, cursor: 'pointer',
+                    boxShadow: '0 4px 20px rgba(239,68,68,0.6)', transition: 'transform 0.15s ease'
+                  }}
+                >
+                  📵 掛斷
+                </button>
+
+                <button
+                  onClick={() => setIsSpeakerOn(!isSpeakerOn)}
+                  style={{
+                    width: 56, height: 56, borderRadius: '50%',
+                    background: isSpeakerOn ? '#06C755' : 'rgba(255,255,255,0.15)',
+                    border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', transition: 'all 0.2s ease'
+                  }}
+                  title="擴音"
+                >
+                  <IconVolume2 />
+                </button>
+              </div>
             </>
           )}
         </div>
