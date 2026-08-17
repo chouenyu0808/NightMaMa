@@ -83,71 +83,27 @@ function SOSContent() {
     setSosSent(true)
   }
 
-// Play realistic LINE Ringtone chime using Web Audio API
-function startLineRingtone() {
-  if (typeof window === 'undefined') return () => {}
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
-  if (!AudioCtx) return () => {}
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  try {
-    const ctx = new AudioCtx()
-    let stopped = false
-
-    const playNotes = () => {
-      if (stopped) return
-      const now = ctx.currentTime
-
-      // Rhythmic LINE Ringtone 4-note chime sequence (880Hz, 1108Hz, 1318Hz, 1760Hz)
-      const sequence = [
-        { freq: 880, time: 0, dur: 0.1 },
-        { freq: 1108.73, time: 0.1, dur: 0.1 },
-        { freq: 1318.51, time: 0.2, dur: 0.1 },
-        { freq: 1760, time: 0.3, dur: 0.25 },
-        { freq: 880, time: 0.65, dur: 0.1 },
-        { freq: 1108.73, time: 0.75, dur: 0.1 },
-        { freq: 1318.51, time: 0.85, dur: 0.1 },
-        { freq: 1760, time: 0.95, dur: 0.3 },
-      ]
-
-      sequence.forEach(s => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.type = 'sine'
-        osc.frequency.setValueAtTime(s.freq, now + s.time)
-
-        gain.gain.setValueAtTime(0.3, now + s.time)
-        gain.gain.exponentialRampToValueAtTime(0.001, now + s.time + s.dur)
-
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-
-        osc.start(now + s.time)
-        osc.stop(now + s.time + s.dur)
-      })
-
-      if (!stopped) {
-        setTimeout(playNotes, 2200)
+  // Play authentic LINE Ringtone MP3 when fake call ringing
+  useEffect(() => {
+    if (fakeCallActive && fakeCallTimer > 0) {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('/line_ringtone.mp3')
+        audioRef.current.loop = true
+      }
+      audioRef.current.play().catch(err => console.warn('Audio play notice:', err))
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
       }
     }
-
-    playNotes()
-
     return () => {
-      stopped = true
-      try { ctx.close() } catch {}
-    }
-  } catch {
-    return () => {}
-  }
-}
-
-  // Play LINE Ringtone when fake call ringing
-  useEffect(() => {
-    if (!fakeCallActive || fakeCallTimer <= 0) return
-    const stopRingtone = startLineRingtone()
-    return () => {
-      stopRingtone()
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
     }
   }, [fakeCallActive, fakeCallTimer])
 
