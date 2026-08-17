@@ -15,7 +15,7 @@ def _count_within_radius(
     lng_col: str,
     lat: float,
     lng: float,
-    radius_m: float = 50,
+    radius_m: float = 100,  # ponytail: 50m left too many sampled points with 0 nearby hits, tanking worst-segment scores; raise further if still too sparse
 ) -> int:
     query = f"""
         SELECT COUNT(*) AS n
@@ -35,13 +35,13 @@ def _count_within_radius(
     return next(iter(job.result()))["n"]
 
 
-def count_streetlights(client: bigquery.Client, lat: float, lng: float, radius_m: float = 50) -> int:
+def count_streetlights(client: bigquery.Client, lat: float, lng: float, radius_m: float = 100) -> int:
     return _count_within_radius(
         client, settings.bq_dataset_lights, settings.bq_table_lights, "latitude", "longitude", lat, lng, radius_m
     )
 
 
-def count_cameras(client: bigquery.Client, lat: float, lng: float, radius_m: float = 50) -> int:
+def count_cameras(client: bigquery.Client, lat: float, lng: float, radius_m: float = 100) -> int:
     return _count_within_radius(
         client, settings.bq_dataset_cameras, settings.bq_table_cameras, "lat", "lng", lat, lng, radius_m
     )

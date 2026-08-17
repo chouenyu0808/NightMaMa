@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { loadMaps, fetchRoutes, formatDuration, formatDistance, type RouteResult, type LatLng } from '@/lib/maps'
+import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, type RouteResult, type LatLng } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers } from '@/lib/safetyPlaces'
 import Logo from '@/components/Logo'
 
@@ -254,16 +254,23 @@ export default function HomePage() {
       setError('請輸入出發地與目的地')
       return
     }
-    if (!originLatLng || !destLatLng) {
-      setError('請從建議清單中選擇出發地與目的地')
-      return
-    }
     setError('')
     setIsLoading(true)
     setShowSheet(false)
 
     try {
-      const rawRoutes = await fetchRoutes(originLatLng, destLatLng)
+      // Autocomplete's place_changed sometimes doesn't fire (Enter-key race,
+      // browser's own address autofill) leaving *LatLng null even though the
+      // field looks filled in — geocode the typed text as a fallback.
+      const origLatLng = originLatLng || (origin === '我的位置' ? userGpsRef.current : null) || await geocodeAddress(origin)
+      const destLatLngResolved = destLatLng || await geocodeAddress(destination)
+      if (!origLatLng || !destLatLngResolved) {
+        throw new Error('找不到地址，請確認出發地與目的地名稱')
+      }
+      setOriginLatLng(origLatLng)
+      setDestLatLng(destLatLngResolved)
+
+      const rawRoutes = await fetchRoutes(origLatLng, destLatLngResolved)
       if (!rawRoutes.length) throw new Error('找不到路線')
       const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
 
@@ -328,10 +335,13 @@ export default function HomePage() {
     return <LandingPage onStart={() => setAppState('map')} />
   }
 
+  // 顯示全部候選路線（最快/最安全/平衡，最多 3 條），依安全分數排序
+  const displayRoutes = routes.map((route, idx) => ({ route, idx }))
+
   return (
     <div style={{ position: 'relative', height: '100dvh', overflow: 'hidden' }}>
       {/* Map */}
-      <div ref={mapRef} style={{ position: 'absolute', inset: 0, background: '#0f172a' }} />
+      <div ref={mapRef} style={{ position: 'absolute', inset: 0, background: '#eef3e8' }} />
 
       {/* Top search panel */}
       <div style={{
@@ -434,7 +444,7 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Route bottom sheet */}
+      {/* Route bottom sheet — 只比較「安心路線」vs「最快路線」兩條 */}
       {showSheet && routes.length > 0 && (
         <div
           className="bottom-sheet glass"
@@ -454,7 +464,7 @@ export default function HomePage() {
             <div className="bottom-sheet-handle" />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                找到 {routes.length} 條路線 · 依安全評分排序 ↓
+                找到 {displayRoutes.length} 條路線 · 依安全評分排序 ↓
               </p>
               <button
                 style={{
@@ -474,10 +484,16 @@ export default function HomePage() {
 
           {!isSheetCollapsed && (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '30dvh', overflowY: 'auto' }} className="scrollable">
-                {routes.map((route, i) => (
-                  <RouteCard key={i} route={route} isSelected={selectedIdx === i} onClick={() => handleSelectRoute(i)} />
-                ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '34dvh', overflowY: 'auto' }} className="scrollable">
+                {[...displayRoutes]
+                  .sort((a, b) => (a.idx === selectedIdx ? -1 : 0) - (b.idx === selectedIdx ? -1 : 0))
+                  .map(({ route, idx }) =>
+                    idx === selectedIdx ? (
+                      <RouteCard key={idx} route={route} onClick={() => handleSelectRoute(idx)} />
+                    ) : (
+                      <RouteRow key={idx} route={route} onClick={() => handleSelectRoute(idx)} />
+                    )
+                  )}
               </div>
               <button className="btn-primary" style={{ marginTop: 12 }} onClick={handleStartNavigation}>
                 🚶 開始導航 · {routes[selectedIdx]?.safety.label}路線
@@ -684,37 +700,67 @@ function LandingPage({ onStart }: { onStart: () => void }) {
   )
 }
 
-// ─── Route Card ───────────────────────────────────────────────────────────────
-function RouteCard({ route, isSelected, onClick }: { route: ScoredRoute; isSelected: boolean; onClick: () => void }) {
-  const scoreClass = route.safety.total >= 65 ? 'score-high' : route.safety.total >= 40 ? 'score-mid' : 'score-low'
+// ─── Route Card (展開版，選中的路線) ─────────────────────────────────────────────
+function StatBox({ icon, value, label, color }: { icon: string; value: string | number; label: string; color?: string }) {
+  return (
+    <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '8px 4px' }}>
+      <div style={{ fontSize: 15 }}>{icon}</div>
+      <div style={{ fontWeight: 800, fontSize: 14, color: color || 'white', marginTop: 2 }}>{value}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{label}</div>
+    </div>
+  )
+}
+
+function RouteCard({ route, onClick }: { route: ScoredRoute; onClick: () => void }) {
   const typeIcon = route.typeLabel === '最安全' ? '🛡️' : route.typeLabel === '最快' ? '⚡' : '⚖️'
 
   return (
-    <div className={`route-card glass-light ${isSelected ? 'selected' : ''}`} onClick={onClick}
-      style={{ border: isSelected ? `2px solid ${route.safety.color}44` : '2px solid transparent', background: isSelected ? `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.06)` : undefined }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+    <div className="route-card glass-light selected" onClick={onClick}
+      style={{ border: `2px solid ${route.safety.color}66`, background: `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.08)` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 20 }}>{typeIcon}</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{route.typeLabel}路線</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {formatDuration(route.durationSec)} · {formatDistance(route.distanceM)}
-              {route.extraMin > 0 && <span style={{ color: 'var(--text-muted)' }}> (+{route.extraMin}分)</span>}
-            </div>
-          </div>
+          <span style={{ fontSize: 18 }}>{typeIcon}</span>
+          <span style={{ fontWeight: 800, fontSize: 15 }}>{route.typeLabel}路線</span>
         </div>
-        <div className={`score-badge ${scoreClass}`}>{route.safety.emoji} {route.safety.total}</div>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>
+          {formatDuration(route.durationSec)}
+          <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11 }}> ({formatDistance(route.distanceM)})</span>
+        </div>
       </div>
-      <div className="safety-meter" style={{ marginBottom: 8 }}>
-        <div className="safety-meter-fill" style={{ width: `${route.safety.total}%`, background: `linear-gradient(90deg, ${route.safety.color}66, ${route.safety.color})` }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+        <StatBox icon="💡" value={route.lightCount} label="路燈" />
+        <StatBox icon="📹" value={route.cameraCount} label="監視器" />
+        <StatBox icon="🛡️" value={`${(route.safety.total / 10).toFixed(1)}/10`} label="安全評分" color={route.safety.color} />
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{route.description}</p>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <span className="map-chip" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11 }}>🏪 24h超商</span>
-        <span className="map-chip" style={{ background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11 }}>👮 派出所</span>
-        <span className="map-chip" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: 11 }}>💡 {route.lightCount} 路燈</span>
-        <span className="map-chip" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11 }}>📹 {route.cameraCount} 監視器</span>
+        <span className="map-chip" style={{ background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11 }}>👮 {route.policeCount} 派出所</span>
       </div>
+    </div>
+  )
+}
+
+// ─── Route Row (收合版，未選中的路線) ─────────────────────────────────────────────
+function RouteRow({ route, onClick }: { route: ScoredRoute; onClick: () => void }) {
+  const typeIcon = route.typeLabel === '最安全' ? '🛡️' : route.typeLabel === '最快' ? '⚡' : '⚖️'
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '10px 14px', borderRadius: 14,
+        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 15 }}>{typeIcon}</span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{route.typeLabel}路線</span>
+      </div>
+      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        {formatDuration(route.durationSec)} <span style={{ color: 'var(--text-muted)' }}>({formatDistance(route.distanceM)})</span>
+      </span>
     </div>
   )
 }
@@ -741,19 +787,21 @@ export function NavBar({ active }: { active: 'home' | 'companion' | 'sos' | 'set
   )
 }
 
-// ─── Dark Map Style ────────────────────────────────────────────────────────────
+// ─── Green Map Style (standard, natural colors) ────────────────────────────────
 const darkMapStyle: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#334155' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#1e3a5f' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c1929' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0f1f35' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#0a1a10' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e5e7eb' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#fde68a' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#78350f' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a5d8e8' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#d4ecd0' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#a8d5a2' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#2f6b2f' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#eef3e8' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#e5e7eb' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#cbd5e1' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
 ]

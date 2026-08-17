@@ -11,6 +11,7 @@ class WeightOverrides(BaseModel):
     light: float = 1
     camera: float = 1
     store: float = 1
+    police: float = 1
     time: float = 1
 
 
@@ -28,6 +29,7 @@ class RouteOption(BaseModel):
     polyline: str
     light_count: int = 0
     camera_count: int = 0
+    police_count: int = 0
 
 
 class RoutesResponse(BaseModel):

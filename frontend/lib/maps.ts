@@ -84,8 +84,16 @@ export interface RouteResult {
   reason: string | null
   lightCount: number
   cameraCount: number
+  policeCount: number
   points: LatLng[]
   steps: RouteStep[]
+}
+
+export async function geocodeAddress(address: string): Promise<LatLng | null> {
+  const geocoder = new google.maps.Geocoder()
+  const { results } = await geocoder.geocode({ address, region: 'tw' })
+  const loc = results[0]?.geometry?.location
+  return loc ? { lat: loc.lat(), lng: loc.lng() } : null
 }
 
 /** 呼叫後端 /routes 取得依安全評分排序的候選路線 */
@@ -115,6 +123,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
     reason: string | null
     light_count: number
     camera_count: number
+    police_count: number
   }>).map((r) => ({
     type: r.type,
     polyline: r.polyline,
@@ -124,6 +133,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
     reason: r.reason,
     lightCount: r.light_count,
     cameraCount: r.camera_count,
+    policeCount: r.police_count,
     points: decodePolyline(r.polyline),
     // Backend doesn't return turn-by-turn steps yet; navigate/page.tsx falls
     // back to generateStepsFromPoints() when this is empty.

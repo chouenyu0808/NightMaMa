@@ -7,9 +7,9 @@ from models.schemas import LatLng
 NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
 
 
-def count_24h_stores(point: LatLng, radius_m: float = 100) -> int:
+def _search_nearby(point: LatLng, included_type: str, radius_m: float, field_mask: str) -> list[dict]:
     body = {
-        "includedTypes": ["convenience_store"],
+        "includedTypes": [included_type],
         "maxResultCount": 20,
         "locationRestriction": {
             "circle": {
@@ -21,9 +21,18 @@ def count_24h_stores(point: LatLng, radius_m: float = 100) -> int:
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": settings.google_maps_api_key,
-        "X-Goog-FieldMask": "places.currentOpeningHours.openNow",
+        "X-Goog-FieldMask": field_mask,
     }
     resp = httpx.post(NEARBY_URL, json=body, headers=headers, timeout=10)
     resp.raise_for_status()
-    places = resp.json().get("places", [])
+    return resp.json().get("places", [])
+
+
+def count_24h_stores(point: LatLng, radius_m: float = 100) -> int:
+    places = _search_nearby(point, "convenience_store", radius_m, "places.currentOpeningHours.openNow")
     return sum(1 for p in places if p.get("currentOpeningHours", {}).get("openNow"))
+
+
+def count_police_stations(point: LatLng, radius_m: float = 150) -> int:
+    # ponytail: no openNow filter — police stations aren't tagged with hours in Places data
+    return len(_search_nearby(point, "police", radius_m, "places.id"))

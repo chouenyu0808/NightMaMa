@@ -17,6 +17,7 @@ class Segment:
     light_count: int
     camera_count: int
     store_count: int
+    police_count: int = 0
 
 
 @dataclass
@@ -24,6 +25,7 @@ class Weights:
     light: float = 1.0
     camera: float = 1.0
     store: float = 1.0
+    police: float = 1.0
     time: float = 1.0
 
 
@@ -38,7 +40,16 @@ def score_segment(segment: Segment, weights: Weights) -> float:
         weights.light * _density_per_100m(segment.light_count, segment.length_m)
         + weights.camera * _density_per_100m(segment.camera_count, segment.length_m)
         + weights.store * _density_per_100m(segment.store_count, segment.length_m)
+        + weights.police * _density_per_100m(segment.police_count, segment.length_m)
     )
+
+
+# ponytail: score_segment's raw weighted density has no fixed ceiling, but the
+# API contract (see backend-architecture.md) and frontend both expect a 0-100
+# UX score. 5.0 is calibrated from a live Taipei route sample (worst-segment
+# density landed at 1.4-3.5 for real fastest/safest/balanced candidates) —
+# retune if scores cluster too high/low once more real routes are sampled.
+MAX_RAW_SCORE = 5.0
 
 
 def score_route(segments: list[Segment], time_extra_min: float, weights: Weights | None = None) -> float:
@@ -47,4 +58,5 @@ def score_route(segments: list[Segment], time_extra_min: float, weights: Weights
     weights = weights or Weights()
     worst_segment_score = min(score_segment(s, weights) for s in segments)
     time_penalty = weights.time * math.log(1 + max(time_extra_min, 0))
-    return worst_segment_score - time_penalty
+    raw = worst_segment_score - time_penalty
+    return max(0.0, min(100.0, raw / MAX_RAW_SCORE * 100))

@@ -17,7 +17,7 @@ def test_dark_segment_drags_down_route_score():
 
 
 def test_time_penalty_reduces_score():
-    segment = Segment(length_m=100, light_count=10, camera_count=0, store_count=0)
+    segment = Segment(length_m=100, light_count=2, camera_count=0, store_count=0)
     fast = score_route([segment], time_extra_min=0)
     slow = score_route([segment], time_extra_min=10)
 

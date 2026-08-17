@@ -690,17 +690,18 @@ const floatingControlStyle: React.CSSProperties = {
   boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
 }
 
-// Google Navigation style map
+// Google Navigation style map — standard, natural (green) colors
 const googleNavMapStyle: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#334155' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#1e3a5f' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0c1929' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0f1f35' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#0a1a10' }] },
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e5e7eb' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#fde68a' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a5d8e8' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#d4ecd0' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#a8d5a2' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#eef3e8' }] },
 ]
 
 export default function NavigatePage() {

@@ -15,7 +15,10 @@ MAX_SAMPLES_PER_ROUTE = 6  # ponytail: caps BigQuery/Places calls per route; rai
 
 
 def _weights_from(overrides: WeightOverrides) -> Weights:
-    return Weights(light=overrides.light, camera=overrides.camera, store=overrides.store, time=overrides.time)
+    return Weights(
+        light=overrides.light, camera=overrides.camera, store=overrides.store,
+        police=overrides.police, time=overrides.time,
+    )
 
 
 def _segments_for_route(bq: bigquery.Client, sampled_points: list[LatLng]) -> list[Segment]:
@@ -27,6 +30,7 @@ def _segments_for_route(bq: bigquery.Client, sampled_points: list[LatLng]) -> li
                 light_count=bigquery_service.count_streetlights(bq, a.lat, a.lng),
                 camera_count=bigquery_service.count_cameras(bq, a.lat, a.lng),
                 store_count=places_service.count_24h_stores(a),
+                police_count=places_service.count_police_stations(a),
             )
         )
     return segments
@@ -57,6 +61,7 @@ def get_routes(
 
         light_count = sum(s.light_count for s in segments)
         camera_count = sum(s.camera_count for s in segments)
+        police_count = sum(s.police_count for s in segments)
 
         options.append(
             RouteOption(
@@ -66,6 +71,7 @@ def get_routes(
                 polyline=raw["polyline"]["encodedPolyline"],
                 light_count=light_count,
                 camera_count=camera_count,
+                police_count=police_count,
             )
         )
 
