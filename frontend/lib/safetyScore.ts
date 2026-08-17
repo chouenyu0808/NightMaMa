@@ -111,32 +111,39 @@ export function countNearbyCCTV(
   return seen.size
 }
 
-/** 綜合安全評分 */
+/** 綜合安全評分 (權重: 超商 40% > 警察局 30% > 路燈 20% > 監視器 10%) */
 export function calcSafetyScore(
   samples: LatLng[],
   lights: Light[],
   cctvs: CCTV[],
-  placeCount = 0
+  storeCount = 0,
+  policeCount = 0
 ): SafetyScore {
   const routeLengthKm = (samples.length * 30) / 1000 || 1
   const { count: lightCount } = countNearbyLights(samples, lights)
   const cctvCount = countNearbyCCTV(samples, cctvs)
 
-  // 每公里密度標準化 (滿分基準: 路燈 120/km, CCTV 18/km, 店家 3/km)
+  // 每公里密度標準化 (滿分基準: 超商 3/km, 警局 1/km, 路燈 120/km, CCTV 18/km)
+  const storeDensity = (storeCount || 2) / routeLengthKm
+  const policeDensity = (policeCount || 1) / routeLengthKm
   const lightDensity = lightCount / routeLengthKm
   const cctvDensity = cctvCount / routeLengthKm
-  const placeDensity = placeCount / routeLengthKm
 
+  const storeScore = Math.min(100, Math.round((storeDensity / 3) * 100))
+  const policeScore = Math.min(100, Math.round((policeDensity / 1) * 100))
   const lightScore = Math.min(100, Math.round((lightDensity / 120) * 100))
   const cctvScore = Math.min(100, Math.round((cctvDensity / 18) * 100))
-  const placeScore = Math.min(100, Math.round((placeDensity / 3) * 100))
 
-  // 加權總分: 路燈 55% + CCTV 35% + 24h店家 10%
-  let rawTotal = lightScore * 0.55 + cctvScore * 0.35 + placeScore * 0.1
+  // 加權總分: 超商 40% + 警察局 30% + 路燈 20% + 監視器 10%
+  let rawTotal =
+    storeScore * 0.40 +
+    policeScore * 0.30 +
+    lightScore * 0.20 +
+    cctvScore * 0.10
 
-  // 絕對數量加分 (高涵蓋防禦加成)
-  if (lightCount >= 500) rawTotal += 3
-  if (cctvCount >= 80) rawTotal += 3
+  // 實體防禦加成 (有 24h 超商或警察局加分)
+  if (storeCount >= 2) rawTotal += 3
+  if (policeCount >= 1) rawTotal += 4
 
   const total = Math.min(99, Math.max(30, Math.round(rawTotal)))
 
@@ -161,7 +168,7 @@ export function calcSafetyScore(
     total,
     lightScore,
     cctvScore,
-    placeScore,
+    placeScore: storeScore,
     lightCount,
     cctvCount,
     label,

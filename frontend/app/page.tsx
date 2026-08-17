@@ -654,7 +654,9 @@ function RouteCard({ route, isSelected, onClick }: { route: ScoredRoute; isSelec
         <div className="safety-meter-fill" style={{ width: `${route.safety.total}%`, background: `linear-gradient(90deg, ${route.safety.color}66, ${route.safety.color})` }} />
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{route.description}</p>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <span className="map-chip" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11 }}>🏪 24h超商</span>
+        <span className="map-chip" style={{ background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11 }}>👮 派出所</span>
         <span className="map-chip" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: 11 }}>💡 {route.safety.lightCount} 路燈</span>
         <span className="map-chip" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11 }}>📹 {route.safety.cctvCount} 監視器</span>
       </div>
