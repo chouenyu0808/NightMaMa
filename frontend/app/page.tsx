@@ -329,30 +329,9 @@ export default function HomePage() {
         position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
         pointerEvents: 'none'
       }}>
-        {/* iOS Status Bar placeholder */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '12px 24px 4px', fontSize: 14, fontWeight: 700, color: 'white',
-          background: 'linear-gradient(to bottom, rgba(11,14,27,0.95), transparent)'
-        }}>
-          <span>9:41</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, pointerEvents: 'auto' }}>
-            <button
-              onClick={() => setShowAnxietyModal(true)}
-              style={{
-                background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.5)',
-                color: '#f87171', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 700,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4
-              }}
-            >
-              <IconAlertTriangle size={14} color="#f87171" /> 不安通報
-            </button>
-          </div>
-        </div>
-
         {/* Floating Top Header (when search sheet is closed) */}
         {!showSheet && (
-          <div style={{ padding: '8px 20px 0', pointerEvents: 'auto' }}>
+          <div style={{ padding: '20px 20px 0', pointerEvents: 'auto' }}>
             {/* Hero Brand Bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
               <div>
@@ -364,27 +343,41 @@ export default function HomePage() {
                 </p>
               </div>
 
-              {/* Mascot Art */}
-              <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <div style={{
-                  background: 'rgba(30, 27, 75, 0.9)', border: '1px solid rgba(167, 139, 250, 0.4)',
-                  borderRadius: '12px 12px 2px 12px', padding: '3px 8px', fontSize: 10, fontWeight: 700,
-                  color: '#e0e7ff', marginBottom: 4, whiteSpace: 'nowrap'
-                }}>
-                  我在這，陪你走 💜
-                </div>
-                <div style={{
-                  width: 44, height: 44, borderRadius: '50%',
-                  background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
-                  boxShadow: '0 0 16px rgba(250, 204, 21, 0.6)',
-                  position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
+              {/* Mascot Art + Anxiety Report Pill Button */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+                <button
+                  onClick={() => setShowAnxietyModal(true)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.6)',
+                    color: '#f87171', borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    backdropFilter: 'blur(8px)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)'
+                  }}
+                >
+                  <IconAlertTriangle size={14} color="#f87171" /> 不安通報
+                </button>
+
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                   <div style={{
-                    width: 22, height: 22, borderRadius: '50%',
-                    background: 'radial-gradient(circle at 30% 30%, #c084fc, #7e22ce)',
-                    position: 'absolute', right: 2, bottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    background: 'rgba(30, 27, 75, 0.9)', border: '1px solid rgba(167, 139, 250, 0.4)',
+                    borderRadius: '12px 12px 2px 12px', padding: '3px 8px', fontSize: 10, fontWeight: 700,
+                    color: '#e0e7ff', marginBottom: 4, whiteSpace: 'nowrap'
                   }}>
-                    <span style={{ fontSize: 8 }}>🥰</span>
+                    我在這，陪你走 💜
+                  </div>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: '50%',
+                    background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
+                    boxShadow: '0 0 16px rgba(250, 204, 21, 0.6)',
+                    position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: '50%',
+                      background: 'radial-gradient(circle at 30% 30%, #c084fc, #7e22ce)',
+                      position: 'absolute', right: 2, bottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <span style={{ fontSize: 8 }}>🥰</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -487,15 +480,27 @@ export default function HomePage() {
                 <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>➔</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#f472b6' }}>{destination}</span>
               </div>
-              <button
-                onClick={() => setShowSheet(false)}
-                style={{
-                  background: 'rgba(255,255,255,0.1)', border: 'none', color: '#c4b5fd',
-                  padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer'
-                }}
-              >
-                <IconPencil size={12} /> 重新搜尋
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  onClick={() => setShowAnxietyModal(true)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.5)',
+                    color: '#f87171', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3
+                  }}
+                >
+                  <IconAlertTriangle size={12} color="#f87171" /> 不安通報
+                </button>
+                <button
+                  onClick={() => setShowSheet(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)', border: 'none', color: '#c4b5fd',
+                    padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  <IconPencil size={12} /> 重新搜尋
+                </button>
+              </div>
             </div>
           </div>
         )}
