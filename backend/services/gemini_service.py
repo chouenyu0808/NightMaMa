@@ -27,15 +27,6 @@ def _client_instance() -> genai.Client:
     return _client
 
 
-def explain_route_choice(light_count: int, store_count: int, camera_count: int) -> str:
-    prompt = (
-        "用一句話（20字內、繁體中文）說明為什麼這條路線比較安全："
-        f"沿途路燈 {light_count} 盞、24H店家 {store_count} 家、監視器 {camera_count} 個。"
-    )
-    interaction = _client_instance().interactions.create(model=MODEL, input=prompt)
-    return interaction.output_text.strip()
-
-
 def chat_reply(user_text: str) -> str:
     prompt = f"你是夜間步行陪伴語音助理，簡短溫暖地回應（30字內、繁體中文）：{user_text}"
     interaction = _client_instance().interactions.create(model=MODEL, input=prompt)

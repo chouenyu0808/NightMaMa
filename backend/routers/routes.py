@@ -5,7 +5,7 @@ from google.cloud import bigquery, firestore
 from clients import firestore_client, maps_client
 from deps import get_bigquery, get_firestore
 from models.schemas import LatLng, RouteOption, RouteRequest, RoutesResponse, WeightOverrides
-from services import bigquery_service, gemini_service, places_service
+from services import bigquery_service, places_service
 from services.safety_scorer import Segment, Weights, score_route
 from utils import geo
 
@@ -56,14 +56,7 @@ def get_routes(
         score = score_route(segments, time_extra_min, weights) if segments else 0.0
 
         light_count = sum(s.light_count for s in segments)
-        store_count = sum(s.store_count for s in segments)
         camera_count = sum(s.camera_count for s in segments)
-
-        reason = gemini_service.explain_route_choice(
-            light_count=light_count,
-            store_count=store_count,
-            camera_count=camera_count,
-        )
 
         options.append(
             RouteOption(
@@ -71,7 +64,6 @@ def get_routes(
                 distance_m=raw.get("distanceMeters", 0),
                 score=round(score, 1),
                 polyline=raw["polyline"]["encodedPolyline"],
-                reason=reason,
                 light_count=light_count,
                 camera_count=camera_count,
             )

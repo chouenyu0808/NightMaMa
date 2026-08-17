@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { NavBar } from '@/app/page'
 
 const CONTACTS_KEY = 'nightmama_contacts'
+const GEMINI_KEY_STORAGE = 'nightmama_gemini_key'
 
 interface Contact {
   id: string
@@ -72,38 +73,45 @@ export default function SettingsPage() {
 
       <div className="scrollable" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 80 }}>
 
-        {/* LINE Notify setup */}
+
+
+        {/* LINE Official Account Contact Setup */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>💚 LINE 通知設定</div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 16 }}>
-            新增緊急聯絡人後，SOS 時自動發送 LINE 通知含即時定位
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>💚 LINE 緊急求救通知設定</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
+            一般使用者只需加入 <b>NightMaMa 官方帳號好友</b>，設定緊急聯絡人姓名與 LINE ID，觸發 SOS 時即可自動發送即時 GPS 定位警報！
           </div>
+
+          <a
+            href="https://line.me/R/ti/p/@344bwjhh"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              background: '#06C755', color: '#FFFFFF', fontWeight: 800, padding: '12px',
+              borderRadius: 14, textDecoration: 'none', fontSize: 14, marginBottom: 14,
+              boxShadow: '0 2px 8px rgba(6,199,85,0.3)'
+            }}
+          >
+            💬 第一步：點此加入 NightMaMa 官方帳號好友 (@344bwjhh)
+          </a>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <input
               className="input-field"
-              placeholder="聯絡人姓名（例：媽媽）"
+              placeholder="聯絡人姓名（例：媽媽、男友、家人）"
               value={name}
               onChange={e => setName(e.target.value)}
             />
             <input
               className="input-field"
-              placeholder="LINE Notify Token"
+              placeholder="LINE ID / User ID（選填，例：mom_line_id）"
               value={lineToken}
               onChange={e => setLineToken(e.target.value)}
-              type="password"
             />
 
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              📌 取得 Token：前往{' '}
-              <a href="https://notify-bot.line.me" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>
-                notify-bot.line.me
-              </a>
-              {' '}→「發行權杖」→ 輸入房間名稱 → 複製 Token
-            </div>
-
-            <button className="btn-primary" onClick={saveContact}>
-              {saved ? '✅ 已儲存！' : '+ 新增聯絡人'}
+            <button className="btn-primary" onClick={saveContact} style={{ marginTop: 4 }}>
+              {saved ? '✅ 已成功綁定緊急聯絡人！' : '+ 儲存緊急聯絡人'}
             </button>
           </div>
         </div>
@@ -149,9 +157,9 @@ export default function SettingsPage() {
           <div style={{ fontWeight: 700, marginBottom: 12 }}>🌙 關於 NightMaMa</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
             <div>🗺️ 路燈資料：台北市 145,919 盞路燈（data.taipei）</div>
-            <div>📹 CCTV 資料：台北市 417 支監視器</div>
-            <div>🤖 AI 陪聊：Google Gemini 2.0 Flash</div>
-            <div>🗺️ 地圖路線：Google Maps Routes API</div>
+            <div>📹 CCTV 資料：台北市 5,036 支警察局監視器</div>
+            <div>🤖 AI 陪聊：Google Gemini 3.6 Flash / 2.5 Flash</div>
+            <div>🗺️ 地圖路線：Google Maps Routes API (Custom Safety Matrix)</div>
           </div>
         </div>
       </div>

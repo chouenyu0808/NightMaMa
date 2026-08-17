@@ -220,6 +220,8 @@ html, body {
 .sos-btn {
   width: 140px;
   height: 140px;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
   border-radius: 50%;
   border: 4px solid rgba(239,68,68,0.5);
   cursor: pointer;

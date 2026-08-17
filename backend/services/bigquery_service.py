@@ -7,11 +7,20 @@ from google.cloud import bigquery
 from config import settings
 
 
-def _count_within_radius(client: bigquery.Client, table: str, lat: float, lng: float, radius_m: float = 50) -> int:
+def _count_within_radius(
+    client: bigquery.Client,
+    dataset: str,
+    table: str,
+    lat_col: str,
+    lng_col: str,
+    lat: float,
+    lng: float,
+    radius_m: float = 50,
+) -> int:
     query = f"""
         SELECT COUNT(*) AS n
-        FROM `{settings.bq_dataset}.{table}`
-        WHERE ST_DWITHIN(ST_GEOGPOINT(lng, lat), ST_GEOGPOINT(@lng, @lat), @radius)
+        FROM `{dataset}.{table}`
+        WHERE ST_DWITHIN(ST_GEOGPOINT({lng_col}, {lat_col}), ST_GEOGPOINT(@lng, @lat), @radius)
     """
     job = client.query(
         query,
@@ -27,11 +36,15 @@ def _count_within_radius(client: bigquery.Client, table: str, lat: float, lng: f
 
 
 def count_streetlights(client: bigquery.Client, lat: float, lng: float, radius_m: float = 50) -> int:
-    return _count_within_radius(client, "streetlights", lat, lng, radius_m)
+    return _count_within_radius(
+        client, settings.bq_dataset_lights, settings.bq_table_lights, "latitude", "longitude", lat, lng, radius_m
+    )
 
 
 def count_cameras(client: bigquery.Client, lat: float, lng: float, radius_m: float = 50) -> int:
-    return _count_within_radius(client, "cameras", lat, lng, radius_m)
+    return _count_within_radius(
+        client, settings.bq_dataset_cameras, settings.bq_table_cameras, "lat", "lng", lat, lng, radius_m
+    )
 
 
 def insert_unsafe_report(client: bigquery.Client, lat: float, lng: float, reason: str, session_hash: str) -> None:

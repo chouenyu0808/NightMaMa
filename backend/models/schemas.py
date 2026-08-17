@@ -26,7 +26,6 @@ class RouteOption(BaseModel):
     distance_m: float = 0
     score: float
     polyline: str
-    reason: str | None = None
     light_count: int = 0
     camera_count: int = 0
 

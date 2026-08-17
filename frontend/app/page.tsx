@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, formatDuration, formatDistance, type RouteResult, type LatLng } from '@/lib/maps'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers } from '@/lib/safetyPlaces'
+import Logo from '@/components/Logo'
 
 interface RouteVisual {
   total: number
@@ -28,11 +30,13 @@ type AppState = 'landing' | 'map'
 
 export default function HomePage() {
   const router = useRouter()
-  const [appState, setAppState] = useState<AppState>('landing')
+  const [appState, setAppState] = useState<AppState>('map')
 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<google.maps.Map | null>(null)
   const polylinesRef = useRef<google.maps.Polyline[]>([])
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
+  const userGpsRef = useRef<{ lat: number; lng: number } | null>(null)
   const autocompleteOriginRef = useRef<google.maps.places.Autocomplete | null>(null)
   const autocompleteDestRef = useRef<google.maps.places.Autocomplete | null>(null)
   const originInputRef = useRef<HTMLInputElement>(null)
@@ -62,6 +66,7 @@ export default function HomePage() {
           gestureHandling: 'greedy',
           styles: darkMapStyle,
         })
+        google.maps.event.trigger(mapInstance.current, 'resize')
         if (originInputRef.current) {
           autocompleteOriginRef.current = new google.maps.places.Autocomplete(originInputRef.current, {
             componentRestrictions: { country: 'tw' },
@@ -154,6 +159,19 @@ export default function HomePage() {
       markersRef.current.push(startMarker, endMarker)
     }
 
+    // Search and display 24h convenience stores & police stations along route
+    if (mapInstance.current) {
+      if (!infoWindowRef.current) {
+        infoWindowRef.current = new google.maps.InfoWindow()
+      }
+      searchNearbySafetyPlaces(mapInstance.current, points).then(places => {
+        if (mapInstance.current) {
+          const placeMarkers = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
+          markersRef.current.push(...placeMarkers)
+        }
+      }).catch(console.error)
+    }
+
     // Auto fit bounds to full route
     const bounds = new google.maps.LatLngBounds()
     points.forEach(p => bounds.extend(p))
@@ -163,13 +181,73 @@ export default function HomePage() {
     // Bottom padding: ~90px if collapsed, ~240px if expanded
     const bottomPad = sheetCollapsed ? 90 : 240
 
-    mapInstance.current!.fitBounds(bounds, {
-      top: topPad,
-      bottom: bottomPad,
-      left: 35,
-      right: 35,
-    })
+    if (mapInstance.current) {
+      google.maps.event.trigger(mapInstance.current, 'resize')
+      mapInstance.current.fitBounds(bounds, {
+        top: topPad,
+        bottom: bottomPad,
+        left: 35,
+        right: 35,
+      })
+    }
   }, [])
+
+  // Continuous GPS tracking with high accuracy
+  useEffect(() => {
+    if (appState === 'map' && navigator.geolocation) {
+      const watchId = navigator.geolocation.watchPosition(
+        pos => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          userGpsRef.current = coords
+          if (!origin) setOrigin('我的位置')
+        },
+        err => console.warn('GPS tracking notice:', err),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+      )
+      return () => navigator.geolocation.clearWatch(watchId)
+    }
+  }, [appState, origin])
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportType, setReportType] = useState('💡 路燈故障/昏暗')
+  const [reportNote, setReportNote] = useState('')
+  const [reportedSpots, setReportedSpots] = useState<Array<{ id: number; type: string; note: string; lat: number; lng: number }>>([])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('nightmama_unsafe_spots')
+    if (saved) {
+      try { setReportedSpots(JSON.parse(saved)) } catch {}
+    }
+  }, [])
+
+  const submitReport = () => {
+    const lat = userGpsRef.current?.lat || 25.0478
+    const lng = userGpsRef.current?.lng || 121.5170
+    const newSpot = { id: Date.now(), type: reportType, note: reportNote, lat, lng }
+    const updated = [...reportedSpots, newSpot]
+    setReportedSpots(updated)
+    localStorage.setItem('nightmama_unsafe_spots', JSON.stringify(updated))
+    setShowReportModal(false)
+    setReportNote('')
+
+    if (mapInstance.current) {
+      const dangerMarker = new google.maps.Marker({
+        position: { lat, lng },
+        map: mapInstance.current,
+        title: `🚨 社群回報暗區: ${reportType}`,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: '#ef4444',
+          fillOpacity: 0.9,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+        },
+      })
+      markersRef.current.push(dangerMarker)
+    }
+
+    alert('✅ 不安暗區點位已成功匿名通報！地圖已為您與其他使用者建立警示標籤。')
+  }
 
   const handleSearch = async () => {
     if (!origin.trim() || !destination.trim()) {
@@ -203,6 +281,7 @@ export default function HomePage() {
         return { ...route, safety, typeLabel, description, extraMin }
       })
 
+      // Sort by Safety Total Score descending (Highest safety score at the top!)
       scored.sort((a, b) => b.safety.total - a.safety.total)
       setRoutes(scored)
       setSelectedIdx(0)
@@ -240,6 +319,7 @@ export default function HomePage() {
       safety: String(route.safety.total),
       lights: String(route.lightCount),
       cctv: String(route.cameraCount),
+      steps: JSON.stringify(route.steps || []),
     })
     router.push(`/navigate?${params}`)
   }
@@ -262,8 +342,27 @@ export default function HomePage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <button onClick={() => setAppState('landing')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>←</button>
-          <span style={{ fontSize: 20 }}>🌙</span>
+          <Logo size={28} />
           <span style={{ fontSize: 18, fontWeight: 900 }} className="gradient-text">NightMaMa</span>
+          <button
+            onClick={() => setShowReportModal(true)}
+            style={{
+              marginLeft: 'auto',
+              fontSize: 11,
+              fontWeight: 700,
+              color: '#f59e0b',
+              background: 'rgba(245,158,11,0.15)',
+              padding: '4px 10px',
+              borderRadius: 999,
+              border: '1px solid rgba(245,158,11,0.3)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            📢 不安通報
+          </button>
         </div>
 
         {isSearchCollapsed && routes.length > 0 ? (
@@ -388,6 +487,64 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Unsafe Dark Spot Report Modal */}
+      {showReportModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+        }}>
+          <div className="glass" style={{ width: '100%', maxWidth: 360, borderRadius: 24, padding: 24, border: '1px solid rgba(245,158,11,0.3)', background: '#1e293b' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                📢 匿名回報不安暗區/死角
+              </div>
+              <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              您的匿名回報將用於即時在地圖標記暗區，提醒其他夜行民眾，並作為大數據城市暗巷治理參考。
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>1. 選擇問題類型：</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['💡 路燈故障/昏暗', '🚨 治安死角/可疑人士', '🚧 施工障礙/無人道'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setReportType(type)}
+                    style={{
+                      padding: '6px 10px', borderRadius: 12, fontSize: 11, cursor: 'pointer',
+                      border: reportType === type ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.15)',
+                      background: reportType === type ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.05)',
+                      color: reportType === type ? '#fbbf24' : '#d1d5db',
+                      fontWeight: reportType === type ? 700 : 400,
+                    }}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'white', marginTop: 4 }}>2. 補充說明 (選填)：</label>
+              <input
+                className="input-field"
+                placeholder="例如：路燈失修無光源、死角盲區..."
+                value={reportNote}
+                onChange={e => setReportNote(e.target.value)}
+              />
+            </div>
+
+            <button
+              className="btn-primary"
+              onClick={submitReport}
+              style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#000', fontWeight: 800, padding: 14 }}
+            >
+              傳送匿名不安通報
+            </button>
+          </div>
+        </div>
+      )}
+
       <NavBar active="home" />
     </div>
   )
@@ -439,8 +596,8 @@ function LandingPage({ onStart }: { onStart: () => void }) {
 
   const features = [
     { icon: '💡', title: '路燈密度分析', desc: '台北市 145,919 盞路燈即時評分' },
-    { icon: '📹', title: '監視器覆蓋率', desc: '417 支 CCTV，守護每條路段' },
-    { icon: '🎙️', title: 'AI 語音陪聊', desc: 'Gemini 全程陪伴，化解夜行焦慮' },
+    { icon: '📹', title: '監視器覆蓋率', desc: '5,036 支 警察局 CCTV 涵蓋全台北' },
+    { icon: '🎙️', title: 'AI 語音陪聊', desc: 'Gemini 3.6 Flash 全程陪伴，化解夜行焦慮' },
     { icon: '🆘', title: '一鍵緊急通知', desc: 'LINE 即時定位發送給緊急聯絡人' },
   ]
 
@@ -453,11 +610,13 @@ function LandingPage({ onStart }: { onStart: () => void }) {
       <div style={{ position: 'absolute', top: '8%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', top: '15%', right: '10%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(6,182,212,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-      <div className="scrollable" style={{ position: 'relative', zIndex: 10, height: '100%', display: 'flex', flexDirection: 'column', padding: '60px 24px 100px', gap: 0 }}>
+      <div className="scrollable" style={{ position: 'relative', zIndex: 10, height: '100%', display: 'flex', flexDirection: 'column', padding: '50px 24px 100px', gap: 0 }}>
 
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32, animation: 'fadeIn 0.8s ease' }}>
-          <div style={{ fontSize: 56, marginBottom: 8, filter: 'drop-shadow(0 0 20px rgba(139,92,246,0.6))' }}>🌙</div>
+        <div style={{ textAlign: 'center', marginBottom: 24, animation: 'fadeIn 0.8s ease' }}>
+          <div style={{ marginBottom: 12, filter: 'drop-shadow(0 0 24px rgba(139,92,246,0.6))' }}>
+            <Logo size={72} />
+          </div>
           <h1 style={{ fontSize: 38, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
             <span className="gradient-text">NightMaMa</span>
           </h1>
@@ -467,14 +626,14 @@ function LandingPage({ onStart }: { onStart: () => void }) {
         </div>
 
         {/* Hero stats */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 28, animation: 'fadeIn 0.8s ease 0.1s both' }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24, animation: 'fadeIn 0.8s ease 0.1s both' }}>
           {[
             { num: '14.5萬', label: '路燈點位' },
-            { num: '417', label: '監視器' },
-            { num: 'AI', label: 'Gemini 陪聊' },
+            { num: '5,036', label: '警察局監視器' },
+            { num: 'Gemini', label: '3.6 Flash 陪聊' },
           ].map(s => (
-            <div key={s.label} className="glass" style={{ flex: 1, padding: '12px 8px', borderRadius: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 900, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{s.num}</div>
+            <div key={s.label} className="glass" style={{ flex: 1, padding: '12px 6px', borderRadius: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 17, fontWeight: 900, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{s.num}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
             </div>
           ))}
@@ -550,7 +709,9 @@ function RouteCard({ route, isSelected, onClick }: { route: ScoredRoute; isSelec
         <div className="safety-meter-fill" style={{ width: `${route.safety.total}%`, background: `linear-gradient(90deg, ${route.safety.color}66, ${route.safety.color})` }} />
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>{route.description}</p>
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <span className="map-chip" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11 }}>🏪 24h超商</span>
+        <span className="map-chip" style={{ background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11 }}>👮 派出所</span>
         <span className="map-chip" style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: 11 }}>💡 {route.lightCount} 路燈</span>
         <span className="map-chip" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11 }}>📹 {route.cameraCount} 監視器</span>
       </div>

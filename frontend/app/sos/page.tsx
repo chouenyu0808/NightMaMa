@@ -61,39 +61,114 @@ function SOSContent() {
 
   const sendSOSNotification = async () => {
     const contacts = JSON.parse(localStorage.getItem(EMERGENCY_CONTACTS_KEY) || '[]') as Array<{ name: string; lineToken: string }>
-    const token = process.env.NEXT_PUBLIC_LINE_NOTIFY_TOKEN || contacts[0]?.lineToken
+    const contactName = contacts[0]?.name || '使用者'
+    const targetId = contacts[0]?.lineToken || ''
 
     const mapsUrl = currentLocation
       ? `https://maps.google.com/?q=${currentLocation.lat},${currentLocation.lng}`
-      : 'https://maps.google.com/?q=台北市'
+      : 'https://maps.google.com/?q=25.0478,121.5170'
 
-    const message = `\n🆘 NightMaMa 緊急通知\n\n你的聯絡人正在夜間步行，已觸發 SOS 警報！\n\n📍 目前位置：${mapsUrl}\n⏰ 時間：${new Date().toLocaleTimeString('zh-TW')}\n\n請立即確認是否平安。`
+    const message = `🚨 【NightMaMa 緊急求救警報】\n您的聯絡人 (${contactName}) 在夜間步行時觸發了 SOS 緊急求救！\n\n📍 即時 GPS 定位：${mapsUrl}\n⏰ 觸發時間：${new Date().toLocaleString('zh-TW')}\n\n請立即嘗試聯繫確認對方是否平安！`
 
-    if (token) {
-      try {
-        await fetch('/api/line-notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, message }),
-        })
-      } catch {
-        // silent fail — still show sent state
+    try {
+      await fetch('/api/line-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId, message }),
+      })
+    } catch {
+      // silent fail — still show sent state
+    }
+    setSending(false)
+    setSosSent(true)
+  }
+
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [audioUnlocked, setAudioUnlocked] = useState(false)
+
+  const triggerAudioPlay = () => {
+    setAudioUnlocked(true)
+    if (audioRef.current) {
+      audioRef.current.play().catch(console.warn)
+    } else {
+      audioRef.current = new Audio('/line_ringtone.wav')
+      audioRef.current.loop = true
+      audioRef.current.play().catch(console.warn)
+    }
+  }
+
+  // Play authentic LINE Ringtone WAV when fake call ringing
+  useEffect(() => {
+    if (fakeCallActive && fakeCallTimer > 0) {
+      if (!audioRef.current) {
+        audioRef.current = new Audio('/line_ringtone.wav')
+        audioRef.current.loop = true
+      }
+      audioRef.current.play().then(() => setAudioUnlocked(true)).catch(err => {
+        console.warn('Browser autoplay notice:', err)
+        setAudioUnlocked(false)
+      })
+    } else {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
       }
     }
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+    }
+  }, [fakeCallActive, fakeCallTimer])
 
-    setSosSent(true)
-    setSending(false)
-  }
+  // Speak voice when fake call answered
+  useEffect(() => {
+    if (fakeCallActive && fakeCallTimer === 0) {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel()
+        const utt = new SpeechSynthesisUtterance('喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！')
+        utt.lang = 'zh-TW'
+        utt.rate = 1.0
+        utt.pitch = 1.05
+        window.speechSynthesis.speak(utt)
+      }
+    }
+  }, [fakeCallActive, fakeCallTimer])
 
   if (fakeCallActive && fakeCallTimer > 0) {
     return (
-      <div style={{ height: '100dvh', background: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-        <div style={{ fontSize: 60 }}>📞</div>
-        <div style={{ color: 'var(--text-secondary)', fontSize: 16 }}>{fakeCallTimer} 秒後接通…</div>
-        <div style={{ fontSize: 22, fontWeight: 700 }}>媽媽</div>
-        <div style={{ display: 'flex', gap: 40, marginTop: 20 }}>
-          <button onClick={() => setFakeCallActive(false)} style={{ width: 70, height: 70, borderRadius: '50%', background: '#ef4444', border: 'none', fontSize: 28, cursor: 'pointer' }}>📵</button>
-          <button onClick={() => setFakeCallTimer(0)} style={{ width: 70, height: 70, borderRadius: '50%', background: '#10b981', border: 'none', fontSize: 28, cursor: 'pointer' }}>📞</button>
+      <div
+        onClick={triggerAudioPlay}
+        style={{ height: '100dvh', background: '#111827', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white', cursor: 'pointer' }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mom_avatar.jpg"
+            alt="媽咪"
+            style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover', border: '4px solid rgba(255,255,255,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+          />
+          <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
+          <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            💬 LINE 語音來電 ({fakeCallTimer}s)
+          </div>
+          {!audioUnlocked && (
+            <div style={{ fontSize: 11, background: 'rgba(6,199,85,0.2)', color: '#06C755', padding: '4px 12px', borderRadius: 999, border: '1px solid rgba(6,199,85,0.3)', marginTop: 4 }}>
+              🔔 點擊螢幕任意處即刻響起 LINE 鈴聲
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setFakeCallActive(false)} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}>📵</button>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>拒絕</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setFakeCallTimer(0)} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)' }}>📞</button>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>接聽</span>
+          </div>
         </div>
       </div>
     )
@@ -101,16 +176,28 @@ function SOSContent() {
 
   if (fakeCallActive && fakeCallTimer === 0) {
     return (
-      <div style={{ height: '100dvh', background: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
-        <div style={{ fontSize: 60 }}>📞</div>
-        <div style={{ fontSize: 22, fontWeight: 700 }}>媽媽</div>
-        <div style={{ color: '#10b981' }}>通話中 00:00</div>
-        <div style={{ color: 'var(--text-secondary)', textAlign: 'center', fontSize: 14, marginTop: 8 }}>
-          「喂？你到哪了？我在等你，快點回來！附近有人嗎？」
+      <div style={{ height: '100dvh', background: '#111827', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mom_avatar.jpg"
+            alt="媽咪"
+            style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '4px solid #06C755', boxShadow: '0 0 20px rgba(6,199,85,0.4)' }}
+          />
+          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>媽咪</div>
+          <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600 }}>LINE 通話中 00:08</div>
+          <div className="glass-light" style={{ color: '#F3F4F6', textAlign: 'center', fontSize: 15, marginTop: 14, padding: '14px 20px', borderRadius: 18, lineHeight: 1.6, maxWidth: 300, background: 'rgba(255,255,255,0.08)' }}>
+            「喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！」
+          </div>
         </div>
+
         <button
-          onClick={() => { setFakeCallActive(false); router.back() }}
-          style={{ width: 70, height: 70, borderRadius: '50%', background: '#ef4444', border: 'none', fontSize: 28, cursor: 'pointer', marginTop: 24 }}
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
+            setFakeCallActive(false)
+            router.back()
+          }}
+          style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}
         >
           📵
         </button>
@@ -128,7 +215,14 @@ function SOSContent() {
         </div>
       </div>
 
-      <div className="scrollable" style={{ flex: 1, padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
+      <div className="scrollable" style={{
+        flex: 1,
+        padding: '24px 20px calc(88px + env(safe-area-inset-bottom))',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 24,
+      }}>
         {/* SOS Button */}
         {!sosSent ? (
           <>

@@ -10,18 +10,22 @@ export interface LatLng {
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
+let loaderConfigured = false
 let mapsReady = false
 
 export async function loadMaps(): Promise<typeof google.maps> {
-  if (mapsReady) return google.maps
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
-  if (!apiKey) {
-    throw new Error('NEXT_PUBLIC_GOOGLE_MAPS_KEY 未設定，請在 frontend/.env.local 填入')
+  if (mapsReady && typeof google !== 'undefined' && google.maps) return google.maps
+  if (!loaderConfigured) {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
+    if (!apiKey) {
+      throw new Error('NEXT_PUBLIC_GOOGLE_MAPS_KEY 未設定，請在 frontend/.env.local 填入')
+    }
+    setOptions({
+      key: apiKey,
+      v: 'weekly',
+    })
+    loaderConfigured = true
   }
-  setOptions({
-    key: apiKey,
-    v: 'weekly',
-  })
   await importLibrary('maps')
   await importLibrary('places')
   await importLibrary('geometry')
@@ -63,6 +67,14 @@ export function decodePolyline(encoded: string): LatLng[] {
   return points
 }
 
+export interface RouteStep {
+  instruction: string
+  maneuver: string
+  distanceM: number
+  startLocation: LatLng
+  endLocation: LatLng
+}
+
 export interface RouteResult {
   type: string // "fastest" | "safest" | "balanced"
   polyline: string
@@ -73,6 +85,7 @@ export interface RouteResult {
   lightCount: number
   cameraCount: number
   points: LatLng[]
+  steps: RouteStep[]
 }
 
 /** 呼叫後端 /routes 取得依安全評分排序的候選路線 */
@@ -112,6 +125,9 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
     lightCount: r.light_count,
     cameraCount: r.camera_count,
     points: decodePolyline(r.polyline),
+    // Backend doesn't return turn-by-turn steps yet; navigate/page.tsx falls
+    // back to generateStepsFromPoints() when this is empty.
+    steps: [],
   }))
 }
 
