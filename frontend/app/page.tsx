@@ -28,6 +28,47 @@ interface ScoredRoute extends RouteResult {
 
 type AppState = 'landing' | 'map'
 
+// ─── Line Icons（取代 emoji，風格參考 Google Maps）───────────────────────────────
+function IconShield({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z" /></svg>
+}
+function IconBolt({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 11 14 11 22 21 10 13 10 13 2" /></svg>
+}
+function IconBalance({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="3" x2="12" y2="21" /><path d="M5 7h14" /><path d="M5 7 2 13a3 3 0 0 0 6 0z" /><path d="M19 7l-3 6a3 3 0 0 0 6 0z" /></svg>
+}
+function IconBulb({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z" /></svg>
+}
+function IconCamera({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+}
+function IconStore({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1-5h16l1 5" /><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" /><path d="M9 20v-6h6v6" /><path d="M3 9h18" /></svg>
+}
+function IconBadge({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5" /><path d="M8.5 13 7 22l5-3 5 3-1.5-9" /></svg>
+}
+function IconPin({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+}
+function IconFlag({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22V4" /><path d="M4 4h14l-2 4 2 4H4" /></svg>
+}
+function IconSearch({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+}
+function IconWalk({ size = 16 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13" cy="4" r="2" /><path d="M9 22l1-6-2-2 1-5 3-2 3 2 3 4-2 1-2-3-1 3 2 2-1 6" /><path d="M8 22l2-6" /></svg>
+}
+
+function typeIconFor(label: '最安全' | '最快' | '平衡', size?: number) {
+  if (label === '最安全') return <IconShield size={size} />
+  if (label === '最快') return <IconBolt size={size} />
+  return <IconBalance size={size} />
+}
+
 export default function HomePage() {
   const router = useRouter()
   const [appState, setAppState] = useState<AppState>('map')
@@ -307,12 +348,35 @@ export default function HomePage() {
     drawRoutes(routes, idx, isSheetCollapsed, isSearchCollapsed)
   }
 
-  const toggleCollapse = () => {
-    const nextState = !isSheetCollapsed
-    setIsSheetCollapsed(nextState)
+  const setSheetCollapsed = (next: boolean) => {
+    setIsSheetCollapsed(next)
     if (routes.length > 0) {
-      drawRoutes(routes, selectedIdx, nextState, isSearchCollapsed)
+      drawRoutes(routes, selectedIdx, next, isSearchCollapsed)
     }
+  }
+
+  const toggleCollapse = () => setSheetCollapsed(!isSheetCollapsed)
+
+  // 底部路線卡片可上下拖曳展開/收合
+  const draggingRef = useRef(false)
+  const dragMovedRef = useRef(false)
+  const onSheetDragStart = (e: React.PointerEvent) => {
+    draggingRef.current = true
+    dragMovedRef.current = false
+    const startY = e.clientY
+    const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientY - startY) > 10) dragMovedRef.current = true
+    }
+    const onUp = (ev: PointerEvent) => {
+      draggingRef.current = false
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      const delta = ev.clientY - startY
+      if (delta > 40 && !isSheetCollapsed) setSheetCollapsed(true)
+      else if (delta < -40 && isSheetCollapsed) setSheetCollapsed(false)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   const handleStartNavigation = () => {
@@ -347,13 +411,11 @@ export default function HomePage() {
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
         padding: '52px 16px 16px',
-        background: 'linear-gradient(to bottom, rgba(10,14,26,0.97) 80%, transparent)',
+        background: 'rgba(10,14,26,0.97)',
         zIndex: 20,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <button onClick={() => setAppState('landing')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>←</button>
-          <Logo size={28} />
-          <span style={{ fontSize: 18, fontWeight: 900 }} className="gradient-text">NightMaMa</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <button onClick={() => setAppState('landing')} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 16, borderRadius: 999, width: 32, height: 32, cursor: 'pointer' }}>←</button>
           <button
             onClick={() => setShowReportModal(true)}
             style={{
@@ -388,8 +450,11 @@ export default function HomePage() {
               backdropFilter: 'blur(12px)',
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, paddingRight: 8 }}>
-              📍 {origin.split('區')[1] || origin.slice(0, 10)} → 🏠 {destination.split('區')[1] || destination.slice(0, 10)}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, paddingRight: 8 }}>
+              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#60a5fa', flexShrink: 0 }} />
+              {origin.split('區')[1] || origin.slice(0, 10)} →
+              <IconFlag size={13} />
+              {destination.split('區')[1] || destination.slice(0, 10)}
             </div>
             <button
               onClick={() => {
@@ -413,7 +478,7 @@ export default function HomePage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>📍</span>
+              <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 8, height: 8, borderRadius: '50%', background: '#60a5fa' }} />
               <input
                 ref={originInputRef}
                 className="input-field"
@@ -425,21 +490,31 @@ export default function HomePage() {
               />
             </div>
             <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>🏠</span>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#ef4444', display: 'flex' }}><IconPin size={14} /></span>
               <input
                 ref={destInputRef}
                 className="input-field"
-                style={{ paddingLeft: 42 }}
+                style={{ paddingLeft: 42, paddingRight: 44 }}
                 placeholder="目的地"
                 value={destination}
                 onChange={e => { setDestination(e.target.value); setDestLatLng(null) }}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
               />
+              <button
+                onClick={handleSearch}
+                disabled={isLoading}
+                style={{
+                  position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', border: 'none', color: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', opacity: isLoading ? 0.6 : 1,
+                }}
+              >
+                <IconSearch size={15} />
+              </button>
             </div>
             {error && <p style={{ color: '#ef4444', fontSize: 13, paddingLeft: 4 }}>{error}</p>}
-            <button className="btn-primary" onClick={handleSearch} disabled={isLoading}>
-              {isLoading ? '⏳ 計算安全路線中…' : '🔍 找最安全路線'}
-            </button>
           </div>
         )}
       </div>
@@ -447,19 +522,23 @@ export default function HomePage() {
       {/* Route bottom sheet — 只比較「安心路線」vs「最快路線」兩條 */}
       {showSheet && routes.length > 0 && (
         <div
-          className="bottom-sheet glass"
+          className="bottom-sheet"
           style={{
-            bottom: '64px',
+            bottom: '16px',
+            background: '#111827',
+            border: '1px solid rgba(255,255,255,0.1)',
             paddingBottom: isSheetCollapsed ? '12px' : '20px',
-            maxHeight: isSheetCollapsed ? '70px' : '52dvh',
+            maxHeight: isSheetCollapsed ? '70px' : '40dvh',
             zIndex: 60,
             overflow: 'hidden',
-            transition: 'all 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
+            touchAction: 'none',
+            transition: draggingRef.current ? 'none' : 'all 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
           }}
         >
           <div
-            onClick={toggleCollapse}
-            style={{ cursor: 'pointer', padding: '4px 0 8px' }}
+            onClick={() => { if (dragMovedRef.current) return; toggleCollapse() }}
+            onPointerDown={onSheetDragStart}
+            style={{ cursor: 'grab', padding: '4px 0 8px' }}
           >
             <div className="bottom-sheet-handle" />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -484,7 +563,7 @@ export default function HomePage() {
 
           {!isSheetCollapsed && (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '34dvh', overflowY: 'auto' }} className="scrollable">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '22dvh', overflowY: 'auto' }} className="scrollable">
                 {[...displayRoutes]
                   .sort((a, b) => (a.idx === selectedIdx ? -1 : 0) - (b.idx === selectedIdx ? -1 : 0))
                   .map(({ route, idx }) =>
@@ -495,8 +574,8 @@ export default function HomePage() {
                     )
                   )}
               </div>
-              <button className="btn-primary" style={{ marginTop: 12 }} onClick={handleStartNavigation}>
-                🚶 開始導航 · {routes[selectedIdx]?.safety.label}路線
+              <button className="btn-primary" style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} onClick={handleStartNavigation}>
+                <IconWalk size={16} /> 開始導航 · {routes[selectedIdx]?.safety.label}路線
               </button>
             </>
           )}
@@ -561,7 +640,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <NavBar active="home" />
+      {!(showSheet && routes.length > 0) && <NavBar active="home" />}
     </div>
   )
 }
@@ -701,25 +780,23 @@ function LandingPage({ onStart }: { onStart: () => void }) {
 }
 
 // ─── Route Card (展開版，選中的路線) ─────────────────────────────────────────────
-function StatBox({ icon, value, label, color }: { icon: string; value: string | number; label: string; color?: string }) {
+function StatBox({ icon, value, label, color }: { icon: React.ReactNode; value: string | number; label: string; color?: string }) {
   return (
     <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '8px 4px' }}>
-      <div style={{ fontSize: 15 }}>{icon}</div>
-      <div style={{ fontWeight: 800, fontSize: 14, color: color || 'white', marginTop: 2 }}>{value}</div>
+      <div style={{ display: 'flex', justifyContent: 'center', color: color || 'var(--text-secondary)' }}>{icon}</div>
+      <div style={{ fontWeight: 800, fontSize: 14, color: color || 'white', marginTop: 4 }}>{value}</div>
       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{label}</div>
     </div>
   )
 }
 
 function RouteCard({ route, onClick }: { route: ScoredRoute; onClick: () => void }) {
-  const typeIcon = route.typeLabel === '最安全' ? '🛡️' : route.typeLabel === '最快' ? '⚡' : '⚖️'
-
   return (
     <div className="route-card glass-light selected" onClick={onClick}
       style={{ border: `2px solid ${route.safety.color}66`, background: `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.08)` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 18 }}>{typeIcon}</span>
+          {typeIconFor(route.typeLabel, 18)}
           <span style={{ fontWeight: 800, fontSize: 15 }}>{route.typeLabel}路線</span>
         </div>
         <div style={{ fontSize: 13, fontWeight: 700 }}>
@@ -728,13 +805,13 @@ function RouteCard({ route, onClick }: { route: ScoredRoute; onClick: () => void
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
-        <StatBox icon="💡" value={route.lightCount} label="路燈" />
-        <StatBox icon="📹" value={route.cameraCount} label="監視器" />
-        <StatBox icon="🛡️" value={`${(route.safety.total / 10).toFixed(1)}/10`} label="安全評分" color={route.safety.color} />
+        <StatBox icon={<IconBulb size={15} />} value={route.lightCount} label="路燈" />
+        <StatBox icon={<IconCamera size={15} />} value={route.cameraCount} label="監視器" />
+        <StatBox icon={<IconShield size={15} />} value={`${(route.safety.total / 10).toFixed(1)}/10`} label="安全評分" color={route.safety.color} />
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <span className="map-chip" style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11 }}>🏪 24h超商</span>
-        <span className="map-chip" style={{ background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11 }}>👮 {route.policeCount} 派出所</span>
+        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11 }}><IconStore size={12} /> 24h超商</span>
+        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11 }}><IconBadge size={12} /> {route.policeCount} 派出所</span>
       </div>
     </div>
   )
@@ -742,8 +819,6 @@ function RouteCard({ route, onClick }: { route: ScoredRoute; onClick: () => void
 
 // ─── Route Row (收合版，未選中的路線) ─────────────────────────────────────────────
 function RouteRow({ route, onClick }: { route: ScoredRoute; onClick: () => void }) {
-  const typeIcon = route.typeLabel === '最安全' ? '🛡️' : route.typeLabel === '最快' ? '⚡' : '⚖️'
-
   return (
     <div
       onClick={onClick}
@@ -754,9 +829,9 @@ function RouteRow({ route, onClick }: { route: ScoredRoute; onClick: () => void 
         cursor: 'pointer',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 15 }}>{typeIcon}</span>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>{route.typeLabel}路線</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
+        {typeIconFor(route.typeLabel, 15)}
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>{route.typeLabel}路線</span>
       </div>
       <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
         {formatDuration(route.durationSec)} <span style={{ color: 'var(--text-muted)' }}>({formatDistance(route.distanceM)})</span>

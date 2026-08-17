@@ -46,10 +46,7 @@ def score_segment(segment: Segment, weights: Weights) -> float:
 
 # ponytail: score_segment's raw weighted density has no fixed ceiling, but the
 # API contract (see backend-architecture.md) and frontend both expect a 0-100
-# UX score. 5.0 is calibrated from a live Taipei route sample (worst-segment
-# density landed at 1.4-3.5 for real fastest/safest/balanced candidates) —
-# retune if scores cluster too high/low once more real routes are sampled.
-MAX_RAW_SCORE = 5.0
+MAX_RAW_SCORE = 20.0
 
 
 def score_route(segments: list[Segment], time_extra_min: float, weights: Weights | None = None) -> float:
