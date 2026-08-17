@@ -389,7 +389,6 @@ export default function SettingsPage() {
             <div>📹 CCTV 資料：台北市 5,036 支警察局監視器</div>
             <div>🤖 AI 陪聊：Google Gemini 2.5 Flash</div>
             <div>🗺️ 地圖路線：Google Maps Directions API</div>
-            <div>🛡️ 安全評分：照明 40% + CCTV 25% + 安全庇護點 35%，取最差路段</div>
           </div>
         </div>
       </div>

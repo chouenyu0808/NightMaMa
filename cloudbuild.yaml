@@ -54,6 +54,7 @@ steps:
         set -e
         docker build \
           --build-arg NEXT_PUBLIC_GOOGLE_MAPS_KEY="$$MAPS_BROWSER_KEY" \
+          --build-arg NEXT_PUBLIC_BACKEND_URL="$_API_URL" \
           -t gcr.io/$PROJECT_ID/$_WEB_SERVICE:$BUILD_ID \
           -t gcr.io/$PROJECT_ID/$_WEB_SERVICE:latest \
           frontend

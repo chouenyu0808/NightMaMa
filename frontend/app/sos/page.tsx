@@ -9,7 +9,7 @@ import {
   IconShield, IconAlertTriangle, IconAmbulance, IconUser,
 } from '@/components/Icons'
 
-import { primaryRecipient, sendLineNotification } from '@/lib/emergencyContacts'
+import { primaryContact, refreshContactsFromBackend, sendLineNotification } from '@/lib/emergencyContacts'
 
 function SOSContent() {
   const searchParams = useSearchParams()
@@ -34,6 +34,12 @@ function SOSContent() {
     const timer = setInterval(() => setCallDuration(d => d + 1), 1000)
     return () => clearInterval(timer)
   }, [fakeCallActive, fakeCallState])
+
+  // 綁定是在聯絡人的裝置上完成的，結果只存在 Firestore。
+  // 這裡先拉一次，否則本機 localStorage 是空的，按 SOS 會找不到人。
+  useEffect(() => {
+    refreshContactsFromBackend().catch(() => {})
+  }, [])
 
   // Get location
   //
@@ -71,7 +77,7 @@ function SOSContent() {
   }
 
   const sendSOSNotification = async () => {
-    const contact = primaryRecipient()
+    const contact = primaryContact()
     const contactName = contact?.name || '使用者'
 
     const hasRealLocation = currentLocation !== null
@@ -92,6 +98,11 @@ function SOSContent() {
     // 據實回報：發送失敗時必須讓使用者知道，才能改用電話等其他方式求救
     setNotifyResult(outcome)
     setLocationUnavailable(!hasRealLocation)
+
+    // 聯絡人尚未完成 LINE 綁定時，改開 LINE 讓使用者手動選收件人送出
+    if (!outcome.sent && outcome.shareUrl) {
+      window.location.assign(outcome.shareUrl)
+    }
   }
 
   const audioRef = useRef<HTMLAudioElement | null>(null)

@@ -111,6 +111,21 @@ export async function syncContactsToBackend(contacts: Contact[]): Promise<void> 
   }
 }
 
+/**
+ * 從 Firestore 拉回聯絡人並寫入 localStorage。
+ *
+ * 這個很重要：LINE Login 綁定發生在「聯絡人的裝置」上，結果只存在 Firestore。
+ * 使用者自己的裝置若不主動拉一次，localStorage 永遠是空的 —— 綁定明明成功，
+ * 按 SOS 卻找不到聯絡人。因此凡是會用到聯絡人的頁面都應該在載入時呼叫一次。
+ *
+ * 靜默失敗：後端不可用時保留本機既有資料，不影響求救流程。
+ */
+export async function refreshContactsFromBackend(): Promise<Contact[] | null> {
+  const remote = await loadContactsFromBackend()
+  if (remote) saveContacts(remote)
+  return remote
+}
+
 /** 從 Firestore 拉回聯絡人；沒有資料或後端不可用時回傳 null。 */
 export async function loadContactsFromBackend(): Promise<Contact[] | null> {
   const userId = getUserId()

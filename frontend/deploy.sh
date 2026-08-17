@@ -70,6 +70,7 @@ gcloud auth configure-docker --quiet
 echo "📋 Step 4: 建置 Docker Image..."
 docker build \
   --build-arg NEXT_PUBLIC_GOOGLE_MAPS_KEY="$MAPS_KEY" \
+  --build-arg NEXT_PUBLIC_BACKEND_URL="$BACKEND" \
   -t $IMAGE .
 
 # 6. 推送 image

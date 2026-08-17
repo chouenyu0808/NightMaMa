@@ -9,6 +9,12 @@ COPY . .
 ARG NEXT_PUBLIC_GOOGLE_MAPS_KEY
 ENV NEXT_PUBLIC_GOOGLE_MAPS_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_KEY
 
+# 後端網址。瀏覽器要直接呼叫 /users/* 那組 Firestore 端點（聯絡人、地址、
+# 對話記錄、路線評分），所以必須在 build 時編進 bundle。
+# 這不是秘密 —— 後端本來就是公開服務，靠 CORS 白名單限制來源。
+ARG NEXT_PUBLIC_BACKEND_URL
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+
 RUN npm run build
 
 FROM node:20-alpine AS runner

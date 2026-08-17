@@ -8,6 +8,7 @@ import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMark
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import SosOptionsSheet from '@/app/components/SosOptionsSheet'
 import ArrivalRatingModal from '@/app/components/ArrivalRatingModal'
+import { refreshContactsFromBackend } from '@/lib/emergencyContacts'
 import {
   IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle,
   IconCornerUpRight, IconCornerUpLeft, IconArrowUp, IconFlag, IconSparkles, IconX,
@@ -273,6 +274,11 @@ function NavigateContent() {
     utt.rate = 1.0
     window.speechSynthesis.speak(utt)
   }, [voiceMuted])
+
+  // 導航途中的 SOS 與抵達回報都要用到聯絡人，先從 Firestore 同步一次
+  useEffect(() => {
+    refreshContactsFromBackend().catch(() => {})
+  }, [])
 
   // Timer countdown（順便更新抵達時刻）
   useEffect(() => {
