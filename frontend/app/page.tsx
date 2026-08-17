@@ -459,25 +459,77 @@ export default function HomePage() {
 
       computedRoutes.sort((a, b) => b.score - a.score)
 
-      const scored: ScoredRoute[] = computedRoutes.map((route, i) => {
-        let typeLabel: ScoredRoute['typeLabel'] = '平衡'
-        if (route.type === 'transit' || route.isTransit) {
-          typeLabel = '大眾運輸'
-        } else if (i === 0) {
-          typeLabel = '最安全'
-        } else if (route.extraMin === 0) {
-          typeLabel = '最快'
-        } else {
-          typeLabel = '平衡'
-        }
+      // Separate Transit and Walking routes
+      const transitList = computedRoutes.filter(r => r.isTransit || r.type === 'transit')
+      const walkingList = computedRoutes.filter(r => !r.isTransit && r.type !== 'transit')
 
-        const description = route.reason || `${route.safety.emoji} 安全評分 ${route.safety.total} 分，沿途 ${route.lightCount} 盞路燈`
-        return {
-          ...route,
-          typeLabel,
-          description,
+      const scored: ScoredRoute[] = []
+
+      // 1. 大眾運輸 (Transit) — if available
+      if (transitList.length > 0) {
+        const tr = transitList[0]
+        scored.push({
+          ...tr,
+          typeLabel: '大眾運輸',
+          description: tr.reason || `🚌 大眾運輸轉乘路線`,
+        })
+      }
+
+      // 2. Walking Routes processing (Safest, Fastest, Balanced with deduplication)
+      if (walkingList.length > 0) {
+        const sortedBySafety = [...walkingList].sort((a, b) => b.score - a.score)
+        const safest = sortedBySafety[0]
+
+        const sortedByDuration = [...walkingList].sort((a, b) => a.durationSec - b.durationSec)
+        const fastest = sortedByDuration[0]
+
+        // Check if Safest is ALSO Fastest
+        const isSafestAlsoFastest =
+          Math.abs(safest.durationSec - fastest.durationSec) <= 60 ||
+          safest.polyline === fastest.polyline
+
+        if (isSafestAlsoFastest) {
+          // Merged into ONE "最安全" route (since it is also the fastest!)
+          scored.push({
+            ...safest,
+            typeLabel: '最安全',
+            description: `🛡️ 最安全兼最快路線 · 評分 ${(safest.score / 10).toFixed(1)} 分`,
+          })
+
+          // Add a "平衡" route if another walking option exists
+          const balanced = sortedBySafety.find(r => r.polyline !== safest.polyline)
+          if (balanced) {
+            scored.push({
+              ...balanced,
+              typeLabel: '平衡',
+              description: `⚖️ 平衡安心路線 · 評分 ${(balanced.score / 10).toFixed(1)} 分`,
+            })
+          }
+        } else {
+          // Safest and Fastest are DIFFERENT routes -> Show both!
+          scored.push({
+            ...safest,
+            typeLabel: '最安全',
+            description: `🛡️ 高度照明治安防護路線 · 評分 ${(safest.score / 10).toFixed(1)} 分`,
+          })
+
+          scored.push({
+            ...fastest,
+            typeLabel: '最快',
+            description: `⚡ 最快捷徑路線 · 費時 ${formatDuration(fastest.durationSec)}`,
+          })
+
+          // Add a "平衡" route if 3rd option exists
+          const balanced = sortedBySafety.find(r => r.polyline !== safest.polyline && r.polyline !== fastest.polyline)
+          if (balanced) {
+            scored.push({
+              ...balanced,
+              typeLabel: '平衡',
+              description: `⚖️ 平衡綜合路線 · 評分 ${(balanced.score / 10).toFixed(1)} 分`,
+            })
+          }
         }
-      })
+      }
 
       setRoutes(scored)
       setSelectedIdx(0)
