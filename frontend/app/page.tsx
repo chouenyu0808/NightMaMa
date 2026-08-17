@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, formatDuration, formatDistance, type RouteResult } from '@/lib/maps'
 import { calcSafetyScore, sampleRoutePoints, type Light, type CCTV, type SafetyScore } from '@/lib/safetyScore'
 import { generateRouteDescription } from '@/lib/gemini'
+import Logo from '@/components/Logo'
 
 interface ScoredRoute extends RouteResult {
   safety: SafetyScore
@@ -295,7 +296,7 @@ export default function HomePage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <button onClick={() => setAppState('landing')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>←</button>
-          <span style={{ fontSize: 20 }}>🌙</span>
+          <Logo size={28} />
           <span style={{ fontSize: 18, fontWeight: 900 }} className="gradient-text">NightMaMa</span>
           {dataLoaded && (
             <span style={{ marginLeft: 'auto', fontSize: 10, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(16,185,129,0.2)' }}>
@@ -495,7 +496,9 @@ function LandingPage({ onStart, dataLoaded }: { onStart: () => void; dataLoaded:
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 24, animation: 'fadeIn 0.8s ease' }}>
-          <div style={{ fontSize: 56, marginBottom: 8, filter: 'drop-shadow(0 0 20px rgba(139,92,246,0.6))' }}>🌙</div>
+          <div style={{ marginBottom: 12, filter: 'drop-shadow(0 0 24px rgba(139,92,246,0.6))' }}>
+            <Logo size={72} />
+          </div>
           <h1 style={{ fontSize: 38, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
             <span className="gradient-text">NightMaMa</span>
           </h1>
