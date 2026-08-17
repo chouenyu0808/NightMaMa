@@ -247,9 +247,9 @@ function NavigateContent() {
 
       mapInstance.current = new google.maps.Map(mapRef.current, {
         center: points[0],
-        zoom: 15.8,
+        zoom: 14.8,
         heading: 0,
-        tilt: 30,
+        tilt: 25,
         disableDefaultUI: true,
         gestureHandling: 'greedy',
         styles: googleNavMapStyle,
@@ -389,14 +389,14 @@ function NavigateContent() {
         )
       }
 
-      // Initial camera view — fit bounds with wider maxZoom (15.8) for maximum surrounding map visibility
+      // Initial camera view — fit bounds with wide maxZoom (14.8) for large surrounding map coverage
       const bounds = new google.maps.LatLngBounds()
       points.forEach(p => bounds.extend(p))
       mapInstance.current.fitBounds(bounds, { top: 180, bottom: 180, left: 60, right: 60 })
 
       google.maps.event.addListenerOnce(mapInstance.current, 'idle', () => {
-        if (mapInstance.current && (mapInstance.current.getZoom() || 0) > 16.0) {
-          mapInstance.current.setZoom(15.8)
+        if (mapInstance.current && (mapInstance.current.getZoom() || 0) > 15.0) {
+          mapInstance.current.setZoom(14.8)
         }
       })
     })
@@ -411,7 +411,7 @@ function NavigateContent() {
     setIsCentering(true)
     if (userPos && mapInstance.current) {
       mapInstance.current.panTo(userPos)
-      mapInstance.current.setZoom(15.8)
+      mapInstance.current.setZoom(14.8)
     }
   }
 
