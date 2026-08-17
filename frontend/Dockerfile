@@ -4,14 +4,10 @@ COPY package*.json ./
 RUN npm i --legacy-peer-deps
 COPY . .
 
-# Build args for API keys (injected at build time for Next.js NEXT_PUBLIC_ vars)
+# 只有 Google Maps 瀏覽器金鑰需要在 build 時注入（NEXT_PUBLIC_ 會編進 client bundle）。
+# 伺服器端金鑰（GEMINI_API_KEY / LINE_CHANNEL_ACCESS_TOKEN）請用 runtime 環境變數注入。
 ARG NEXT_PUBLIC_GOOGLE_MAPS_KEY
-ARG NEXT_PUBLIC_GEMINI_KEY
-ARG NEXT_PUBLIC_LINE_NOTIFY_TOKEN
-
 ENV NEXT_PUBLIC_GOOGLE_MAPS_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_KEY
-ENV NEXT_PUBLIC_GEMINI_KEY=$NEXT_PUBLIC_GEMINI_KEY
-ENV NEXT_PUBLIC_LINE_NOTIFY_TOKEN=$NEXT_PUBLIC_LINE_NOTIFY_TOKEN
 
 RUN npm run build
 

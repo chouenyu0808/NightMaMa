@@ -2,38 +2,36 @@
 
 import { useState, useEffect } from 'react'
 import { NavBar } from '@/app/components/NavBar'
-import { IconSettings, IconSend, IconTrash, IconCheckCircle, IconHeart, IconMoon, IconMap, IconCamera, IconMic, IconRoute } from '@/components/Icons'
-
-const CONTACTS_KEY = 'nightmama_contacts'
-const GEMINI_KEY_STORAGE = 'nightmama_gemini_key'
-
-interface Contact {
-  id: string
-  name: string
-  lineToken: string
-}
+import { IconSettings, IconHeart } from '@/components/Icons'
+import {
+  loadContacts,
+  saveContacts,
+  sendLineNotification,
+  LINE_USER_ID_PATTERN,
+  type Contact,
+} from '@/lib/emergencyContacts'
 
 export default function SettingsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [name, setName] = useState('')
-  const [lineToken, setLineToken] = useState('')
+  const [lineUserId, setLineUserId] = useState('')
+  const [inputError, setInputError] = useState('')
   const [saved, setSaved] = useState(false)
-  const [testSent, setTestSent] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [isSendingTest, setIsSendingTest] = useState(false)
 
   const [homeAddress, setHomeAddress] = useState('')
   const [workAddress, setWorkAddress] = useState('')
   const [addressSaved, setAddressSaved] = useState(false)
 
+  // localStorage 只能在瀏覽器讀取，因此掛載後才同步進 state。
+  // 包在 queueMicrotask 裡是為了避開 effect body 內同步 setState 造成的串接渲染。
   useEffect(() => {
-    const stored = localStorage.getItem(CONTACTS_KEY)
-    if (stored) setContacts(JSON.parse(stored))
-
-    const storedHome = localStorage.getItem('nightmama_home_address')
-    if (storedHome) setHomeAddress(storedHome)
-
-    const storedWork = localStorage.getItem('nightmama_work_address')
-    if (storedWork) setWorkAddress(storedWork)
+    queueMicrotask(() => {
+      setContacts(loadContacts())
+      setHomeAddress(localStorage.getItem('nightmama_home_address') ?? '')
+      setWorkAddress(localStorage.getItem('nightmama_work_address') ?? '')
+    })
   }, [])
 
   const saveAddresses = () => {
@@ -44,13 +42,26 @@ export default function SettingsPage() {
   }
 
   const saveContact = () => {
-    if (!name.trim() || !lineToken.trim()) return
-    const newContact: Contact = { id: Date.now().toString(), name: name.trim(), lineToken: lineToken.trim() }
+    const trimmedName = name.trim()
+    const trimmedId = lineUserId.trim()
+
+    if (!trimmedName) {
+      setInputError('請輸入聯絡人姓名')
+      return
+    }
+    // 先擋掉格式錯誤，否則要等到真的觸發 SOS 才會發現通知送不出去
+    if (!LINE_USER_ID_PATTERN.test(trimmedId)) {
+      setInputError('LINE User ID 格式不正確，應為 U 開頭加上 32 個英數字元')
+      return
+    }
+
+    setInputError('')
+    const newContact: Contact = { id: Date.now().toString(), name: trimmedName, lineUserId: trimmedId }
     const updated = [...contacts, newContact]
     setContacts(updated)
-    localStorage.setItem(CONTACTS_KEY, JSON.stringify(updated))
+    saveContacts(updated)
     setName('')
-    setLineToken('')
+    setLineUserId('')
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -58,27 +69,18 @@ export default function SettingsPage() {
   const removeContact = (id: string) => {
     const updated = contacts.filter(c => c.id !== id)
     setContacts(updated)
-    localStorage.setItem(CONTACTS_KEY, JSON.stringify(updated))
+    saveContacts(updated)
   }
 
-  const sendTestNotification = async (token: string) => {
+  const sendTestNotification = async (targetId: string) => {
     setIsSendingTest(true)
-    try {
-      await fetch('/api/line-notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          message: '\n🌙 NightMaMa 測試通知\n\n你已成功設定 NightMaMa 緊急通知！\n當你的聯絡人觸發 SOS 時，你會收到即時定位通知。',
-        }),
-      })
-      setTestSent(true)
-      setTimeout(() => setTestSent(false), 3000)
-    } catch {
-      alert('發送失敗，請確認 LINE Notify Token 是否正確')
-    } finally {
-      setIsSendingTest(false)
-    }
+    const outcome = await sendLineNotification(
+      '\n🌙 NightMaMa 測試通知\n\n你已成功設定 NightMaMa 緊急通知！\n當你的聯絡人觸發 SOS 時，你會收到即時定位通知。',
+      targetId
+    )
+    setTestResult({ ok: outcome.sent, text: outcome.message })
+    setIsSendingTest(false)
+    setTimeout(() => setTestResult(null), 5000)
   }
 
   return (
@@ -158,10 +160,18 @@ export default function SettingsPage() {
             />
             <input
               className="input-field"
-              placeholder="LINE ID / User ID（選填，例：mom_line_id）"
-              value={lineToken}
-              onChange={e => setLineToken(e.target.value)}
+              placeholder="LINE User ID（U 開頭 33 碼，非顯示用的 LINE ID）"
+              value={lineUserId}
+              onChange={e => { setLineUserId(e.target.value); setInputError('') }}
             />
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              這裡要填的是聯絡人加入官方帳號後產生的 <b>User ID</b>（U 開頭 33 碼），
+              不是個人資料頁上的 LINE ID。請勿在此填入任何 access token。
+            </div>
+
+            {inputError && (
+              <div style={{ fontSize: 12, color: '#f87171', fontWeight: 600 }}>{inputError}</div>
+            )}
 
             <button className="btn-primary" onClick={saveContact} style={{ marginTop: 4 }}>
               {saved ? '✅ 已成功綁定緊急聯絡人！' : '+ 儲存緊急聯絡人'}
@@ -173,23 +183,35 @@ export default function SettingsPage() {
         {contacts.length > 0 && (
           <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
             <div style={{ fontWeight: 700, marginBottom: 14 }}>📋 緊急聯絡人</div>
+
+            {testResult && (
+              <div style={{
+                marginBottom: 12, padding: '10px 14px', borderRadius: 12, fontSize: 12,
+                lineHeight: 1.5, fontWeight: 600,
+                background: testResult.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                color: testResult.ok ? '#34d399' : '#f87171',
+              }}>
+                {testResult.text}
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {contacts.map(contact => (
                 <div key={contact.id} className="glass-light" style={{ padding: '12px 16px', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontWeight: 600 }}>{contact.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      Token: {contact.lineToken.slice(0, 8)}…
+                      User ID: {contact.lineUserId.slice(0, 8)}…
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       className="btn-icon"
                       style={{ width: 36, height: 36, fontSize: 14, background: 'rgba(16,185,129,0.2)' }}
-                      onClick={() => sendTestNotification(contact.lineToken)}
+                      onClick={() => sendTestNotification(contact.lineUserId)}
                       disabled={isSendingTest}
                     >
-                      {testSent ? '✅' : '📤'}
+                      📤
                     </button>
                     <button
                       className="btn-icon"
@@ -211,8 +233,9 @@ export default function SettingsPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
             <div>🗺️ 路燈資料：台北市 145,919 盞路燈（data.taipei）</div>
             <div>📹 CCTV 資料：台北市 5,036 支警察局監視器</div>
-            <div>🤖 AI 陪聊：Google Gemini 3.6 Flash / 2.5 Flash</div>
-            <div>🗺️ 地圖路線：Google Maps Routes API (Custom Safety Matrix)</div>
+            <div>🤖 AI 陪聊：Google Gemini 2.5 Flash</div>
+            <div>🗺️ 地圖路線：Google Maps Directions API</div>
+            <div>🛡️ 安全評分：照明 40% + CCTV 25% + 安全庇護點 35%，取最差路段</div>
           </div>
         </div>
       </div>

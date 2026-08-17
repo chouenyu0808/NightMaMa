@@ -177,9 +177,10 @@ function NavigateContent() {
   const destination = searchParams.get('destination') || '目的地'
   const durationSec = parseInt(searchParams.get('duration') || '600')
   const distanceM = parseInt(searchParams.get('distance') || '950')
-  const safetyScore = parseInt(searchParams.get('safety') || '85')
-  const lightCount = parseInt(searchParams.get('lights') || '120')
-  const cctvCount = parseInt(searchParams.get('cctv') || '5')
+  // 後端評分取不到時 page.tsx 不會帶 safety 參數，這裡就維持 null，
+  // 不要用 85 之類的預設值假裝有評分。
+  const safetyParam = searchParams.get('safety')
+  const safetyScore = safetyParam === null || safetyParam === '' ? null : Number.parseInt(safetyParam, 10)
 
   const [remainingSec, setRemainingSec] = useState(durationSec)
   const [realtimeDistanceM, setRealtimeDistanceM] = useState(distanceM)

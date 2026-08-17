@@ -10,7 +10,9 @@ import json
 import os
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'public', 'data')
+# frontend/data/ (not public/) — 這些是給 import_bigquery.py 用的來源資料，
+# 不是網站靜態資源，放 public/ 會被當成 8MB 的公開下載檔。
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'frontend', 'data')
 
 
 def twd97_to_wgs84(x: float, y: float) -> tuple[float, float]:

@@ -1,0 +1,28 @@
+# 秘密：絕不進入 build context。
+# 沒有這條的話 `COPY frontend/ ./` 會把含真實金鑰的 .env.local 複製進 image layer。
+# 瀏覽器端金鑰請用 --build-arg 傳入，伺服器端金鑰用 Cloud Run runtime 環境變數。
+**/.env
+**/.env.local
+**/.env*.local
+
+# 依賴與建置產物（builder 階段會自己 npm i / next build）
+**/node_modules
+**/.next
+**/out
+**/__pycache__
+**/*.pyc
+**/tsconfig.tsbuildinfo
+
+# 8MB 開放資料：只有 backend/scripts/import_bigquery.py 這支一次性腳本會用到，
+# 執行環境不需要，排除可大幅縮短 build context 上傳時間。
+frontend/data/
+
+# Python 後端（前端 image 用不到）
+backend/
+
+# 版控與文件
+.git
+.gitignore
+*.md
+docs/
+images.jpg

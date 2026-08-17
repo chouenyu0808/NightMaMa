@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { IconAlertTriangle, IconUser, IconBulb, IconVolume2, IconShield } from '@/components/Icons'
+import { sendLineNotification } from '@/lib/emergencyContacts'
 
 interface AnxietyReportModalProps {
   isOpen: boolean
@@ -24,72 +25,76 @@ export default function AnxietyReportModal({
   onReportSuccess,
 }: AnxietyReportModalProps) {
   const [loadingCategory, setLoadingCategory] = useState<string | null>(null)
-  const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   if (!isOpen) return null
 
   const handleSelectCategory = async (categoryLabel: string) => {
     setLoadingCategory(categoryLabel)
-    setSuccessMsg(null)
+    setResultMsg(null)
 
-    try {
-      // 1. Get current GPS position if not provided
-      let lat = currentPos?.lat || 25.021
-      let lng = currentPos?.lng || 121.532
+    // 1. Get current GPS position if not provided
+    let lat = currentPos?.lat
+    let lng = currentPos?.lng
 
-      if (typeof window !== 'undefined' && navigator.geolocation && !currentPos) {
-        await new Promise<void>((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              lat = pos.coords.latitude
-              lng = pos.coords.longitude
-              resolve()
-            },
-            () => resolve(),
-            { timeout: 3000 }
-          )
-        })
-      }
-
-      const addressText = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
-
-      // 2. Post to /api/report (Community Safety Heatmap)
-      await fetch('/api/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lat,
-          lng,
-          category: categoryLabel,
-          address: addressText,
-        }),
-      }).catch(() => {})
-
-      // 3. Send LINE Alert Push Notification to Emergency Contact/Group
-      const lineMessage = `⚠️ [NightMaMa 不安通報]\n使用者通報「${categoryLabel}」。\n📍 目前即時 GPS 位置：https://maps.google.com/?q=${lat},${lng}\n🤖 AI 媽咪正在線上語音陪伴中。`
-
-      await fetch('/api/line-notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: lineMessage }),
-      }).catch(() => {})
-
-      setSuccessMsg(`不安通報已成功發送！系統已發送 LINE 安全警訊給緊急聯絡人，並在安全地圖上記錄通報點。`)
-      onReportSuccess?.(categoryLabel, lat, lng)
-
-      setTimeout(() => {
-        setSuccessMsg(null)
-        setLoadingCategory(null)
-        onClose()
-      }, 2500)
-    } catch {
-      setSuccessMsg(`不安通報已成功記錄並發送通報！`)
-      setTimeout(() => {
-        setSuccessMsg(null)
-        setLoadingCategory(null)
-        onClose()
-      }, 2000)
+    if (typeof window !== 'undefined' && navigator.geolocation && !currentPos) {
+      await new Promise<void>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            lat = pos.coords.latitude
+            lng = pos.coords.longitude
+            resolve()
+          },
+          () => resolve(),
+          { timeout: 3000 }
+        )
+      })
     }
+
+    // 定位失敗就不要用假座標硬送，通報一個錯誤的位置沒有意義
+    if (lat === undefined || lng === undefined) {
+      setResultMsg({ ok: false, text: '定位失敗，無法取得目前位置，通報未送出。請確認已允許位置權限。' })
+      setLoadingCategory(null)
+      return
+    }
+
+    const addressText = `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+
+    // 2. Post to /api/report (Community Safety Heatmap)
+    let reportOk = false
+    try {
+      const res = await fetch('/api/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lng, category: categoryLabel, address: addressText }),
+      })
+      reportOk = res.ok
+    } catch {
+      reportOk = false
+    }
+
+    // 3. Send LINE Alert Push Notification to the user's configured emergency contact
+    const lineMessage = `⚠️ [NightMaMa 不安通報]\n使用者通報「${categoryLabel}」。\n📍 目前即時 GPS 位置：https://maps.google.com/?q=${lat},${lng}\n🤖 AI 媽咪正在線上語音陪伴中。`
+    const notify = await sendLineNotification(lineMessage)
+
+    // 據實回報兩件事各自的結果，不要一律顯示成功
+    if (reportOk && notify.sent) {
+      setResultMsg({ ok: true, text: '不安通報已記錄在安全地圖，並已發送 LINE 警訊給緊急聯絡人。' })
+    } else if (reportOk) {
+      setResultMsg({ ok: false, text: `通報已記錄在安全地圖，但 ${notify.message}` })
+    } else if (notify.sent) {
+      setResultMsg({ ok: false, text: 'LINE 警訊已送出，但通報未能記錄到安全地圖。' })
+    } else {
+      setResultMsg({ ok: false, text: `通報未送出。${notify.message}` })
+    }
+
+    if (reportOk) onReportSuccess?.(categoryLabel, lat, lng)
+
+    setTimeout(() => {
+      setResultMsg(null)
+      setLoadingCategory(null)
+      onClose()
+    }, 3500)
   }
 
   return (
@@ -123,13 +128,15 @@ export default function AnxietyReportModal({
           </button>
         </div>
 
-        {successMsg ? (
+        {resultMsg ? (
           <div style={{
-            background: '#ECFDF5', border: '1px solid #10B981', color: '#047857',
+            background: resultMsg.ok ? '#ECFDF5' : '#FEF2F2',
+            border: `1px solid ${resultMsg.ok ? '#10B981' : '#EF4444'}`,
+            color: resultMsg.ok ? '#047857' : '#B91C1C',
             borderRadius: 16, padding: '16px', fontSize: 14, lineHeight: 1.6, textAlign: 'center',
             fontWeight: 600, margin: '16px 0'
           }}>
-            {successMsg}
+            {resultMsg.text}
           </div>
         ) : (
           <>

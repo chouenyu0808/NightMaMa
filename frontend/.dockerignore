@@ -1,0 +1,15 @@
+# 秘密：絕不進入 build context（`COPY . .` 否則會把 .env.local 複製進 image layer）
+.env
+.env.local
+.env*.local
+
+# 依賴與建置產物
+node_modules
+.next
+out
+tsconfig.tsbuildinfo
+
+# 8MB 開放資料：只有 backend/scripts/import_bigquery.py 用得到，執行環境不需要
+data/
+
+*.md

@@ -9,7 +9,7 @@ import {
   IconShield, IconAlertTriangle, IconAmbulance, IconUser,
 } from '@/components/Icons'
 
-const EMERGENCY_CONTACTS_KEY = 'nightmama_contacts'
+import { primaryRecipient, sendLineNotification } from '@/lib/emergencyContacts'
 
 function SOSContent() {
   const searchParams = useSearchParams()
@@ -24,6 +24,8 @@ function SOSContent() {
   const [fakeCallState, setFakeCallState] = useState<'ringing' | 'connected'>(isFakeCall ? 'ringing' : 'ringing')
   const [callDuration, setCallDuration] = useState(0)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [notifyResult, setNotifyResult] = useState<{ sent: boolean; message: string } | null>(null)
+  const [locationUnavailable, setLocationUnavailable] = useState(false)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
 
   // Call duration counter when connected
@@ -34,10 +36,14 @@ function SOSContent() {
   }, [fakeCallActive, fakeCallState])
 
   // Get location
+  //
+  // 定位失敗時「不」填入台北車站之類的預設座標：求救訊息附上一個錯誤的位置，
+  // 比明講「定位失敗」更危險，會把救援引導到錯的地方。
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
       pos => setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setCurrentLocation({ lat: 25.0478, lng: 121.5319 }) // fallback: Taipei
+      () => setCurrentLocation(null),
+      { enableHighAccuracy: true, timeout: 10000 }
     )
   }, [])
 
@@ -65,27 +71,27 @@ function SOSContent() {
   }
 
   const sendSOSNotification = async () => {
-    const contacts = JSON.parse(localStorage.getItem(EMERGENCY_CONTACTS_KEY) || '[]') as Array<{ name: string; lineToken: string }>
-    const contactName = contacts[0]?.name || '使用者'
-    const targetId = contacts[0]?.lineToken || ''
+    const contact = primaryRecipient()
+    const contactName = contact?.name || '使用者'
 
+    const hasRealLocation = currentLocation !== null
     const mapsUrl = currentLocation
       ? `https://maps.google.com/?q=${currentLocation.lat},${currentLocation.lng}`
-      : 'https://maps.google.com/?q=25.0478,121.5170'
+      : ''
 
-    const message = `🚨 【NightMaMa 緊急求救警報】\n您的聯絡人 (${contactName}) 在夜間步行時觸發了 SOS 緊急求救！\n\n📍 即時 GPS 定位：${mapsUrl}\n⏰ 觸發時間：${new Date().toLocaleString('zh-TW')}\n\n請立即嘗試聯繫確認對方是否平安！`
+    const locationLine = hasRealLocation
+      ? `📍 即時 GPS 定位：${mapsUrl}`
+      : '📍 定位失敗，未取得即時 GPS 位置'
 
-    try {
-      await fetch('/api/line-notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId, message }),
-      })
-    } catch {
-      // silent fail — still show sent state
-    }
+    const message = `🚨 【NightMaMa 緊急求救警報】\n您的聯絡人 (${contactName}) 在夜間步行時觸發了 SOS 緊急求救！\n\n${locationLine}\n⏰ 觸發時間：${new Date().toLocaleString('zh-TW')}\n\n請立即嘗試聯繫確認對方是否平安！`
+
+    const outcome = await sendLineNotification(message, contact?.lineUserId)
+
     setSending(false)
     setSosSent(true)
+    // 據實回報：發送失敗時必須讓使用者知道，才能改用電話等其他方式求救
+    setNotifyResult(outcome)
+    setLocationUnavailable(!hasRealLocation)
   }
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -293,11 +299,35 @@ function SOSContent() {
           </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 20, textAlign: 'center' }}>
-            <IconCheckCircle size={60} color="#10b981" />
-            <div style={{ fontWeight: 700, fontSize: 18, color: '#10b981' }}>SOS 已發送！</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-              已通知緊急聯絡人並附上你的位置
-            </div>
+            {notifyResult?.sent ? (
+              <>
+                <IconCheckCircle size={60} color="#10b981" />
+                <div style={{ fontWeight: 700, fontSize: 18, color: '#10b981' }}>SOS 已發送！</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+                  {locationUnavailable
+                    ? '已通知緊急聯絡人，但定位失敗，訊息未附上你的位置'
+                    : '已通知緊急聯絡人並附上你的位置'}
+                </div>
+              </>
+            ) : (
+              <>
+                <IconAlertTriangle size={60} color="#ef4444" />
+                <div style={{ fontWeight: 700, fontSize: 18, color: '#ef4444' }}>LINE 通知未送出</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 14, maxWidth: 300, lineHeight: 1.6 }}>
+                  {notifyResult?.message || '發送失敗。'}
+                </div>
+                <a
+                  href="tel:110"
+                  style={{
+                    marginTop: 4, padding: '12px 28px', borderRadius: 999,
+                    background: '#ef4444', color: 'white', fontWeight: 800,
+                    fontSize: 15, textDecoration: 'none',
+                  }}
+                >
+                  改撥 110 報警
+                </a>
+              </>
+            )}
             {currentLocation && (
               <a
                 href={`https://maps.google.com/?q=${currentLocation.lat},${currentLocation.lng}`}

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// 依序嘗試，第一個成功回應的就採用。
+// 注意：gemini-1.5-flash 已從 Gemini API 下線，不要再放回這個清單。
+const CHAT_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash']
+const VISION_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash']
+
 export async function POST(req: NextRequest) {
   try {
     const { userMessage, history = [], context = {}, imageData = '' } = await req.json()
@@ -8,11 +13,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Message or image required' }, { status: 400 })
     }
 
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_KEY ||
-      process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ||
-      ''
+    // 僅伺服器端環境變數。不要 fallback 到 NEXT_PUBLIC_ 版本（會外洩到瀏覽器），
+    // 也不要拿 Maps key 當 Gemini key 用（兩個服務混用同一把金鑰）。
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      console.error('[companion] 缺少 GEMINI_API_KEY 環境變數')
+      return NextResponse.json({
+        reply: '⚠️ AI 陪伴服務尚未設定，請確認伺服器已設定 GEMINI_API_KEY。',
+      })
+    }
 
     let lastError = ''
 
@@ -27,15 +36,14 @@ export async function POST(req: NextRequest) {
 【目前路線上下文】
 - 出發地：${context.origin || '我的位置'}
 - 目的地：${context.destination || '目的地'}
-- 安全評分：${context.safetyScore || 85}/100
+- 安全評分：${typeof context.safetyScore === 'number' ? `${context.safetyScore}/100` : '尚未取得（請勿自行編造分數）'}
 - 剩餘時間：約 ${context.durationMin || 5} 分鐘`
 
     // Multimodal Photo Inspection Branch
     if (imageData && imageData.startsWith('data:image')) {
       const cleanBase64 = imageData.replace(/^data:image\/\w+;base64,/, '')
-      const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash']
 
-      for (const modelName of models) {
+      for (const modelName of VISION_MODELS) {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
           const res = await fetch(url, {
@@ -68,8 +76,8 @@ export async function POST(req: NextRequest) {
               return NextResponse.json({ reply: `📸 照片分析完成：${text.trim()}` })
             }
           }
-        } catch (err: any) {
-          lastError = err.message || String(err)
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : String(err)
         }
       }
     }
@@ -83,39 +91,10 @@ export async function POST(req: NextRequest) {
 
     const fullPrompt = `${systemInstruction}${historyText}\n使用者問：${userMessage}`
 
-    // 1. Try Gemini Interactions API (gemini-3.6-flash)
-    try {
-      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          model: 'gemini-3.6-flash',
-          input: fullPrompt,
-        }),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        const modelOutputStep = data.steps?.find((s: any) => s.type === 'model_output')
-        const replyText = modelOutputStep?.content?.[0]?.text || data.output_text
-
-        if (replyText && replyText.trim()) {
-          return NextResponse.json({ reply: replyText.trim() })
-        }
-      } else {
-        const errData = await res.json().catch(() => ({}))
-        lastError = `[Interactions HTTP ${res.status}] ${errData.error?.message || ''}`
-      }
-    } catch (err: any) {
-      lastError = err.message || String(err)
-    }
-
-    // 2. Fallback to generateContent REST API
-    const models = ['gemini-2.0-flash', 'gemini-1.5-flash']
-    for (const modelName of models) {
+    // 先前這裡會先打 /v1beta/interactions 搭配 model "gemini-3.6-flash"。
+    // 這個端點與這個 model 名稱在 Gemini API 都不存在，所以每次對話都固定失敗一次
+    // 才會 fallback，白白多付一個來回的延遲。已移除，直接使用 generateContent。
+    for (const modelName of CHAT_MODELS) {
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
         const res = await fetch(url, {
@@ -132,8 +111,12 @@ export async function POST(req: NextRequest) {
           if (text && text.trim()) {
             return NextResponse.json({ reply: text.trim() })
           }
+        } else {
+          const errData = await res.json().catch(() => ({}))
+          lastError = `[${modelName} HTTP ${res.status}] ${errData.error?.message || ''}`
         }
       } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err)
         console.warn(`generateContent model ${modelName} failed:`, err)
       }
     }
@@ -141,9 +124,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       reply: `⚠️ Gemini AI 連線失敗 (${lastError || '無回應'})。請確認 GCP Cloud Run 環境變數已正確設定 GEMINI_API_KEY。`,
     })
-  } catch (e: any) {
+  } catch (e) {
+    // 內部錯誤細節只寫進伺服器日誌，不要回傳給用戶端
+    console.error('[companion] 未預期的錯誤', e)
     return NextResponse.json({
-      reply: `⚠️ 伺服器處理錯誤：${e.message || '請稍後重試'}`,
+      reply: '⚠️ 伺服器處理錯誤，請稍後重試。',
     })
   }
 }

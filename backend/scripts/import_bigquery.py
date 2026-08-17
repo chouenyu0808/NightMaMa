@@ -1,4 +1,4 @@
-"""One-off import: frontend/public/data/{streetlights,cctv}.json -> BigQuery.
+"""One-off import: frontend/data/{streetlights,cctv}.json -> BigQuery.
 
 Reuses the already-cleaned WGS84 output of convert_data.py instead of
 re-parsing the raw TWD97/Big5 CSVs. Safe to re-run (WRITE_TRUNCATE).
@@ -19,7 +19,8 @@ from google.cloud import bigquery
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import settings  # noqa: E402
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "public", "data")
+# frontend/data/ (not public/) — these files are import sources, not web assets.
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "data")
 
 STREETLIGHTS_SCHEMA = [
     bigquery.SchemaField("id", "STRING"),

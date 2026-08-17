@@ -29,6 +29,25 @@ class RoutesResponse(BaseModel):
     routes: list[RouteOption]
 
 
+class ScoreRequest(BaseModel):
+    """Encoded polylines the caller already planned and wants safety numbers for."""
+    polylines: list[str]
+
+
+class ScoredRouteItem(BaseModel):
+    score: float
+    light_count: int = 0
+    camera_count: int = 0
+    police_count: int = 0
+    store_count: int = 0
+    segment_scores: list[float] = []
+
+
+class ScoreResponse(BaseModel):
+    """Same order as the request's polylines."""
+    scores: list[ScoredRouteItem]
+
+
 class SOSRequest(BaseModel):
     user_id: str
     session_id: str = "current"

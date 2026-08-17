@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { clientKey, rateLimit, tooManyRequests } from '@/lib/rateLimit'
 
 /**
  * Gemini TTS API route - uses generativelanguage.googleapis.com/generateContent
@@ -6,7 +7,21 @@ import { NextRequest, NextResponse } from 'next/server'
  *
  * The Gemini TTS model returns raw PCM audio (24kHz, 16-bit, mono).
  * We wrap it with a WAV header so browsers can play it natively.
+ *
+ * 這支端點會產生實際的 Gemini 用量費用，因此：
+ * - 只接受 POST（原本的 GET handler 讓任何人用 ?text= 直接燒額度）
+ * - 限制文字長度與語音名稱白名單
+ * - per-IP 速率限制
  */
+
+// Gemini TTS 內建語音名稱白名單
+const ALLOWED_VOICES = new Set(['Aoede', 'Puck', 'Charon', 'Kore', 'Fenrir'])
+const DEFAULT_VOICE = 'Aoede'
+
+const MAX_TEXT_LENGTH = 500
+
+const RATE_LIMIT_MAX = 6
+const RATE_LIMIT_WINDOW_MS = 60_000
 
 function buildWavHeader(pcmDataLength: number, sampleRate = 24000, numChannels = 1, bitsPerSample = 16): Buffer {
   const byteRate = sampleRate * numChannels * bitsPerSample / 8
@@ -31,20 +46,35 @@ function buildWavHeader(pcmDataLength: number, sampleRate = 24000, numChannels =
 }
 
 export async function POST(req: NextRequest) {
+  const limit = rateLimit(`tts:${clientKey(req)}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)
+  if (!limit.ok) return tooManyRequests(limit.retryAfterSec)
+
   try {
     const body = await req.json().catch(() => ({}))
-    const text =
-      body.text ||
-      '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
-    const voiceName = body.voice || 'Aoede'
 
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_KEY ||
-      ''
+    const rawText =
+      typeof body.text === 'string' && body.text.trim()
+        ? body.text.trim()
+        : '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
+
+    if (rawText.length > MAX_TEXT_LENGTH) {
+      return NextResponse.json(
+        { error: `文字長度超過上限 ${MAX_TEXT_LENGTH} 字` },
+        { status: 400 }
+      )
+    }
+    const text = rawText
+
+    const requestedVoice = typeof body.voice === 'string' ? body.voice : ''
+    const voiceName = ALLOWED_VOICES.has(requestedVoice) ? requestedVoice : DEFAULT_VOICE
+
+    // 僅伺服器端環境變數。不要 fallback 到 NEXT_PUBLIC_ 版本，
+    // 那等同把 key 公開在瀏覽器 bundle 裡。
+    const apiKey = process.env.GEMINI_API_KEY
 
     if (!apiKey) {
-      return NextResponse.json({ error: 'Missing Gemini API key' }, { status: 500 })
+      console.error('[tts] 缺少 GEMINI_API_KEY 環境變數')
+      return NextResponse.json({ error: 'TTS 服務尚未設定' }, { status: 503 })
     }
 
     // Gemini TTS: POST generativelanguage.googleapis.com/v1beta/models/<model>:generateContent
@@ -101,17 +131,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: 'No audio in Gemini TTS response' }, { status: 500 })
-  } catch (err: any) {
+  } catch (err) {
+    // 不要把內部錯誤訊息回傳給用戶端
     console.error('TTS route error:', err)
-    return NextResponse.json({ error: err.message || 'TTS Error' }, { status: 500 })
+    return NextResponse.json({ error: 'TTS 產生失敗' }, { status: 500 })
   }
-}
-
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const text =
-    searchParams.get('text') ||
-    '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
-  const voice = searchParams.get('voice') || 'Aoede'
-  return POST(new NextRequest(req.url, { method: 'POST', body: JSON.stringify({ text, voice }) }))
 }

@@ -15,7 +15,12 @@ class Settings(BaseSettings):
     bq_dataset_cameras: str = "cctv"
     bq_table_cameras: str = "cctv"
     pubsub_topic_sos: str = "sos-triggered"
-    cors_origins: list[str] = ["*"]
+
+    # 預設只允許本機開發來源。/score 與 /routes 每次呼叫都會產生 BigQuery 與
+    # Places API 費用，開放 "*" 等於讓任何網站都能從訪客瀏覽器燒你的額度。
+    # 部署時請用環境變數指定前端實際網域，例如：
+    #   CORS_ORIGINS=["https://nightmama-xxxx.asia-east1.run.app"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 
 settings = Settings()

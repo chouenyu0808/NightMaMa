@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from routers import report, routes, sos, speak, stream
+from routers import report, routes, score, sos, speak, stream
 
 app = FastAPI(title="NightMaMa Backend")
 
@@ -15,6 +15,7 @@ app.add_middleware(
 )
 
 app.include_router(routes.router)
+app.include_router(score.router)
 app.include_router(sos.router)
 app.include_router(report.router)
 app.include_router(speak.router)

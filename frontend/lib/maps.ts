@@ -8,15 +8,18 @@ export interface LatLng {
   lng: number
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-
 let loaderConfigured = false
 let mapsReady = false
 
 export async function loadMaps(): Promise<typeof google.maps> {
   if (mapsReady && typeof google !== 'undefined' && google.maps) return google.maps
   if (!loaderConfigured) {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || 'AIzaSyCxhdH8QKTA2NI4hI1RbeGmGNNbJ4Z9Uhk'
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
+    if (!apiKey) {
+      throw new Error(
+        '缺少 NEXT_PUBLIC_GOOGLE_MAPS_KEY。請在 frontend/.env.local 設定後重新啟動 dev server。'
+      )
+    }
     setOptions({
       key: apiKey,
       v: 'weekly',
@@ -80,18 +83,26 @@ export interface TransitLeg {
   points: LatLng[]
 }
 
+/**
+ * 真實安全評分，來自後端 /score（BigQuery 路燈 + CCTV + Places 安全庇護點）。
+ *
+ * 全部欄位可為 null，代表「尚未取得」或「後端不可用」。這裡刻意不提供預設值：
+ * 先前的版本用 `pathPoints.length * 1.5` 之類的公式捏造路燈數與分數，
+ * 對安全性 App 來說，顯示一個編造的安全分數比顯示「無法取得」危險得多。
+ */
 export interface RouteResult {
   type: string // "fastest" | "safest" | "balanced" | "transit"
   polyline: string
   durationSec: number
   distanceM: number
-  score: number
   reason: string | null
-  lightCount: number
-  cameraCount: number
-  policeCount: number
+  /** null = 尚未取得真實評分 */
+  score: number | null
+  lightCount: number | null
+  cameraCount: number | null
+  policeCount: number | null
+  storeCount: number | null
   segmentScores: number[]
-  storeCount: number
   points: LatLng[]
   steps: RouteStep[]
   isTransit?: boolean
@@ -161,17 +172,20 @@ export async function fetchRoutes(
             const pathPoints: LatLng[] = (r.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() }))
             const polylineStr = r.overview_polyline || ''
             return {
-              type: i === 0 ? 'safest' : i === 1 ? 'fastest' : 'balanced',
+              // 這裡只是候選路線的暫時代號；真正的「最安全 / 最快」
+              // 要等後端評分回來後才由 page.tsx 決定。
+              type: 'candidate',
               polyline: polylineStr,
               durationSec: leg?.duration?.value || 600,
               distanceM: leg?.distance?.value || 1000,
-              score: 85 - i * 5,
               reason: null,
-              lightCount: Math.floor(pathPoints.length * 1.5),
-              cameraCount: Math.floor(pathPoints.length * 0.8),
-              policeCount: Math.floor(pathPoints.length * 0.2),
+              // 安全數據一律留空，等 attachSafetyScores() 從後端補上
+              score: null,
+              lightCount: null,
+              cameraCount: null,
+              policeCount: null,
+              storeCount: null,
               segmentScores: [],
-              storeCount: Math.floor(pathPoints.length * 0.4) + 3,
               points: pathPoints,
               steps: (leg?.steps || []).map(s => {
                 const rawInstruction = s.instructions || ''
@@ -214,8 +228,6 @@ export async function fetchRoutes(
                   const steps: RouteStep[] = []
 
                   let mainLineName = ''
-                  let mainDepStop = ''
-                  let mainArrStop = ''
 
                   ;(tLeg.steps || []).forEach((s) => {
                     const sPts: LatLng[] = (s.path || []).map(p => ({ lat: p.lat(), lng: p.lng() }))
@@ -226,8 +238,6 @@ export async function fetchRoutes(
 
                       if (!mainLineName) {
                         mainLineName = lName
-                        mainDepStop = depStop
-                        mainArrStop = arrStop
                       }
 
                       transitLegs.push({
@@ -306,7 +316,6 @@ export async function fetchRoutes(
                   const finalArr = busLegs[busLegs.length - 1]?.arrivalStop || '下車站'
 
                   const walkLegs = transitLegs.filter(l => l.mode === 'WALK')
-                  const totalWalkPts = walkLegs.reduce((sum, l) => sum + (l.points?.length || 0), 0)
                   const totalWalkDistM = walkLegs.reduce((sum, l) => {
                     if (!l.points || l.points.length < 2) return sum
                     let d = 0
@@ -319,7 +328,6 @@ export async function fetchRoutes(
                     }
                     return sum + d
                   }, 0)
-                  const transitScore = Math.max(30, Math.min(95, 90 - Math.floor(totalWalkDistM / 100)))
 
                   const realTransitRoute: RouteResult = {
                     type: 'transit',
@@ -328,13 +336,15 @@ export async function fetchRoutes(
                     polyline: tr.overview_polyline || '',
                     durationSec: tLeg?.duration?.value || 600,
                     distanceM: tLeg?.distance?.value || 1000,
-                    score: transitScore,
-                    reason: `搭乘 ${busSummary || '大眾運輸'}（${firstDep} 上車 ➔ ${finalArr} 下車），僅頭尾步行實施夜間安全防護`,
-                    lightCount: totalWalkPts * 2,
-                    cameraCount: totalWalkPts,
-                    policeCount: 0,
+                    reason: `搭乘 ${busSummary || '大眾運輸'}（${firstDep} 上車 ➔ ${finalArr} 下車），步行段約 ${Math.round(totalWalkDistM)} 公尺`,
+                    // 轉乘路線的安全評分同樣交給後端計算：整條 polyline 都會被
+                    // 評分，其中搭車路段本來就會落在有路燈的道路上。
+                    score: null,
+                    lightCount: null,
+                    cameraCount: null,
+                    policeCount: null,
+                    storeCount: null,
                     segmentScores: [],
-                    storeCount: 0,
                     points: (tr.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() })),
                     steps,
                   }

@@ -15,7 +15,8 @@ import {
 interface RouteContext {
   origin: string
   destination: string
-  safetyScore: number
+  /** null = 後端安全評分無法取得，AI 不應假裝知道分數 */
+  safetyScore: number | null
   durationMin: number
 }
 
@@ -40,6 +41,17 @@ const INITIAL_MESSAGE: Message = {
 function formatTime(timestamp: number): string {
   const d = new Date(timestamp)
   return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+/**
+ * 安全評分只有在後端真的算出來時才存在。取不到就回傳 null，
+ * 讓 AI 提示詞說「評分尚未取得」而不是隨口報一個 85 分。
+ */
+function resolveSafetyScore(fromProps: number | null | undefined, fromQuery: string | null): number | null {
+  if (typeof fromProps === 'number') return fromProps
+  if (fromQuery === null || fromQuery === '') return null
+  const parsed = Number.parseInt(fromQuery, 10)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 // --- Gemini Live Audio Queue Player (24kHz Output) ---
@@ -163,7 +175,7 @@ export interface CompanionContentProps {
   routeContext?: {
     origin: string
     destination: string
-    safetyScore: number
+    safetyScore: number | null
     durationSec: number
   }
 }
@@ -208,7 +220,7 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
   const context: RouteContext = {
     origin: routeContext?.origin || (searchParams ? searchParams.get('origin') : null) || '我的位置',
     destination: routeContext?.destination || (searchParams ? searchParams.get('destination') : null) || '目的地',
-    safetyScore: routeContext?.safetyScore || parseInt((searchParams ? searchParams.get('safety') : null) || '85'),
+    safetyScore: resolveSafetyScore(routeContext?.safetyScore, searchParams ? searchParams.get('safety') : null),
     durationMin: routeContext ? Math.round(routeContext.durationSec / 60) : Math.round(parseInt((searchParams ? searchParams.get('duration') : null) || '600') / 60),
   }
 
@@ -456,13 +468,23 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     staticVoice.onended = () => setAiSpeaking(false)
     staticVoice.play().catch(() => {})
 
-    const apiKey = process.env.NEXT_PUBLIC_GEMINI_KEY || ''
-    if (!apiKey) return
+    // 向伺服器換發短期 ephemeral token。長期 Gemini 金鑰留在伺服器端，
+    // 不會出現在瀏覽器 bundle 裡。換發失敗時就維持上面已經播放的靜態語音。
+    let liveToken = ''
+    try {
+      const tokenRes = await fetch('/api/live-token', { method: 'POST' })
+      if (!tokenRes.ok) return
+      const tokenData = await tokenRes.json()
+      liveToken = typeof tokenData?.token === 'string' ? tokenData.token : ''
+    } catch {
+      return
+    }
+    if (!liveToken) return
 
     try {
       playerRef.current = new GeminiAudioPlayer((speaking) => setAiSpeaking(speaking))
 
-      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=${encodeURIComponent(liveToken)}`
       const ws = new WebSocket(wsUrl)
       ws.binaryType = 'arraybuffer'
       liveWsRef.current = ws

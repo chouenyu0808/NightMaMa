@@ -1,8 +1,7 @@
 /**
  * 沿途 24 小時營業「台灣便利商店」與「警察局 / 派出所」全涵蓋地圖標記工具
  */
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+import { escapeHtml } from './escapeHtml'
 
 export interface SafetyPlace {
   id: string
@@ -221,12 +220,12 @@ export function drawSafetyPlaceMarkers(
       const content = `
         <div style="padding: 10px 14px; color: #111827; font-family: system-ui, sans-serif; min-width: 180px;">
           <div style="font-weight: 700; font-size: 13px; color: ${isStore ? '#059669' : '#1e3a8a'}; margin-bottom: 3px;">
-            ${isStore ? `🏪 24h 明亮超商 · ${place.brand}` : '👮 警察局 / 派出所'}
+            ${isStore ? `🏪 24h 明亮超商 · ${escapeHtml(place.brand)}` : '👮 警察局 / 派出所'}
           </div>
-          <div style="font-size: 15px; font-weight: 800; color: #111827;">${place.name}</div>
-          ${place.vicinity ? `<div style="font-size: 12px; color: #4b5563; margin-top: 4px;">${place.vicinity}</div>` : ''}
-          <div style="font-size: 11px; color: #059669; margin-top: 6px; font-weight: 700; background: #ECFDF5; padding: 3px 8px; borderRadius: 6px; display: inline-block;">
-            距離路線約 ${place.distanceToRouteM || 0} 公尺 · 夜間安全防護點
+          <div style="font-size: 15px; font-weight: 800; color: #111827;">${escapeHtml(place.name)}</div>
+          ${place.vicinity ? `<div style="font-size: 12px; color: #4b5563; margin-top: 4px;">${escapeHtml(place.vicinity)}</div>` : ''}
+          <div style="font-size: 11px; color: #059669; margin-top: 6px; font-weight: 700; background: #ECFDF5; padding: 3px 8px; border-radius: 6px; display: inline-block;">
+            距離路線約 ${Number(place.distanceToRouteM) || 0} 公尺 · 夜間安全防護點
           </div>
         </div>
       `
@@ -238,6 +237,15 @@ export function drawSafetyPlaceMarkers(
   })
 
   return markers
+}
+
+/** /api/report 回傳的通報項目。內容為使用者提交，一律視為不可信字串。 */
+interface AnxietyReportPin {
+  id?: string
+  lat: number | string
+  lng: number | string
+  reason?: string
+  reported_at?: string
 }
 
 /** 在地圖上繪製「社區不安通報治安熱點」標記 */
@@ -255,11 +263,16 @@ export async function drawAnxietyReportMarkers(
     const sharedInfoWindow = infoWindow || new google.maps.InfoWindow()
     const markers: google.maps.Marker[] = []
 
-    reports.forEach((rep: any) => {
+    reports.forEach((rep: AnxietyReportPin) => {
+      const lat = Number(rep.lat)
+      const lng = Number(rep.lng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
       const marker = new google.maps.Marker({
-        position: { lat: Number(rep.lat), lng: Number(rep.lng) },
+        position: { lat, lng },
         map,
-        title: `⚠️ 不安通報：${rep.reason}`,
+        // Marker title 是純文字屬性，不會被當成 HTML 解析
+        title: `⚠️ 不安通報：${rep.reason ?? ''}`,
         icon: {
           url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="%23DC2626" stroke="%23FFFFFF" stroke-width="2.5"/><text x="17" y="22" font-size="16" text-anchor="middle">⚠️</text></svg>',
           scaledSize: new google.maps.Size(30, 30),
@@ -269,16 +282,19 @@ export async function drawAnxietyReportMarkers(
       })
 
       marker.addListener('click', () => {
-        const timeStr = new Date(rep.reported_at).toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
+        const reportedAt = new Date(rep.reported_at ?? '')
+        const timeStr = Number.isNaN(reportedAt.getTime())
+          ? '時間不明'
+          : reportedAt.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
         const content = `
           <div style="padding: 10px 14px; color: #111827; font-family: system-ui, sans-serif; min-width: 200px;">
             <div style="font-weight: 800; font-size: 13px; color: #DC2626; margin-bottom: 3px;">
               ⚠️ 夜間治安不安通報熱點
             </div>
-            <div style="font-size: 15px; font-weight: 800; color: #111827;">${rep.reason}</div>
-            <div style="font-size: 12px; color: #4B5563; margin-top: 4px;">通報時間：${timeStr}</div>
+            <div style="font-size: 15px; font-weight: 800; color: #111827;">${escapeHtml(rep.reason)}</div>
+            <div style="font-size: 12px; color: #4B5563; margin-top: 4px;">通報時間：${escapeHtml(timeStr)}</div>
             <div style="font-size: 11px; color: #DC2626; margin-top: 6px; font-weight: 700; background: #FEE2E2; padding: 3px 8px; border-radius: 6px; display: inline-block;">
-              ● 已同步發送 LINE 警訊並調整路線權重
+              ● 社區通報紀錄點（僅供參考，未納入路線計算）
             </div>
           </div>
         `

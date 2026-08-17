@@ -3,26 +3,35 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
+import { attachSafetyScores } from '@/lib/safetyScore'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers, haversineM, type SafetyPlace } from '@/lib/safetyPlaces'
 import { NavBar } from '@/app/components/NavBar'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget, IconHome, IconArrowUpDown, IconArrowRight, IconX, IconUser } from '@/components/Icons'
 
 interface RouteVisual {
-  score: number
+  score: number | null
   color: string
   bg: string
   border: string
   text: string
   emoji: string
-  total: number
-  label: '安全' | '普通' | '注意'
+  label: '安全' | '普通' | '注意' | '未知'
 }
 
-function scoreToVisual(score: number): RouteVisual {
-  if (score >= 65) return { score, total: score, label: '安全', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', border: '#10b981', text: '#34d399', emoji: '🟢' }
-  if (score >= 40) return { score, total: score, label: '普通', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: '#f59e0b', text: '#fbbf24', emoji: '🟡' }
-  return { score, total: score, label: '注意', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', border: '#ef4444', text: '#f87171', emoji: '🔴' }
+/** score 為 null 代表後端評分服務取不到，一律顯示為「未知」而非猜一個數字 */
+function scoreToVisual(score: number | null): RouteVisual {
+  if (score === null) {
+    return { score: null, label: '未知', color: '#6b7280', bg: 'rgba(107, 114, 128, 0.15)', border: '#6b7280', text: '#9ca3af', emoji: '⚪' }
+  }
+  if (score >= 65) return { score, label: '安全', color: '#10b981', bg: 'rgba(16, 185, 129, 0.15)', border: '#10b981', text: '#34d399', emoji: '🟢' }
+  if (score >= 40) return { score, label: '普通', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)', border: '#f59e0b', text: '#fbbf24', emoji: '🟡' }
+  return { score, label: '注意', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)', border: '#ef4444', text: '#f87171', emoji: '🔴' }
+}
+
+/** 安全數據不存在時顯示 "—"，不要退回預設數字 */
+function fmtCount(n: number | null): string {
+  return n === null ? '—' : String(n)
 }
 
 export interface ScoredRoute extends RouteResult {
@@ -62,6 +71,8 @@ export default function HomePage() {
   const [routes, setRoutes] = useState<ScoredRoute[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [error, setError] = useState('')
+  /** 後端安全評分取不到時的說明文字；空字串代表評分正常 */
+  const [scoreWarning, setScoreWarning] = useState('')
   const [showSheet, setShowSheet] = useState(false)
   const [isSheetMinimized, setIsSheetMinimized] = useState(false)
 
@@ -448,20 +459,28 @@ export default function HomePage() {
         setDestLatLng(lastPts[lastPts.length - 1])
       }
 
-      const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
+      // 幾何/步驟/轉乘來自 Google Directions；安全評分交給後端用
+      // BigQuery 路燈 + CCTV + Places 資料實算（backend/services/safety_scorer.py）。
+      const outcome = await attachSafetyScores(rawRoutes)
+      const scoredRaw = outcome.routes
+      setScoreWarning(outcome.status === 'ok' ? '' : (outcome.message || '安全評分無法取得'))
 
-      // 直接採用後端 /routes 算出的真實安全分數 (Lighting/CCTV/Safe Haven 加權後、取最差路段)
-      const computedRoutes = rawRoutes.map(route => {
-        const safety = scoreToVisual(Math.round(route.score))
-        const extraMin = Math.round((route.durationSec - minDuration) / 60)
-        return {
-          ...route,
-          safety,
-          extraMin,
-        }
-      })
+      const minDuration = Math.min(...scoredRaw.map(r => r.durationSec))
 
-      computedRoutes.sort((a, b) => b.score - a.score)
+      const computedRoutes = scoredRaw.map(route => ({
+        ...route,
+        safety: scoreToVisual(route.score),
+        extraMin: Math.round((route.durationSec - minDuration) / 60),
+      }))
+
+      // 沒有評分的路線排在最後，而不是被當成 0 分（那會讀成「極度危險」）
+      const byScoreDesc = (a: RouteResult, b: RouteResult) => {
+        if (a.score === null && b.score === null) return 0
+        if (a.score === null) return 1
+        if (b.score === null) return -1
+        return b.score - a.score
+      }
+      computedRoutes.sort(byScoreDesc)
 
       // Separate Transit and Walking routes
       const transitList = computedRoutes.filter(r => r.isTransit || r.type === 'transit')
@@ -481,7 +500,11 @@ export default function HomePage() {
 
       // 2. Walking Routes processing (Safest, Fastest, Balanced with deduplication)
       if (walkingList.length > 0) {
-        const sortedBySafety = [...walkingList].sort((a, b) => b.score - a.score)
+        // 評分是後端算的 0-100 分；顯示成 x/10 分
+        const scoreText = (r: RouteResult) =>
+          r.score === null ? '評分無法取得' : `評分 ${(r.score / 10).toFixed(1)} 分`
+
+        const sortedBySafety = [...walkingList].sort(byScoreDesc)
         const safest = sortedBySafety[0]
 
         const sortedByDuration = [...walkingList].sort((a, b) => a.durationSec - b.durationSec)
@@ -497,7 +520,7 @@ export default function HomePage() {
           scored.push({
             ...safest,
             typeLabel: '最安全',
-            description: `🛡️ 最安全兼最快路線 · 評分 ${(safest.score / 10).toFixed(1)} 分`,
+            description: `🛡️ 最安全兼最快路線 · ${scoreText(safest)}`,
           })
 
           // Add a "平衡" route if another walking option exists
@@ -506,7 +529,7 @@ export default function HomePage() {
             scored.push({
               ...balanced,
               typeLabel: '平衡',
-              description: `⚖️ 平衡安心路線 · 評分 ${(balanced.score / 10).toFixed(1)} 分`,
+              description: `⚖️ 平衡安心路線 · ${scoreText(balanced)}`,
             })
           }
         } else {
@@ -514,7 +537,7 @@ export default function HomePage() {
           scored.push({
             ...safest,
             typeLabel: '最安全',
-            description: `🛡️ 高度照明治安防護路線 · 評分 ${(safest.score / 10).toFixed(1)} 分`,
+            description: `🛡️ 高度照明治安防護路線 · ${scoreText(safest)}`,
           })
 
           scored.push({
@@ -529,7 +552,7 @@ export default function HomePage() {
             scored.push({
               ...balanced,
               typeLabel: '平衡',
-              description: `⚖️ 平衡綜合路線 · 評分 ${(balanced.score / 10).toFixed(1)} 分`,
+              description: `⚖️ 平衡綜合路線 · ${scoreText(balanced)}`,
             })
           }
         }
@@ -539,64 +562,21 @@ export default function HomePage() {
       setSelectedIdx(0)
       setShowSheet(true)
 
-      // Fetch nearby safety places (stores & police) ONCE without infinite loop recursion
+      // 沿線超商 / 派出所標記。
+      //
+      // 這裡「只」拿來畫地圖標記與路段著色 —— 安全分數與各項計數已經由後端
+      // 用 BigQuery 路燈 + CCTV + Places 實算完成，不再於前端二次推導。
+      // （舊版在這裡用 `35 + storeDensity*6 + policeDensity*15` 覆寫後端分數。）
       if (mapInstance.current && scored.length > 0) {
         searchNearbySafetyPlaces(mapInstance.current, scored[0].points).then((places) => {
           fetchedSafetyPlacesRef.current = places
-
-          // Compute TRUE route-specific spatial store and police counts for EACH route
-          const scoredWithCounts = scored.map(r => {
-            let storeCount = 0
-            let policeCount = 0
-
-            places.forEach(p => {
-              let minD = Infinity
-              for (let i = 0; i < r.points.length; i += 3) {
-                const pt = r.points[i]
-                const d = haversineM(p.lat, p.lng, pt.lat, pt.lng)
-                if (d < minD) minD = d
-                if (d <= 150) break
-              }
-
-              if (p.type === 'store' && minD <= 250) {
-                storeCount++
-              } else if (p.type === 'police' && minD <= 500) {
-                policeCount++
-              }
-            })
-
-            // Dynamically recalculate safety score based on REAL store/police density
-            // Formula: base 50, +2 per nearby store, +5 per nearby police, capped at 95
-            // For transit routes, keep the transit-calculated score
-            const distKm = Math.max(1, r.distanceM / 1000)
-            let dynamicScore = r.score
-            if (!r.isTransit) {
-              const storeDensity = storeCount / distKm   // stores per km
-              const policeDensity = policeCount / distKm  // police per km
-              dynamicScore = Math.round(
-                Math.max(15, Math.min(95,
-                  35 + storeDensity * 6 + policeDensity * 15
-                ))
-              )
-            }
-
-            return {
-              ...r,
-              storeCount,
-              policeCount,
-              score: dynamicScore,
-              safety: scoreToVisual(dynamicScore),
-            }
-          })
-
-          setRoutes(scoredWithCounts)
 
           if (mapInstance.current) {
             if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
             safetyMarkersRef.current.forEach(m => m.setMap(null))
             safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
           }
-          drawRoutes(scoredWithCounts, 0)
+          drawRoutes(scored, 0)
         }).catch(() => {
           drawRoutes(scored, 0)
         })
@@ -655,12 +635,14 @@ export default function HomePage() {
     }
   }
 
+  // 還沒搜尋出路線時的佔位物件。全部留空，不要放 88 分／45 盞路燈這種
+  // 假數據 —— 那會在真實資料還沒到之前就先騙過使用者。
   const selectedRoute = routes[selectedIdx] || {
-    score: 88,
-    lightCount: 45,
-    cameraCount: 28,
-    policeCount: 2,
-    storeCount: 4,
+    score: null,
+    lightCount: null,
+    cameraCount: null,
+    policeCount: null,
+    storeCount: null,
   }
 
   return (
@@ -1024,22 +1006,40 @@ export default function HomePage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    💡 {selectedRoute.lightCount} 路燈
+                    💡 {fmtCount(selectedRoute.lightCount)} 路燈
                   </span>
                   <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    📹 {selectedRoute.cameraCount} 監視器
+                    📹 {fmtCount(selectedRoute.cameraCount)} 監視器
                   </span>
                   <span style={{ background: 'rgba(249,115,22,0.18)', color: '#f97316', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    🏪 {selectedRoute.storeCount || 4} 家超商
+                    🏪 {fmtCount(selectedRoute.storeCount)} 家超商
                   </span>
                   <span style={{ background: 'rgba(30,58,138,0.35)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    👮 {selectedRoute.policeCount || 2} 派出所
+                    👮 {fmtCount(selectedRoute.policeCount)} 派出所
                   </span>
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 900, color: selectedRoute.safety?.color, background: 'rgba(16,185,129,0.12)', padding: '2px 8px', borderRadius: 8, border: `1px solid ${selectedRoute.safety?.color || '#10b981'}` }}>
-                  {(selectedRoute.score / 10).toFixed(1)} / 10 安心
+                <div style={{
+                  fontSize: 12, fontWeight: 900,
+                  color: selectedRoute.safety?.color || '#9ca3af',
+                  background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 8,
+                  border: `1px solid ${selectedRoute.safety?.color || '#6b7280'}`,
+                }}>
+                  {selectedRoute.score === null
+                    ? '評分無法取得'
+                    : `${(selectedRoute.score / 10).toFixed(1)} / 10 安心`}
                 </div>
               </div>
+
+              {scoreWarning && (
+                <div style={{
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  border: '1px solid rgba(245, 158, 11, 0.45)',
+                  color: '#fbbf24', borderRadius: 12, padding: '8px 10px',
+                  fontSize: 11, lineHeight: 1.5, marginBottom: 10, fontWeight: 600,
+                }}>
+                  ⚠️ {scoreWarning}。路線仍可正常導航，但夜間安全評分（路燈／監視器密度）此次未能計算。
+                </div>
+              )}
 
               {selectedRoute.typeLabel === '大眾運輸' && (
                 <div style={{
@@ -1132,7 +1132,7 @@ export default function HomePage() {
               const stepsParam = selectedRoute.steps && selectedRoute.steps.length > 0
                 ? `&steps=${encodeURIComponent(JSON.stringify(selectedRoute.steps))}`
                 : ''
-              router.push(`/navigate?polyline=${encodeURIComponent(selectedRoute.polyline || '')}&dest=${encodeURIComponent(destination)}&dist=${selectedRoute.distanceM || 1000}&dur=${selectedRoute.durationSec || 600}&safety=${selectedRoute.score || 88}&orig=${encodeURIComponent(origin)}${stepsParam}`)
+              router.push(`/navigate?polyline=${encodeURIComponent(selectedRoute.polyline || '')}&dest=${encodeURIComponent(destination)}&dist=${selectedRoute.distanceM || 1000}&dur=${selectedRoute.durationSec || 600}${selectedRoute.score === null ? '' : `&safety=${selectedRoute.score}`}&orig=${encodeURIComponent(origin)}${stepsParam}`)
             }}
             style={{
               width: '100%', height: 48, borderRadius: 14,
