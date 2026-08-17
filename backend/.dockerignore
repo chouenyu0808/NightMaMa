@@ -1,0 +1,19 @@
+# 秘密：絕不進入 build context。
+# 沒有這條的話 `COPY . .` 會把含 GOOGLE_MAPS_API_KEY 的 .env 複製進 image layer。
+# 執行時的金鑰請用 Cloud Run 的 --set-secrets 注入。
+.env
+.env.*
+!.env.example
+
+# Python 快取與虛擬環境
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 原始開放資料 CSV/PDF：只有一次性的轉檔腳本會用到，執行環境不需要
+data/*.csv
+data/*.pdf
+
+tests/
+*.md
