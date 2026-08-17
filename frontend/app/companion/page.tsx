@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
-import { NavBar } from '@/app/page'
 
 interface RouteContext {
   origin: string
@@ -18,7 +17,8 @@ type AnySpeechRecognition = any
 type AnySpeechRecognitionEvent = any
 
 interface Message {
-  role: 'user' | 'ai'
+  id?: string
+  role: 'user' | 'ai' | 'system' | 'call_card'
   text: string
   timestamp: number
 }
@@ -34,42 +34,42 @@ function formatTime(timestamp: number): string {
   return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-// Vector SVG Icons
+// Exact LINE Vector SVG Icons
 function IconChevronLeft() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
 }
 function IconSearch() {
-  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
 }
 function IconPhoneCall() {
-  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
 }
 function IconCalendar() {
-  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
 }
 function IconMenu() {
-  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
 }
 function IconPlus() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+  return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
 }
 function IconCamera() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+}
+function IconImage() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
 }
 function IconSmile() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><line x1="9" y1="9" x2="9.01" y2="9" /><line x1="15" y1="9" x2="15.01" y2="9" /></svg>
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><line x1="9" y1="9" x2="9.01" y2="9" /><line x1="15" y1="9" x2="15.01" y2="9" /></svg>
 }
 function IconMic() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
 }
 function IconMicOff() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23" /><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" /><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23" /><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" /><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" /></svg>
 }
 function IconVolume2() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
-}
-function IconShield() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
 }
 
 // --- Gemini Live Audio Queue Player (24kHz Output) ---
@@ -203,14 +203,11 @@ function CompanionContent() {
   const [input, setInput] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
-  const [showQuickPrompts, setShowQuickPrompts] = useState(true)
-  const [isMounted, setIsMounted] = useState(false)
 
   // Voice call states
   const [callActive, setCallActive] = useState(false)
   const [callState, setCallState] = useState<'ringing' | 'connected'>('ringing')
   const [callDuration, setCallDuration] = useState(0)
-  const [audioUnlocked, setAudioUnlocked] = useState(false)
   const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null)
   const momVoiceAudioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -226,10 +223,6 @@ function CompanionContent() {
   const micStreamRef = useRef<MediaStream | null>(null)
   const micCtxRef = useRef<AudioContext | null>(null)
   const scriptNodeRef = useRef<ScriptProcessorNode | null>(null)
-
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
 
   const context: RouteContext = {
     origin: searchParams.get('origin') || '我的位置',
@@ -287,7 +280,6 @@ function CompanionContent() {
     } catch {}
   }, [playAudio])
 
-  // Reliably send AI Chat text messages with fallback to Next.js /api/companion REST route
   const sendMsg = useCallback(async (text: string) => {
     if (!text.trim() || isThinking) return
     const userMsg: Message = { role: 'user', text: text.trim(), timestamp: Date.now() }
@@ -296,7 +288,6 @@ function CompanionContent() {
     setIsThinking(true)
 
     try {
-      // 1. Try WebSocket if available and open
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         const { text: reply, audio } = await new Promise<{ text: string; audio?: string }>((resolve, reject) => {
           pendingReplyRef.current = resolve
@@ -310,7 +301,6 @@ function CompanionContent() {
         return
       }
 
-      // 2. Reliable Next.js API Route (/api/companion) powered by Gemini API
       const res = await fetch('/api/companion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -397,17 +387,6 @@ function CompanionContent() {
     return () => clearInterval(timer)
   }, [callActive, callState])
 
-  const triggerAudioPlay = () => {
-    setAudioUnlocked(true)
-    if (ringtoneAudioRef.current && callState === 'ringing') {
-      ringtoneAudioRef.current.play().catch(() => {})
-    } else if (callState === 'ringing') {
-      ringtoneAudioRef.current = new Audio('/line_ringtone.mp3')
-      ringtoneAudioRef.current.loop = true
-      ringtoneAudioRef.current.play().catch(() => {})
-    }
-  }
-
   // Ringtone playback while ringing
   useEffect(() => {
     if (callActive && callState === 'ringing') {
@@ -415,7 +394,7 @@ function CompanionContent() {
         ringtoneAudioRef.current = new Audio('/line_ringtone.mp3')
         ringtoneAudioRef.current.loop = true
       }
-      ringtoneAudioRef.current.play().then(() => setAudioUnlocked(true)).catch(() => setAudioUnlocked(false))
+      ringtoneAudioRef.current.play().catch(() => {})
     } else {
       if (ringtoneAudioRef.current) {
         ringtoneAudioRef.current.pause()
@@ -430,7 +409,6 @@ function CompanionContent() {
     }
   }, [callActive, callState])
 
-  // Clean up Gemini Live Call resources when call closes
   const stopLiveCallResources = useCallback(() => {
     if (scriptNodeRef.current) {
       scriptNodeRef.current.disconnect()
@@ -469,9 +447,18 @@ function CompanionContent() {
     setCallState('ringing')
     setCallDuration(0)
     setCallActive(true)
+
+    // Add LINE Voice Call Started Card into chat stream
+    setMessages(prev => [
+      ...prev,
+      {
+        role: 'call_card',
+        text: '語音通話已開始。',
+        timestamp: Date.now(),
+      },
+    ])
   }, [])
 
-  // Start Voice Call with dual-engine: Instant pre-generated voice WAV + Gemini Multimodal Live WS upgrade
   const acceptVoiceCall = async () => {
     if (ringtoneAudioRef.current) {
       ringtoneAudioRef.current.pause()
@@ -481,7 +468,7 @@ function CompanionContent() {
     setCallState('connected')
     setMomTranscript('「喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！」')
 
-    // 1. GUARANTEED INSTANT AUDIO: Play pre-generated mom voice WAV directly in click handler
+    // GUARANTEED INSTANT AUDIO: Play pre-generated voice WAV directly inside user gesture click handler
     const staticVoice = new Audio('/mom_voice.wav')
     momVoiceAudioRef.current = staticVoice
     setAiSpeaking(true)
@@ -491,7 +478,6 @@ function CompanionContent() {
     const apiKey = process.env.NEXT_PUBLIC_GEMINI_KEY || ''
     if (!apiKey) return
 
-    // 2. LIVE WEBSOCKET UPGRADE (Parallel setup for real-time bidirectional voice)
     try {
       playerRef.current = new GeminiAudioPlayer((speaking) => setAiSpeaking(speaking))
 
@@ -540,18 +526,15 @@ function CompanionContent() {
           if (!rawText) return
           const data = JSON.parse(rawText)
 
-          // Setup complete -> Start mic audio stream
           if (data.setupComplete) {
             startMicAudioStream(ws)
             return
           }
 
-          // Incoming live Gemini audio/text content
           if (data.serverContent) {
             const parts = data.serverContent.modelTurn?.parts || []
             for (const p of parts) {
               if (p.inlineData?.data) {
-                // If live stream audio arrives, seamlessly stop static WAV and play live PCM
                 if (momVoiceAudioRef.current) {
                   momVoiceAudioRef.current.pause()
                   momVoiceAudioRef.current = null
@@ -577,14 +560,13 @@ function CompanionContent() {
       }
 
       ws.onerror = (e) => {
-        console.warn('Gemini Live WS notice (using static audio fallback):', e)
+        console.warn('Gemini Live WS notice:', e)
       }
     } catch (e) {
       console.warn('Failed to start Live Audio WS:', e)
     }
   }
 
-  // Capture Microphone Audio (16kHz PCM Int16 Base64 stream)
   const startMicAudioStream = async (ws: WebSocket) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -606,7 +588,6 @@ function CompanionContent() {
 
         const inputBuffer = e.inputBuffer.getChannelData(0)
 
-        // RMS VAD for user speaking detection & barge-in interruption
         let sum = 0
         for (let i = 0; i < inputBuffer.length; i++) {
           sum += inputBuffer[i] * inputBuffer[i]
@@ -615,7 +596,6 @@ function CompanionContent() {
 
         if (rms > 0.04) {
           setUserSpeaking(true)
-          // User is speaking -> Interrupt AI Mom's audio playback immediately
           if (momVoiceAudioRef.current) {
             momVoiceAudioRef.current.pause()
           }
@@ -624,7 +604,6 @@ function CompanionContent() {
           setUserSpeaking(false)
         }
 
-        // Convert Float32 to PCM16 16kHz Base64
         const base64PCM = pcmFloatTo16BitBase64(inputBuffer, ctx.sampleRate, 16000)
 
         const realtimeMsg = {
@@ -653,184 +632,194 @@ function CompanionContent() {
     }
     setCallActive(false)
 
+    // Add LINE Voice Call Ended Capsule to chat stream
     setMessages(prev => [
       ...prev,
       {
-        role: 'ai',
-        text: '📞 LINE 語音通話已結束。',
+        role: 'system',
+        text: '語音通話已結束。',
         timestamp: Date.now(),
       },
     ])
   }
 
-  const quickPrompts = [
-    '附近路燈好像有點暗',
-    '我感覺後面有人跟著我',
-    '我大概再10分鐘到家',
-    '幫我定位周遭超商',
-  ]
-
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100dvh',
-      background: '#7b9ebf', color: '#1F2937', fontFamily: 'system-ui, -apple-system, sans-serif'
+      background: '#84A3CB', color: '#111827', fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      {/* Top Header */}
+      {/* Top Header - Exact LINE Header 1:1 */}
       <header style={{
-        padding: '12px 16px', background: '#7b9ebf', display: 'flex',
-        alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.2)',
+        padding: '10px 14px', background: '#84A3CB', display: 'flex',
+        alignItems: 'center', justifyContent: 'space-between', color: '#111827',
         position: 'sticky', top: 0, zIndex: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
             onClick={() => router.push('/')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: 'white' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', color: '#111827' }}
           >
             <IconChevronLeft />
           </button>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
-              媽咪 (NightMaMa AI)
-              <span style={{ fontSize: 10, background: '#06C755', color: 'white', padding: '2px 6px', borderRadius: 10 }}>LINE官方</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>安全分數 {context.safetyScore}分</span>
-              <span>•</span>
-              <span>預計 {context.durationMin} 分鐘</span>
-            </div>
+          <div style={{ fontWeight: 700, fontSize: 17, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
+            2026 Dev jam go... (3)
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Incoming Call trigger button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, color: '#111827' }}>
+          <button style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 2 }}>
+            <IconSearch />
+          </button>
           <button
             onClick={startVoiceCall}
-            style={{
-              background: '#06C755', color: 'white', border: 'none',
-              padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-              display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(6,199,85,0.4)', transition: 'transform 0.2s ease'
-            }}
+            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 2 }}
+            title="發起語音通話"
           >
             <IconPhoneCall />
-            假裝來電
           </button>
-          <button style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: 4 }}>
-            <IconSearch />
+          <button style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 2 }}>
+            <IconCalendar />
+          </button>
+          <button style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 2 }}>
+            <IconMenu />
           </button>
         </div>
       </header>
 
-      {/* Safety Alert Banner */}
+      {/* Main Chat Messages Stream — 1:1 LINE Layout */}
       <div style={{
-        background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)',
-        padding: '8px 16px', fontSize: 12, color: 'white', display: 'flex',
-        alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)'
+        flex: 1, overflowY: 'auto', padding: '12px 14px 80px',
+        display: 'flex', flexDirection: 'column', gap: 16
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <IconShield />
-          <span>一路平安模式啟用中 — 已鎖定路線導航</span>
-        </div>
-        <button
-          onClick={() => router.push('/sos')}
-          style={{ background: '#EF4444', color: 'white', border: 'none', padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-        >
-          SOS 求救
-        </button>
-      </div>
+        {messages.map((msg, i) => {
+          if (msg.role === 'system') {
+            return (
+              <div key={i} style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
+                <div style={{
+                  background: 'rgba(80, 110, 155, 0.65)', backdropFilter: 'blur(4px)',
+                  color: '#FFFFFF', fontSize: 12, padding: '4px 14px', borderRadius: 14,
+                  display: 'flex', alignItems: 'center', gap: 6
+                }}>
+                  <span>{formatTime(msg.timestamp)}</span>
+                  <span>{msg.text}</span>
+                </div>
+              </div>
+            )
+          }
 
-      {/* Main Chat Messages Container */}
-      <div style={{
-        flex: 1, overflowY: 'auto', padding: '16px 16px 120px',
-        display: 'flex', flexDirection: 'column', gap: 12
-      }}>
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
-              alignItems: 'flex-start',
-              gap: 8,
-            }}
-          >
-            {msg.role === 'ai' && (
-              <div style={{
-                width: 38, height: 38, borderRadius: '50%', background: '#FFF',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.1)', overflow: 'hidden', flexShrink: 0
-              }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/mom_avatar.jpg" alt="媽咪" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          if (msg.role === 'call_card') {
+            return (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', background: '#FFF',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', flexShrink: 0
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/mom_avatar.jpg" alt="yuki yang" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2, fontWeight: 500 }}>yuki yang</span>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
+                    <div style={{
+                      background: '#FFFFFF', borderRadius: 18, padding: '20px 20px', width: 250,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                    }}>
+                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F3F4F6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#111827' }}>
+                        <IconPhoneCall />
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: 15, color: '#111827' }}>語音通話已開始。</div>
+                      <button
+                        onClick={acceptVoiceCall}
+                        style={{
+                          width: '100%', background: '#F3F4F6', border: 'none', borderRadius: 12,
+                          padding: '10px 0', fontSize: 15, fontWeight: 600, color: '#111827',
+                          cursor: 'pointer', transition: 'background 0.2s ease'
+                        }}
+                      >
+                        加入
+                      </button>
+                    </div>
+                    <span style={{ fontSize: 11, color: '#4B5563', flexShrink: 0 }}>
+                      {formatTime(msg.timestamp)}
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
-              {msg.role === 'ai' && i === 0 && (
-                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)', marginBottom: 2, marginLeft: 2 }}>媽咪</span>
+            )
+          }
+
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                alignItems: 'flex-start',
+                gap: 8,
+              }}
+            >
+              {msg.role === 'ai' && (
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', background: '#FFF',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden', flexShrink: 0
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/mom_avatar.jpg" alt="yuki yang" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
               )}
-              <div style={{
-                padding: '10px 14px',
-                borderRadius: msg.role === 'user' ? '18px 4px 18px 18px' : '4px 18px 18px 18px',
-                background: msg.role === 'user' ? '#8B5CF6' : '#FFFFFF',
-                color: msg.role === 'user' ? '#FFFFFF' : '#1F2937',
-                fontSize: 14,
-                lineHeight: 1.5,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                wordBreak: 'break-word',
-              }}>
-                {msg.text}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '72%' }}>
+                {msg.role === 'ai' && (
+                  <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2, fontWeight: 500 }}>yuki yang</span>
+                )}
+                <div style={{ display: 'flex', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 6 }}>
+                  <div style={{
+                    padding: '10px 14px',
+                    borderRadius: 18,
+                    background: '#FFFFFF',
+                    color: '#111827',
+                    fontSize: 15,
+                    lineHeight: 1.5,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    wordBreak: 'break-word',
+                    whiteSpace: 'pre-line'
+                  }}>
+                    {msg.text}
+                  </div>
+                  <span style={{ fontSize: 11, color: '#4B5563', flexShrink: 0 }}>
+                    {formatTime(msg.timestamp)}
+                  </span>
+                </div>
               </div>
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2, padding: '0 4px' }}>
-                {formatTime(msg.timestamp)}
-              </span>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {isThinking && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/mom_avatar.jpg" alt="媽咪" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src="/mom_avatar.jpg" alt="yuki yang" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
-            <div style={{ background: '#FFFFFF', padding: '10px 16px', borderRadius: '4px 18px 18px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-              <ThinkingDots />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 12, color: '#374151', marginBottom: 4, marginLeft: 2 }}>yuki yang</span>
+              <div style={{ background: '#FFFFFF', padding: '10px 16px', borderRadius: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <ThinkingDots />
+              </div>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Suggestion Chips */}
-      {showQuickPrompts && messages.length <= 2 && (
-        <div style={{
-          position: 'fixed', bottom: 70, left: 0, right: 0,
-          padding: '0 16px', display: 'flex', gap: 8, overflowX: 'auto',
-          zIndex: 10, scrollbarWidth: 'none'
-        }}>
-          {quickPrompts.map((p, idx) => (
-            <button
-              key={idx}
-              onClick={() => sendMsg(p)}
-              style={{
-                background: 'rgba(255,255,255,0.9)', border: 'none', color: '#4B5563',
-                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 500,
-                whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-                cursor: 'pointer', flexShrink: 0
-              }}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Input Bar */}
+      {/* Input Bar — Exact 1:1 LINE Bottom Bar */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        padding: '10px 12px', background: '#FFFFFF',
-        borderTop: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 8,
-        zIndex: 20
+        padding: '8px 10px 12px', background: '#FFFFFF',
+        display: 'flex', alignItems: 'center', gap: 10,
+        zIndex: 20, borderTop: '1px solid rgba(0,0,0,0.05)'
       }}>
         <input
           type="file"
@@ -840,14 +829,32 @@ function CompanionContent() {
           style={{ display: 'none' }}
           onChange={handlePhotoUpload}
         />
+        
+        {/* Left Control Icons: + , Camera , Gallery */}
+        <button
+          onClick={() => sendMsg('開啟功能選單')}
+          style={{ background: 'none', border: 'none', color: '#111827', cursor: 'pointer', padding: 2, display: 'flex' }}
+        >
+          <IconPlus />
+        </button>
+
         <button
           onClick={() => fileInputRef.current?.click()}
-          style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 6, display: 'flex' }}
-          title="上傳照片評估環境風險"
+          style={{ background: 'none', border: 'none', color: '#111827', cursor: 'pointer', padding: 2, display: 'flex' }}
+          title="開啟相機"
         >
           <IconCamera />
         </button>
 
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{ background: 'none', border: 'none', color: '#111827', cursor: 'pointer', padding: 2, display: 'flex' }}
+          title="開啟相簿"
+        >
+          <IconImage />
+        </button>
+
+        {/* Input Field with Inline Smile Emoji */}
         <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
           <input
             type="text"
@@ -858,34 +865,33 @@ function CompanionContent() {
                 sendMsg(input)
               }
             }}
-            placeholder="傳送訊息給媽咪..."
+            placeholder=""
             style={{
-              width: '100%', padding: '10px 36px 10px 14px', borderRadius: 20,
-              border: '1px solid #E5E7EB', background: '#F9FAFB', fontSize: 14,
-              outline: 'none'
+              width: '100%', padding: '8px 36px 8px 14px', borderRadius: 20,
+              border: 'none', background: '#F3F4F6', fontSize: 15,
+              color: '#111827', outline: 'none'
             }}
           />
           <button
-            onClick={() => sendMsg(input)}
+            onClick={() => sendMsg('😊')}
             style={{
               position: 'absolute', right: 8, background: 'none', border: 'none',
-              color: input.trim() ? '#8B5CF6' : '#D1D5DB', cursor: 'pointer', padding: 4
+              color: '#6B7280', cursor: 'pointer', padding: 2, display: 'flex'
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+            <IconSmile />
           </button>
         </div>
 
+        {/* Right Microphone Icon */}
         <button
           onClick={startVoiceInput}
           style={{
-            background: isListening ? '#EF4444' : '#F3F4F6',
-            color: isListening ? '#FFFFFF' : '#4B5563',
-            border: 'none', borderRadius: '50%', width: 38, height: 38,
+            background: isListening ? '#EF4444' : 'none',
+            color: isListening ? '#FFFFFF' : '#111827',
+            border: 'none', borderRadius: '50%', width: 34, height: 34,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer',
-            boxShadow: isListening ? '0 0 10px rgba(239,68,68,0.5)' : 'none',
-            transition: 'all 0.2s ease',
+            cursor: 'pointer', transition: 'all 0.2s ease',
           }}
           title={isListening ? '停止錄音' : '語音輸入'}
         >
@@ -893,31 +899,26 @@ function CompanionContent() {
         </button>
       </div>
 
-      {/* Full-screen LINE Voice Call Overlay (Gemini Live Audio Engine + Static Audio Guarantee) */}
+      {/* Active LINE Voice Call Overlay (Gemini Live Audio Engine) */}
       {callActive && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
           background: '#0F172A', display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'space-between', padding: '50px 24px 60px', color: 'white'
-        }} onClick={triggerAudioPlay}>
+        }}>
           {callState === 'ringing' ? (
             <>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/mom_avatar.jpg"
-                  alt="媽咪"
+                  alt="yuki yang"
                   style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover', border: '4px solid rgba(255,255,255,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
                 />
-                <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
+                <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>yuki yang</div>
                 <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   💬 LINE 語音來電…
                 </div>
-                {!audioUnlocked && (
-                  <div style={{ fontSize: 11, background: 'rgba(6,199,85,0.2)', color: '#06C755', padding: '4px 12px', borderRadius: 999, border: '1px solid rgba(6,199,85,0.3)', marginTop: 4 }}>
-                    🔔 點擊螢幕解鎖鈴聲
-                  </div>
-                )}
               </div>
 
               <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
@@ -940,7 +941,7 @@ function CompanionContent() {
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="/mom_avatar.jpg"
-                    alt="媽咪"
+                    alt="yuki yang"
                     style={{
                       width: 110, height: 110, borderRadius: '50%', objectFit: 'cover',
                       border: aiSpeaking ? '4px solid #06C755' : userSpeaking ? '4px solid #8B5CF6' : '4px solid rgba(255,255,255,0.3)',
@@ -960,7 +961,7 @@ function CompanionContent() {
                   )}
                 </div>
 
-                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>媽咪</div>
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>yuki yang</div>
                 <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#06C755', animation: 'pulse 1s infinite' }} />
                   LINE 通話中 {String(Math.floor(callDuration / 60)).padStart(2, '0')}:{String(callDuration % 60).padStart(2, '0')}
@@ -1065,7 +1066,7 @@ function ThinkingDots() {
 export default function CompanionPage() {
   return (
     <Suspense fallback={
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#7b9ebf', color: 'white' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#84A3CB', color: 'white' }}>
         載入陪伴模式中…
       </div>
     }>
