@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, type RouteResult, type RouteStep } from '@/lib/maps'
-import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers } from '@/lib/safetyPlaces'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
+import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 
 interface NavStep {
   instruction: string
@@ -166,6 +167,7 @@ function NavigateContent() {
   const [isCentering, setIsCentering] = useState(true)
   const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
+  const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
   // 超商/警局標記改成按需查詢，不用一進導航頁就自動打 Places API
   const toggleSafetyPlaces = useCallback(async () => {
@@ -292,6 +294,10 @@ function NavigateContent() {
       })
 
       routePointsRef.current = points
+      const infoWindow = new google.maps.InfoWindow()
+
+      // Draw community reported anxiety hotspots
+      drawAnxietyReportMarkers(mapInstance.current!, infoWindow).catch(console.error)
 
       let currentPoints = points
 
@@ -391,6 +397,7 @@ function NavigateContent() {
 
     return () => {
       if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
+      mapInstance.current = null
     }
   }, [polylineStr, destination, distanceM, isCentering])
 
@@ -646,17 +653,24 @@ function NavigateContent() {
           </div>
 
           {/* Quick Action Buttons Row */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn-primary"
-              style={{ flex: 1, padding: '14px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 15 }}
+              style={{ flex: 1, padding: '12px 6px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 13, fontWeight: 700 }}
               onClick={() => router.push(`/companion?origin=${origin}&destination=${destination}&safety=${safetyScore}&duration=${remainingSec}`)}
             >
               🎙️ AI 陪聊
             </button>
             <button
+              className="btn-primary"
+              style={{ flex: 1, padding: '12px 6px', background: '#dc2626', fontSize: 13, fontWeight: 700 }}
+              onClick={() => setShowAnxietyModal(true)}
+            >
+              ⚠️ 不安通報
+            </button>
+            <button
               className="btn-primary btn-danger"
-              style={{ flex: 1, padding: '14px', animation: 'none', fontSize: 15 }}
+              style={{ flex: 1, padding: '12px 6px', animation: 'none', fontSize: 13, fontWeight: 700 }}
               onClick={() => router.push('/sos')}
             >
               🆘 SOS
@@ -664,6 +678,19 @@ function NavigateContent() {
           </div>
         </div>
       </div>
+
+      {/* Anxiety Report Modal */}
+      <AnxietyReportModal
+        isOpen={showAnxietyModal}
+        onClose={() => setShowAnxietyModal(false)}
+        currentPos={userPos || undefined}
+        onReportSuccess={() => {
+          if (mapInstance.current) {
+            const infoWindow = new google.maps.InfoWindow()
+            drawAnxietyReportMarkers(mapInstance.current, infoWindow).catch(() => {})
+          }
+        }}
+      />
 
       {/* ─── Turn-by-Turn Steps Drawer Modal ─────────────────────────────────── */}
       {showStepsDrawer && (
@@ -697,7 +724,7 @@ function NavigateContent() {
               >
                 <div style={{ fontSize: 28, width: 40, textAlign: 'center' }}>{step.icon}</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{step.instruction}</div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{step.instruction.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{formatDistance(step.distanceM)}</div>
                 </div>
               </div>
