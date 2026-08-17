@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 
+import AnxietyReportModal from '@/app/components/AnxietyReportModal'
+
 interface RouteContext {
   origin: string
   destination: string
@@ -652,6 +654,8 @@ RULES:
     ])
   }
 
+  const [showAnxietyModal, setShowAnxietyModal] = useState(false)
+
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100dvh',
@@ -675,7 +679,19 @@ RULES:
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, color: '#111827' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: '#111827' }}>
+          {/* Anxiety Report Quick Trigger Button */}
+          <button
+            onClick={() => setShowAnxietyModal(true)}
+            style={{
+              background: '#DC2626', color: '#FFFFFF', border: 'none',
+              borderRadius: 16, padding: '4px 10px', fontSize: 12, fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(220,38,38,0.35)'
+            }}
+          >
+            ⚠️ 不安通報
+          </button>
           <button style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 2 }}>
             <IconSearch />
           </button>
@@ -1048,6 +1064,22 @@ RULES:
           )}
         </div>
       )}
+
+      {/* Anxiety Report Modal */}
+      <AnxietyReportModal
+        isOpen={showAnxietyModal}
+        onClose={() => setShowAnxietyModal(false)}
+        onReportSuccess={(category) => {
+          setMessages(prev => [
+            ...prev,
+            {
+              role: 'system',
+              text: `⚠️ [不安通報已發送] 分類：${category}。已同步 LINE 警訊給緊急聯絡人！`,
+              timestamp: Date.now(),
+            },
+          ])
+        }}
+      />
     </div>
   )
 }

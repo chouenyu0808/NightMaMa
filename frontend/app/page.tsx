@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, type RouteResult, type LatLng } from '@/lib/maps'
-import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers } from '@/lib/safetyPlaces'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import Logo from '@/components/Logo'
 
 interface RouteVisual {
@@ -201,7 +201,7 @@ export default function HomePage() {
       markersRef.current.push(startMarker, endMarker)
     }
 
-    // Search and display 24h convenience stores & police stations along route
+    // Search and display 24h convenience stores, police stations, and anxiety report hotspots
     if (mapInstance.current) {
       if (!infoWindowRef.current) {
         infoWindowRef.current = new google.maps.InfoWindow()
@@ -211,6 +211,10 @@ export default function HomePage() {
           const placeMarkers = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
           markersRef.current.push(...placeMarkers)
         }
+      }).catch(console.error)
+
+      drawAnxietyReportMarkers(mapInstance.current, infoWindowRef.current || undefined).then(repMarkers => {
+        markersRef.current.push(...repMarkers)
       }).catch(console.error)
     }
 

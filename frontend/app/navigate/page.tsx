@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, type RouteResult, type RouteStep } from '@/lib/maps'
-import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers } from '@/lib/safetyPlaces'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
+import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 
 interface NavStep {
   instruction: string
@@ -162,6 +163,7 @@ function NavigateContent() {
   const [showStepsDrawer, setShowStepsDrawer] = useState(false)
   const [voiceMuted, setVoiceMuted] = useState(false)
   const [isCentering, setIsCentering] = useState(true)
+  const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
   // ETA Calculation
   const etaTime = new Date(Date.now() + remainingSec * 1000).toLocaleTimeString('zh-TW', {
@@ -273,6 +275,9 @@ function NavigateContent() {
           drawSafetyPlaceMarkers(mapInstance.current, places, infoWindow)
         }
       }).catch(console.error)
+
+      // Draw community reported anxiety hotspots
+      drawAnxietyReportMarkers(mapInstance.current!, infoWindow).catch(console.error)
 
       let currentPoints = points
 
@@ -612,17 +617,24 @@ function NavigateContent() {
           </div>
 
           {/* Quick Action Buttons Row */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn-primary"
-              style={{ flex: 1, padding: '14px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 15 }}
+              style={{ flex: 1, padding: '12px 6px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 13, fontWeight: 700 }}
               onClick={() => router.push(`/companion?origin=${origin}&destination=${destination}&safety=${safetyScore}&duration=${remainingSec}`)}
             >
               🎙️ AI 陪聊
             </button>
             <button
+              className="btn-primary"
+              style={{ flex: 1, padding: '12px 6px', background: '#dc2626', fontSize: 13, fontWeight: 700 }}
+              onClick={() => setShowAnxietyModal(true)}
+            >
+              ⚠️ 不安通報
+            </button>
+            <button
               className="btn-primary btn-danger"
-              style={{ flex: 1, padding: '14px', animation: 'none', fontSize: 15 }}
+              style={{ flex: 1, padding: '12px 6px', animation: 'none', fontSize: 13, fontWeight: 700 }}
               onClick={() => router.push('/sos')}
             >
               🆘 SOS
@@ -630,6 +642,19 @@ function NavigateContent() {
           </div>
         </div>
       </div>
+
+      {/* Anxiety Report Modal */}
+      <AnxietyReportModal
+        isOpen={showAnxietyModal}
+        onClose={() => setShowAnxietyModal(false)}
+        currentPos={userPos || undefined}
+        onReportSuccess={() => {
+          if (mapInstance.current) {
+            const infoWindow = new google.maps.InfoWindow()
+            drawAnxietyReportMarkers(mapInstance.current, infoWindow).catch(() => {})
+          }
+        }}
+      />
 
       {/* ─── Turn-by-Turn Steps Drawer Modal ─────────────────────────────────── */}
       {showStepsDrawer && (
