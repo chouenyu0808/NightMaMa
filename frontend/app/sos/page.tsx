@@ -83,15 +83,113 @@ function SOSContent() {
     setSosSent(true)
   }
 
+// Play realistic LINE Ringtone chime using Web Audio API
+function startLineRingtone() {
+  if (typeof window === 'undefined') return () => {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+  if (!AudioCtx) return () => {}
+
+  try {
+    const ctx = new AudioCtx()
+    let stopped = false
+
+    const playNotes = () => {
+      if (stopped) return
+      const now = ctx.currentTime
+
+      // Rhythmic LINE Ringtone 4-note chime sequence (880Hz, 1108Hz, 1318Hz, 1760Hz)
+      const sequence = [
+        { freq: 880, time: 0, dur: 0.1 },
+        { freq: 1108.73, time: 0.1, dur: 0.1 },
+        { freq: 1318.51, time: 0.2, dur: 0.1 },
+        { freq: 1760, time: 0.3, dur: 0.25 },
+        { freq: 880, time: 0.65, dur: 0.1 },
+        { freq: 1108.73, time: 0.75, dur: 0.1 },
+        { freq: 1318.51, time: 0.85, dur: 0.1 },
+        { freq: 1760, time: 0.95, dur: 0.3 },
+      ]
+
+      sequence.forEach(s => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(s.freq, now + s.time)
+
+        gain.gain.setValueAtTime(0.3, now + s.time)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + s.time + s.dur)
+
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+
+        osc.start(now + s.time)
+        osc.stop(now + s.time + s.dur)
+      })
+
+      if (!stopped) {
+        setTimeout(playNotes, 2200)
+      }
+    }
+
+    playNotes()
+
+    return () => {
+      stopped = true
+      try { ctx.close() } catch {}
+    }
+  } catch {
+    return () => {}
+  }
+}
+
+  // Play LINE Ringtone when fake call ringing
+  useEffect(() => {
+    if (!fakeCallActive || fakeCallTimer <= 0) return
+    const stopRingtone = startLineRingtone()
+    return () => {
+      stopRingtone()
+    }
+  }, [fakeCallActive, fakeCallTimer])
+
+  // Speak voice when fake call answered
+  useEffect(() => {
+    if (fakeCallActive && fakeCallTimer === 0) {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel()
+        const utt = new SpeechSynthesisUtterance('喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！')
+        utt.lang = 'zh-TW'
+        utt.rate = 1.0
+        utt.pitch = 1.05
+        window.speechSynthesis.speak(utt)
+      }
+    }
+  }, [fakeCallActive, fakeCallTimer])
+
   if (fakeCallActive && fakeCallTimer > 0) {
     return (
-      <div style={{ height: '100dvh', background: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-        <div style={{ fontSize: 60 }}>📞</div>
-        <div style={{ color: 'var(--text-secondary)', fontSize: 16 }}>{fakeCallTimer} 秒後接通…</div>
-        <div style={{ fontSize: 22, fontWeight: 700 }}>媽媽</div>
-        <div style={{ display: 'flex', gap: 40, marginTop: 20 }}>
-          <button onClick={() => setFakeCallActive(false)} style={{ width: 70, height: 70, borderRadius: '50%', background: '#ef4444', border: 'none', fontSize: 28, cursor: 'pointer' }}>📵</button>
-          <button onClick={() => setFakeCallTimer(0)} style={{ width: 70, height: 70, borderRadius: '50%', background: '#10b981', border: 'none', fontSize: 28, cursor: 'pointer' }}>📞</button>
+      <div style={{ height: '100dvh', background: '#111827', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mom_avatar.jpg"
+            alt="媽咪"
+            style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover', border: '4px solid rgba(255,255,255,0.2)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+          />
+          <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
+          <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+            💬 LINE 語音來電 ({fakeCallTimer}s)
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setFakeCallActive(false)} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}>📵</button>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>拒絕</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setFakeCallTimer(0)} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)' }}>📞</button>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>接聽</span>
+          </div>
         </div>
       </div>
     )
@@ -99,16 +197,28 @@ function SOSContent() {
 
   if (fakeCallActive && fakeCallTimer === 0) {
     return (
-      <div style={{ height: '100dvh', background: '#0f172a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24 }}>
-        <div style={{ fontSize: 60 }}>📞</div>
-        <div style={{ fontSize: 22, fontWeight: 700 }}>媽媽</div>
-        <div style={{ color: '#10b981' }}>通話中 00:00</div>
-        <div style={{ color: 'var(--text-secondary)', textAlign: 'center', fontSize: 14, marginTop: 8 }}>
-          「喂？你到哪了？我在等你，快點回來！附近有人嗎？」
+      <div style={{ height: '100dvh', background: '#111827', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/mom_avatar.jpg"
+            alt="媽咪"
+            style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '4px solid #06C755', boxShadow: '0 0 20px rgba(6,199,85,0.4)' }}
+          />
+          <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>媽咪</div>
+          <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600 }}>LINE 通話中 00:08</div>
+          <div className="glass-light" style={{ color: '#F3F4F6', textAlign: 'center', fontSize: 15, marginTop: 14, padding: '14px 20px', borderRadius: 18, lineHeight: 1.6, maxWidth: 300, background: 'rgba(255,255,255,0.08)' }}>
+            「喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！」
+          </div>
         </div>
+
         <button
-          onClick={() => { setFakeCallActive(false); router.back() }}
-          style={{ width: 70, height: 70, borderRadius: '50%', background: '#ef4444', border: 'none', fontSize: 28, cursor: 'pointer', marginTop: 24 }}
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
+            setFakeCallActive(false)
+            router.back()
+          }}
+          style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}
         >
           📵
         </button>
