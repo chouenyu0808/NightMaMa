@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import Logo from '@/components/Logo'
+import { Icon } from '@iconify/react'
 
 interface RouteVisual {
   total: number
@@ -70,6 +71,12 @@ function typeIconFor(label: '最安全' | '最快' | '平衡', size?: number) {
   if (label === '最安全') return <IconShield size={size} />
   if (label === '最快') return <IconBolt size={size} />
   return <IconBalance size={size} />
+}
+
+const typeLabelOf: Record<string, '最安全' | '最快' | '平衡'> = {
+  safest: '最安全',
+  fastest: '最快',
+  balanced: '平衡',
 }
 
 export default function HomePage() {
@@ -374,7 +381,7 @@ export default function HomePage() {
       markersRef.current.push(dangerMarker)
     }
 
-    alert('✅ 不安暗區點位已成功匿名通報！地圖已為您與其他使用者建立警示標籤。')
+    alert('不安暗區點位已成功匿名通報！地圖已為您與其他使用者建立警示標籤。')
   }
 
   const handleSearch = async () => {
@@ -402,19 +409,10 @@ export default function HomePage() {
       if (!rawRoutes.length) throw new Error('找不到路線')
 
       const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
-      const maxLights = Math.max(1, ...rawRoutes.map(r => r.lightCount))
-      const maxCCTV = Math.max(1, ...rawRoutes.map(r => r.cameraCount))
 
-      // 1. 動態依據路燈、監視器、警局、超商等指標計算真實安全分數 (68 ~ 95 分)
+      // 直接採用後端 /routes 算出的真實安全分數 (Lighting/CCTV/Safe Haven 加權後、取最差路段)
       const computedRoutes = rawRoutes.map(route => {
-        const lightRatio = route.lightCount / maxLights
-        const cctvRatio = route.cameraCount / maxCCTV
-        const policeBonus = Math.min(8, route.policeCount * 1.5)
-        const storeBonus = Math.min(7, (route.storeCount || 4) * 1.1)
-
-        const rawScore = Math.round(66 + lightRatio * 14 + cctvRatio * 9 + policeBonus + storeBonus)
-        const finalScore = Math.min(95, Math.max(68, rawScore))
-        const safety = scoreToVisual(finalScore)
+        const safety = scoreToVisual(Math.round(route.score))
         const extraMin = Math.round((route.durationSec - minDuration) / 60)
         const typeLabel = typeLabelOf[route.type] ?? '平衡'
         const description = route.reason || `${safety.emoji} 安全評分 ${safety.total} 分，沿途 ${route.lightCount} 盞路燈`
@@ -422,11 +420,11 @@ export default function HomePage() {
       })
 
       // Sort by Safety Total Score descending (Highest safety score at the top!)
-      scored.sort((a, b) => b.safety.total - a.safety.total)
-      setRoutes(scored)
+      computedRoutes.sort((a, b) => b.safety.total - a.safety.total)
+      setRoutes(computedRoutes)
       setSelectedIdx(0)
       setIsSearchCollapsed(true)
-      drawRoutes(scored, 0, false, true)
+      drawRoutes(computedRoutes, 0, false, true)
       setShowSheet(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '路線搜尋失敗，請重試')
@@ -537,56 +535,58 @@ export default function HomePage() {
       {/* Top search panel */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
-        padding: '52px 16px 16px',
+        padding: isSearchCollapsed && routes.length > 0 ? '48px 16px 10px' : '52px 16px 16px',
         background: 'rgba(10,14,26,0.97)',
         zIndex: 20,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <button onClick={() => setAppState('landing')} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 16, borderRadius: 999, width: 32, height: 32, cursor: 'pointer' }}>←</button>
-          {routes.length > 0 && (
+        {!(isSearchCollapsed && routes.length > 0) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <button onClick={() => setAppState('landing')} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 16, borderRadius: 999, width: 32, height: 32, cursor: 'pointer' }}>←</button>
+            {routes.length > 0 && (
+              <button
+                onClick={toggleSafetyPlaces}
+                disabled={isLoadingSafetyPlaces}
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: showSafetyPlaces ? '#34d399' : '#93c5fd',
+                  background: showSafetyPlaces ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
+                  padding: '4px 10px',
+                  borderRadius: 999,
+                  border: `1px solid ${showSafetyPlaces ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  opacity: isLoadingSafetyPlaces ? 0.6 : 1,
+                }}
+              >
+                <IconStore size={12} /><IconBadge size={12} />
+                {isLoadingSafetyPlaces ? '搜尋中…' : showSafetyPlaces ? '隱藏超商/警局' : '顯示超商/警局'}
+              </button>
+            )}
             <button
-              onClick={toggleSafetyPlaces}
-              disabled={isLoadingSafetyPlaces}
+              onClick={() => setShowReportModal(true)}
               style={{
                 marginLeft: 'auto',
                 fontSize: 11,
                 fontWeight: 700,
-                color: showSafetyPlaces ? '#34d399' : '#93c5fd',
-                background: showSafetyPlaces ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
+                color: '#f59e0b',
+                background: 'rgba(245,158,11,0.15)',
                 padding: '4px 10px',
                 borderRadius: 999,
-                border: `1px solid ${showSafetyPlaces ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                border: '1px solid rgba(245,158,11,0.3)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 4,
-                opacity: isLoadingSafetyPlaces ? 0.6 : 1,
               }}
             >
-              <IconStore size={12} /><IconBadge size={12} />
-              {isLoadingSafetyPlaces ? '搜尋中…' : showSafetyPlaces ? '隱藏超商/警局' : '顯示超商/警局'}
+              <Icon icon="mdi:bullhorn-outline" width={13} height={13} /> 不安通報
             </button>
-          )}
-          <button
-            onClick={() => setShowReportModal(true)}
-            style={{
-              marginLeft: 'auto',
-              fontSize: 11,
-              fontWeight: 700,
-              color: '#f59e0b',
-              background: 'rgba(245,158,11,0.15)',
-              padding: '4px 10px',
-              borderRadius: 999,
-              border: '1px solid rgba(245,158,11,0.3)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            📢 不安通報
-          </button>
-        </div>
+          </div>
+        )}
 
         {isSearchCollapsed && routes.length > 0 ? (
           <div
@@ -601,12 +601,28 @@ export default function HomePage() {
               backdropFilter: 'blur(12px)',
             }}
           >
+            <button onClick={() => setAppState('landing')} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, borderRadius: 999, width: 26, height: 26, cursor: 'pointer', flexShrink: 0, marginRight: 8 }}>←</button>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, paddingRight: 8 }}>
               <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#60a5fa', flexShrink: 0 }} />
               {origin.split('區')[1] || origin.slice(0, 10)} →
               <IconFlag size={13} />
               {destination.split('區')[1] || destination.slice(0, 10)}
             </div>
+            <button
+              onClick={toggleSafetyPlaces}
+              disabled={isLoadingSafetyPlaces}
+              title={showSafetyPlaces ? '隱藏超商/警局' : '顯示超商/警局'}
+              style={{ background: 'none', border: 'none', color: showSafetyPlaces ? '#34d399' : '#93c5fd', padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: isLoadingSafetyPlaces ? 0.6 : 1 }}
+            >
+              <IconStore size={16} />
+            </button>
+            <button
+              onClick={() => setShowReportModal(true)}
+              title="不安通報"
+              style={{ background: 'none', border: 'none', color: '#f59e0b', padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            >
+              <Icon icon="mdi:bullhorn-outline" width={16} height={16} />
+            </button>
             <button
               onClick={() => {
                 setIsSearchCollapsed(false)
@@ -842,9 +858,11 @@ export default function HomePage() {
           <div className="glass" style={{ width: '100%', maxWidth: 360, borderRadius: 24, padding: 24, border: '1px solid rgba(245,158,11,0.3)', background: '#1e293b' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div style={{ fontWeight: 800, fontSize: 16, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}>
-                📢 匿名回報不安暗區/死角
+                <Icon icon="mdi:bullhorn-outline" width={18} height={18} /> 匿名回報不安暗區/死角
               </div>
-              <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 18, cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', display: 'flex' }}>
+                <Icon icon="mdi:close" width={18} height={18} />
+              </button>
             </div>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
               您的匿名回報將用於即時在地圖標記暗區，提醒其他夜行民眾，並作為大數據城市暗巷治理參考。
@@ -952,10 +970,10 @@ function LandingPage({ onStart }: { onStart: () => void }) {
   }, [])
 
   const features = [
-    { icon: '💡', title: '路燈密度分析', desc: '台北市 145,919 盞路燈即時評分' },
-    { icon: '📹', title: '監視器覆蓋率', desc: '5,036 支 警察局 CCTV 涵蓋全台北' },
-    { icon: '🎙️', title: 'AI 語音陪聊', desc: 'Gemini 3.6 Flash 全程陪伴，化解夜行焦慮' },
-    { icon: '🆘', title: '一鍵緊急通知', desc: 'LINE 即時定位發送給緊急聯絡人' },
+    { icon: 'mdi:lightbulb-on-outline', title: '路燈密度分析', desc: '台北市 145,919 盞路燈即時評分' },
+    { icon: 'mdi:cctv', title: '監視器覆蓋率', desc: '5,036 支 警察局 CCTV 涵蓋全台北' },
+    { icon: 'mdi:microphone-outline', title: 'AI 語音陪聊', desc: 'Gemini 3.6 Flash 全程陪伴，化解夜行焦慮' },
+    { icon: 'mdi:lifebuoy', title: '一鍵緊急通知', desc: 'LINE 即時定位發送給緊急聯絡人' },
   ]
 
   return (
@@ -1000,7 +1018,7 @@ function LandingPage({ onStart }: { onStart: () => void }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 28, animation: 'fadeIn 0.8s ease 0.2s both' }}>
           {features.map(f => (
             <div key={f.title} className="glass" style={{ padding: '14px 12px', borderRadius: 18 }}>
-              <div style={{ fontSize: 26, marginBottom: 6 }}>{f.icon}</div>
+              <div style={{ marginBottom: 6, color: '#a78bfa' }}><Icon icon={f.icon} width={26} height={26} /></div>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{f.title}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{f.desc}</div>
             </div>
@@ -1011,25 +1029,25 @@ function LandingPage({ onStart }: { onStart: () => void }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeIn 0.8s ease 0.3s both' }}>
           <button
             className="btn-primary"
-            style={{ padding: '18px', fontSize: 17, letterSpacing: '0.02em' }}
+            style={{ padding: '18px', fontSize: 17, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
             onClick={onStart}
           >
-            🗺️ 開始安全導航
+            <Icon icon="mdi:compass-outline" width={20} height={20} /> 開始安全導航
           </button>
           <div style={{ display: 'flex', gap: 10 }}>
             <button
               className="btn-primary"
-              style={{ flex: 1, background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', padding: '14px' }}
+              style={{ flex: 1, background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={() => router.push('/companion')}
             >
-              🎙️ 語音陪聊
+              <Icon icon="mdi:microphone-outline" width={18} height={18} /> 語音陪聊
             </button>
             <button
               className="btn-primary btn-danger"
-              style={{ flex: 1, padding: '14px', animation: 'none' }}
+              style={{ flex: 1, padding: '14px', animation: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={() => router.push('/sos')}
             >
-              🆘 緊急 SOS
+              <Icon icon="mdi:lifebuoy" width={18} height={18} /> 緊急 SOS
             </button>
           </div>
         </div>
@@ -1074,8 +1092,8 @@ function RouteCard({ route, isSelected = true, onClick }: { route: ScoredRoute; 
           {typeIconFor(route.typeLabel, 18)}
           <span style={{ fontWeight: 800, fontSize: 16, color: 'white' }}>{route.typeLabel}路線</span>
           {isSelected && (
-            <span style={{ background: route.safety.color, color: '#111827', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999 }}>
-              ✓ 已選擇
+            <span style={{ background: route.safety.color, color: '#111827', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <Icon icon="mdi:check-bold" width={11} height={11} /> 已選擇
             </span>
           )}
         </div>
@@ -1097,7 +1115,9 @@ function RouteCard({ route, isSelected = true, onClick }: { route: ScoredRoute; 
           <IconBadge size={12} /> {route.policeCount} 派出所/警局
         </span>
         {route.extraMin === 0 && (
-          <span style={{ fontSize: 11, color: '#10b981', marginLeft: 'auto', fontWeight: 700 }}>⚡ 費時最短</span>
+          <span style={{ fontSize: 11, color: '#10b981', marginLeft: 'auto', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            <IconBolt size={12} /> 費時最短
+          </span>
         )}
       </div>
     </div>
@@ -1131,17 +1151,17 @@ function RouteRow({ route, onClick }: { route: ScoredRoute; onClick: () => void 
 export function NavBar({ active }: { active: 'home' | 'companion' | 'sos' | 'settings' }) {
   const router = useRouter()
   const items = [
-    { id: 'home', icon: '🗺️', label: '導航', path: '/' },
-    { id: 'companion', icon: '🎙️', label: '陪聊', path: '/companion' },
-    { id: 'sos', icon: '🆘', label: 'SOS', path: '/sos' },
-    { id: 'settings', icon: '⚙️', label: '設定', path: '/settings' },
+    { id: 'home', icon: 'mdi:compass-outline', label: '導航', path: '/' },
+    { id: 'companion', icon: 'mdi:microphone-outline', label: '陪聊', path: '/companion' },
+    { id: 'sos', icon: 'mdi:lifebuoy', label: 'SOS', path: '/sos' },
+    { id: 'settings', icon: 'mdi:cog-outline', label: '設定', path: '/settings' },
   ] as const
 
   return (
     <nav className="nav-bar glass" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
       {items.map(item => (
         <button key={item.id} className={`nav-item ${active === item.id ? 'active' : ''}`} onClick={() => router.push(item.path)}>
-          <span style={{ fontSize: item.id === 'sos' ? 20 : 22 }}>{item.icon}</span>
+          <Icon icon={item.icon} width={item.id === 'sos' ? 20 : 22} height={item.id === 'sos' ? 20 : 22} />
           <span>{item.label}</span>
         </button>
       ))}

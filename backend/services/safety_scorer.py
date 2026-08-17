@@ -1,66 +1,78 @@
-"""Route safety scoring — segment-based, worst-segment-wins (see prd.md Module 1).
+"""Route safety scoring — segment-based, worst-segment-wins.
 
-    S_segment = w_light*light_density + w_camera*camera_density + w_store*store_density
-    S_route   = min(S_segment for all segments) - w_time * log(1 + time_extra_min)
+Each ~75m segment gets three 0-100 sub-scores — Lighting, CCTV, Safe Haven —
+each blending local density with proximity to the nearest one, then blended
+by fixed weights into a segment score:
 
-Density is counted per 100m so segment length doesn't bias the score, and the
-route score takes the worst segment (not the average) so one dark stretch
-can't be hidden by an otherwise well-lit route.
+    Segment Score = Lighting*40% + CCTV*25% + Safe Haven*35%
+    Route Score   = min(Segment Score for all segments)
+
+The route score takes the worst segment (not the average) so one dark
+stretch can't be hidden by an otherwise well-lit route.
 """
 import math
 from dataclasses import dataclass
+
+LIGHTING_WEIGHT = 0.40
+CCTV_WEIGHT = 0.25
+SAFE_HAVEN_WEIGHT = 0.35
+
+# ponytail: hand-picked reference/decay constants against Taipei's actual streetlight
+# (145k) and CCTV (5k) coverage; revisit if real routes cluster near 0 or 100
+LIGHT_DENSITY_REF_PER_100M = 3.0  # streetlight count per 100m considered "fully lit"
+CAMERA_DENSITY_REF_PER_100M = 1.0
+LIGHT_PROXIMITY_DECAY_M = 50.0
+CAMERA_PROXIMITY_DECAY_M = 80.0
+STORE_PROXIMITY_DECAY_M = 200.0
 
 
 @dataclass
 class Segment:
     length_m: float
     light_count: int
+    light_nearest_m: float
     camera_count: int
-    # store/police counts are route-wide Places totals split across segments
-    # proportional to length (see routers/routes.py), so they're fractional.
-    store_count: float
-    police_count: float = 0
+    camera_nearest_m: float
+    store_nearest_m: float
 
 
-@dataclass
-class Weights:
-    light: float = 1.0
-    camera: float = 1.0
-    store: float = 1.0
-    police: float = 1.0
-    time: float = 1.0
+def _clamp(x: float) -> float:
+    return max(0.0, min(100.0, x))
 
 
-def _density_per_100m(count: int, length_m: float) -> float:
+def _density_score(count: int, length_m: float, ref_per_100m: float) -> float:
     if length_m <= 0:
         return 0.0
-    return count / (length_m / 100)
+    density = count / (length_m / 100)
+    return _clamp(density / ref_per_100m * 100)
 
 
-def score_segment(segment: Segment, weights: Weights) -> float:
-    return (
-        weights.light * _density_per_100m(segment.light_count, segment.length_m)
-        + weights.camera * _density_per_100m(segment.camera_count, segment.length_m)
-        + weights.store * _density_per_100m(segment.store_count, segment.length_m)
-        + weights.police * _density_per_100m(segment.police_count, segment.length_m)
+def _proximity_score(distance_m: float, decay_m: float) -> float:
+    """100 right next to it, decaying toward 0 as distance grows."""
+    return _clamp(100 * math.exp(-distance_m / decay_m))
+
+
+def lighting_score(segment: Segment) -> float:
+    return 0.6 * _density_score(segment.light_count, segment.length_m, LIGHT_DENSITY_REF_PER_100M) + 0.4 * _proximity_score(
+        segment.light_nearest_m, LIGHT_PROXIMITY_DECAY_M
     )
 
 
-# ponytail: score_segment's raw weighted density has no fixed ceiling, but the
-# API contract (see backend-architecture.md) and frontend both expect a 0-100
-MAX_RAW_SCORE = 20.0
+def cctv_score(segment: Segment) -> float:
+    return 0.6 * _density_score(segment.camera_count, segment.length_m, CAMERA_DENSITY_REF_PER_100M) + 0.4 * _proximity_score(
+        segment.camera_nearest_m, CAMERA_PROXIMITY_DECAY_M
+    )
 
 
-def score_segment_scaled(segment: Segment, weights: Weights) -> float:
-    """Single segment's score on the same 0-100 scale as score_route, for per-segment display (e.g. route coloring)."""
-    return max(0.0, min(100.0, score_segment(segment, weights) / MAX_RAW_SCORE * 100))
+def safe_haven_score(segment: Segment) -> float:
+    return _proximity_score(segment.store_nearest_m, STORE_PROXIMITY_DECAY_M)
 
 
-def score_route(segments: list[Segment], time_extra_min: float, weights: Weights | None = None) -> float:
+def score_segment(segment: Segment) -> float:
+    return LIGHTING_WEIGHT * lighting_score(segment) + CCTV_WEIGHT * cctv_score(segment) + SAFE_HAVEN_WEIGHT * safe_haven_score(segment)
+
+
+def score_route(segments: list[Segment]) -> float:
     if not segments:
         raise ValueError("route must have at least one segment")
-    weights = weights or Weights()
-    worst_segment_score = min(score_segment(s, weights) for s in segments)
-    time_penalty = weights.time * math.log(1 + max(time_extra_min, 0))
-    raw = worst_segment_score - time_penalty
-    return max(0.0, min(100.0, raw / MAX_RAW_SCORE * 100))
+    return min(score_segment(s) for s in segments)

@@ -7,18 +7,9 @@ class LatLng(BaseModel):
     lng: float
 
 
-class WeightOverrides(BaseModel):
-    light: float = 1
-    camera: float = 1
-    store: float = 1
-    police: float = 1
-    time: float = 1
-
-
 class RouteRequest(BaseModel):
     origin: LatLng
     destination: LatLng
-    weight_overrides: WeightOverrides | None = None
 
 
 class RouteOption(BaseModel):
@@ -30,6 +21,7 @@ class RouteOption(BaseModel):
     light_count: int = 0
     camera_count: int = 0
     police_count: int = 0
+    store_count: int = 0
     segment_scores: list[float] = []
 
 
@@ -50,6 +42,18 @@ class ReportRequest(BaseModel):
     lat: float
     lng: float
     reason: str
+
+
+class ReportItem(BaseModel):
+    id: str
+    lat: float
+    lng: float
+    reason: str
+    reported_at: str
+
+
+class ReportsResponse(BaseModel):
+    reports: list[ReportItem]
 
 
 class SpeakRequest(BaseModel):

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
+import { Icon } from '@iconify/react'
 import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, type RouteResult, type RouteStep } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
@@ -17,12 +18,12 @@ interface NavStep {
 
 function getManeuverIcon(maneuver: string): string {
   const m = maneuver.toUpperCase()
-  if (m.includes('RIGHT')) return '↱'
-  if (m.includes('LEFT')) return '↰'
-  if (m.includes('SLIGHT_RIGHT') || m.includes('BEAR_RIGHT')) return '⬏'
-  if (m.includes('SLIGHT_LEFT') || m.includes('BEAR_LEFT')) return '⬎'
-  if (m.includes('UTURN')) return '↰↰'
-  return '⬆️'
+  if (m.includes('UTURN')) return 'material-symbols:u-turn-left'
+  if (m.includes('SLIGHT_RIGHT') || m.includes('BEAR_RIGHT')) return 'material-symbols:turn-slight-right'
+  if (m.includes('SLIGHT_LEFT') || m.includes('BEAR_LEFT')) return 'material-symbols:turn-slight-left'
+  if (m.includes('RIGHT')) return 'material-symbols:turn-right'
+  if (m.includes('LEFT')) return 'material-symbols:turn-left'
+  return 'material-symbols:straight'
 }
 
 function parseStreetName(instruction: string): string {
@@ -59,7 +60,7 @@ function calculateHeading(lat1: number, lng1: number, lat2: number, lng2: number
 
 function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, destination: string): NavStep[] {
   if (points.length < 2) {
-    return [{ instruction: `前往 ${destination}`, distanceM: 100, maneuver: 'STRAIGHT', streetName: destination, icon: '⬆️' }]
+    return [{ instruction: `前往 ${destination}`, distanceM: 100, maneuver: 'STRAIGHT', streetName: destination, icon: 'material-symbols:straight' }]
   }
 
   const generated: NavStep[] = []
@@ -77,7 +78,7 @@ function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, de
         distanceM: Math.round(dist),
         maneuver: 'STRAIGHT',
         streetName: '起點路段',
-        icon: '⬆️',
+        icon: 'material-symbols:straight',
       })
       continue
     }
@@ -91,24 +92,24 @@ function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, de
 
       if (Math.abs(diff) > 25 || accumulatedDist > 220) {
         let maneuver = 'STRAIGHT'
-        let icon = '⬆️'
+        let icon = 'material-symbols:straight'
         let turnName = '直行前進'
 
         if (diff >= 25 && diff < 110) {
           maneuver = 'TURN_RIGHT'
-          icon = '↱'
+          icon = 'material-symbols:turn-right'
           turnName = '右轉'
         } else if (diff <= -25 && diff > -110) {
           maneuver = 'TURN_LEFT'
-          icon = '↰'
+          icon = 'material-symbols:turn-left'
           turnName = '左轉'
         } else if (diff >= 110) {
           maneuver = 'SLIGHT_RIGHT'
-          icon = '⬏'
+          icon = 'material-symbols:turn-slight-right'
           turnName = '斜右轉'
         } else if (diff <= -110) {
           maneuver = 'SLIGHT_LEFT'
-          icon = '⬎'
+          icon = 'material-symbols:turn-slight-left'
           turnName = '斜左轉'
         }
 
@@ -129,7 +130,7 @@ function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, de
     distanceM: 0,
     maneuver: 'DESTINATION',
     streetName: destination.split('區')[1] || destination,
-    icon: '🎯',
+    icon: 'material-symbols:flag',
   })
 
   return generated
@@ -168,6 +169,7 @@ function NavigateContent() {
   const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
+  const [hasArrived, setHasArrived] = useState(false)
 
   // 超商/警局標記改成按需查詢，不用一進導航頁就自動打 Places API
   const toggleSafetyPlaces = useCallback(async () => {
@@ -209,11 +211,17 @@ function NavigateContent() {
 
   // Timer countdown
   useEffect(() => {
+    if (hasArrived) return
     const t = setInterval(() => {
       setRemainingSec(r => Math.max(0, r - 1))
     }, 1000)
     return () => clearInterval(t)
-  }, [])
+  }, [hasArrived])
+
+  // Announce arrival once
+  useEffect(() => {
+    if (hasArrived) speakInstruction(`已抵達目的地：${destination}`)
+  }, [hasArrived, destination, speakInstruction])
 
   // Map initialization & GPS tracking
   useEffect(() => {
@@ -315,6 +323,12 @@ function NavigateContent() {
             setRealtimeDistanceM(remainingM)
             setRemainingSec(Math.round(remainingM / 1.25)) // 1.25 m/s walking speed
 
+            if (remainingM <= 15) {
+              setHasArrived(true)
+              if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
+              return
+            }
+
             // Find closest route point index
             let minIndex = 0
             let minDistance = Infinity
@@ -415,8 +429,16 @@ function NavigateContent() {
     }
   }
 
+  // Demo-only: fake arrival without walking the real route (GPS may not move indoors)
+  const simulateArrival = () => {
+    if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
+    setRealtimeDistanceM(0)
+    setRemainingSec(0)
+    setHasArrived(true)
+  }
+
   const currentStep = steps[currentStepIdx] || {
-    icon: '⬆️',
+    icon: 'material-symbols:straight',
     streetName: destination,
     instruction: `前往 ${destination}`,
     distanceM: distanceM,
@@ -433,8 +455,8 @@ function NavigateContent() {
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
         zIndex: 50,
-        padding: '52px 16px 12px',
-        background: 'linear-gradient(to bottom, rgba(2, 44, 34, 0.98) 85%, transparent)',
+        padding: '24px 16px 12px',
+        background: 'linear-gradient(to bottom, rgba(2, 44, 34, 0.9) 45%, transparent)',
       }}>
         {/* Main Turn Banner */}
         <div style={{
@@ -460,7 +482,7 @@ function NavigateContent() {
             justifyContent: 'center',
             flexShrink: 0,
           }}>
-            {currentStep.icon}
+            <Icon icon={currentStep.icon} width={32} height={32} />
           </div>
 
           {/* Turn text */}
@@ -500,7 +522,7 @@ function NavigateContent() {
               flexShrink: 0,
             }}
           >
-            ✦
+            <Icon icon="mdi:creation" width={20} height={20} />
           </button>
         </div>
 
@@ -521,7 +543,7 @@ function NavigateContent() {
             fontWeight: 600,
           }}>
             <span>接下來</span>
-            <span style={{ fontSize: 16 }}>{nextStep.icon}</span>
+            <Icon icon={nextStep.icon} width={16} height={16} />
             <span>{nextStep.streetName}</span>
           </div>
         )}
@@ -539,7 +561,7 @@ function NavigateContent() {
           style={floatingControlStyle}
           title="指北針"
         >
-          🧭
+          <Icon icon="mdi:compass-outline" width={20} height={20} />
         </button>
 
         {/* Voice Announcements Toggle */}
@@ -556,7 +578,7 @@ function NavigateContent() {
           }}
           title={voiceMuted ? '開啟語音播報' : '靜音'}
         >
-          {voiceMuted ? '🔇' : '🔊'}
+          <Icon icon={voiceMuted ? 'mdi:volume-off' : 'mdi:volume-high'} width={20} height={20} />
         </button>
 
         {/* Recenter Map Button */}
@@ -569,7 +591,7 @@ function NavigateContent() {
           }}
           title="重新對焦我的位置"
         >
-          🎯
+          <Icon icon="mdi:crosshairs-gps" width={20} height={20} />
         </button>
 
         {/* Safety Places Toggle (store/police markers — fetched on demand) */}
@@ -584,7 +606,16 @@ function NavigateContent() {
           }}
           title={showSafetyPlaces ? '隱藏超商/警局' : '顯示附近超商/警局'}
         >
-          {isLoadingSafetyPlaces ? '⏳' : '🏪'}
+          <Icon icon={isLoadingSafetyPlaces ? 'mdi:loading' : 'mdi:storefront-outline'} width={20} height={20} className={isLoadingSafetyPlaces ? 'spin' : undefined} />
+        </button>
+
+        {/* Demo-only: skip straight to arrival without walking the real route */}
+        <button
+          onClick={simulateArrival}
+          style={floatingControlStyle}
+          title="Demo：模擬抵達目的地"
+        >
+          <Icon icon="mdi:flag-checkered" width={20} height={20} />
         </button>
       </div>
 
@@ -623,7 +654,7 @@ function NavigateContent() {
               }}
               title="結束導航"
             >
-              ✕
+              <Icon icon="mdi:close" width={20} height={20} />
             </button>
 
             {/* ETA Info Center */}
@@ -654,7 +685,7 @@ function NavigateContent() {
               }}
               title="詳細路線"
             >
-              🔀
+              <Icon icon="mdi:format-list-numbered" width={20} height={20} />
             </button>
           </div>
 
@@ -662,24 +693,24 @@ function NavigateContent() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn-primary"
-              style={{ flex: 1, padding: '12px 6px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 13, fontWeight: 700 }}
+              style={{ flex: 1, padding: '12px 6px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
               onClick={() => router.push(`/companion?origin=${origin}&destination=${destination}&safety=${safetyScore}&duration=${remainingSec}`)}
             >
-              🎙️ AI 陪聊
+              <Icon icon="mdi:microphone-outline" width={16} height={16} /> AI 陪聊
             </button>
             <button
               className="btn-primary"
-              style={{ flex: 1, padding: '12px 6px', background: '#dc2626', fontSize: 13, fontWeight: 700 }}
+              style={{ flex: 1, padding: '12px 6px', background: '#dc2626', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
               onClick={() => setShowAnxietyModal(true)}
             >
-              ⚠️ 不安通報
+              <Icon icon="mdi:alert-outline" width={16} height={16} /> 不安通報
             </button>
             <button
               className="btn-primary btn-danger"
-              style={{ flex: 1, padding: '12px 6px', animation: 'none', fontSize: 13, fontWeight: 700 }}
+              style={{ flex: 1, padding: '12px 6px', animation: 'none', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
               onClick={() => router.push('/sos')}
             >
-              🆘 SOS
+              <Icon icon="mdi:lifebuoy" width={16} height={16} /> SOS
             </button>
           </div>
         </div>
@@ -698,6 +729,34 @@ function NavigateContent() {
         }}
       />
 
+      {/* ─── Arrival Overlay ──────────────────────────────────────────────────── */}
+      {hasArrived && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'rgba(10,14,26,0.95)',
+          backdropFilter: 'blur(20px)',
+          zIndex: 150,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 16,
+          padding: 24,
+          textAlign: 'center',
+        }}>
+          <Icon icon="mdi:party-popper" width={56} height={56} style={{ color: '#10b981' }} />
+          <div style={{ fontSize: 22, fontWeight: 900, color: 'white' }}>已抵達目的地</div>
+          <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.7)' }}>{destination}</div>
+          <button
+            className="btn-primary"
+            style={{ marginTop: 16, padding: '14px 40px', fontSize: 15, fontWeight: 700 }}
+            onClick={() => router.push('/')}
+          >
+            完成，返回首頁
+          </button>
+        </div>
+      )}
+
       {/* ─── Turn-by-Turn Steps Drawer Modal ─────────────────────────────────── */}
       {showStepsDrawer && (
         <div style={{
@@ -710,8 +769,12 @@ function NavigateContent() {
           padding: '52px 20px 24px',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 20, fontWeight: 900 }}>🔀 轉彎路線指引</div>
-            <button onClick={() => setShowStepsDrawer(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: 24, cursor: 'pointer' }}>✕</button>
+            <div style={{ fontSize: 20, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon icon="mdi:format-list-numbered" width={22} height={22} /> 轉彎路線指引
+            </div>
+            <button onClick={() => setShowStepsDrawer(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', display: 'flex' }}>
+              <Icon icon="mdi:close" width={24} height={24} />
+            </button>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }} className="scrollable">
@@ -728,7 +791,7 @@ function NavigateContent() {
                   gap: 14,
                 }}
               >
-                <div style={{ fontSize: 28, width: 40, textAlign: 'center' }}>{step.icon}</div>
+                <div style={{ width: 40, display: 'flex', justifyContent: 'center' }}><Icon icon={step.icon} width={26} height={26} /></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{step.instruction.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ')}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{formatDistance(step.distanceM)}</div>

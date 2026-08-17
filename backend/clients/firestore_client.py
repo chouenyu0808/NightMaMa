@@ -1,18 +1,6 @@
 """Firestore helpers for user preferences and session state."""
 from google.cloud import firestore
 
-from models.schemas import WeightOverrides
-
-
-def get_weight_overrides(db: firestore.Client, user_id: str | None) -> WeightOverrides:
-    if not user_id:
-        return WeightOverrides()
-    doc = db.collection("users").document(user_id).get()
-    if not doc.exists:
-        return WeightOverrides()
-    prefs = (doc.to_dict() or {}).get("preferences", {}).get("weight_overrides")
-    return WeightOverrides(**prefs) if prefs else WeightOverrides()
-
 
 def set_session_status(
     db: firestore.Client, user_id: str, session_id: str, status: str, lat: float, lng: float

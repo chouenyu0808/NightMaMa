@@ -38,12 +38,27 @@ def haversine_m(a: LatLng, b: LatLng) -> float:
     return 2 * r * math.asin(math.sqrt(h))
 
 
-def sample_evenly(points: list[LatLng], max_samples: int = 6) -> list[LatLng]:
-    """Pick up to max_samples points spread evenly across the route (index-based, not distance-based)."""
-    if len(points) <= max_samples:
+def sample_by_distance(points: list[LatLng], spacing_m: float = 75) -> list[LatLng]:
+    """Walk the polyline and keep a point every `spacing_m`, so segment length stays
+    roughly constant regardless of route length (index-based sampling doesn't: a long
+    route would get a handful of huge segments instead of many short, checkable ones)."""
+    if len(points) < 2:
         return points
-    stride = len(points) / max_samples
-    return [points[int(i * stride)] for i in range(max_samples)]
+    sampled = [points[0]]
+    accumulated = 0.0
+    for a, b in zip(points, points[1:]):
+        accumulated += haversine_m(a, b)
+        if accumulated >= spacing_m:
+            sampled.append(b)
+            accumulated = 0.0
+    if sampled[-1] is not points[-1]:
+        sampled.append(points[-1])
+    return sampled
+
+
+def midpoint(a: LatLng, b: LatLng) -> LatLng:
+    """Simple lat/lng average — segments are short (~75m) so geodesic precision doesn't matter here."""
+    return LatLng(lat=(a.lat + b.lat) / 2, lng=(a.lng + b.lng) / 2)
 
 
 def covering_circle(points: list[LatLng], buffer_m: float = 150) -> tuple[LatLng, float]:

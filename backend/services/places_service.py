@@ -1,4 +1,4 @@
-"""Google Places API (New) — nearby 24hr / open-now store count around a point."""
+"""Google Places API (New) — nearby 24hr store locations / police station count around a point."""
 import httpx
 
 from config import settings
@@ -33,9 +33,14 @@ def _search_nearby(point: LatLng, included_type: str, radius_m: float, field_mas
     return resp.json().get("places", [])
 
 
-def count_24h_stores(point: LatLng, radius_m: float = 100) -> int:
-    places = _search_nearby(point, "convenience_store", radius_m, "places.currentOpeningHours.openNow")
-    return sum(1 for p in places if p.get("currentOpeningHours", {}).get("openNow"))
+def list_24h_stores(point: LatLng, radius_m: float = 100) -> list[LatLng]:
+    """Open-now convenience stores in the circle, as locations — callers derive nearest-distance per segment from this."""
+    places = _search_nearby(point, "convenience_store", radius_m, "places.currentOpeningHours.openNow,places.location")
+    return [
+        LatLng(lat=p["location"]["latitude"], lng=p["location"]["longitude"])
+        for p in places
+        if p.get("currentOpeningHours", {}).get("openNow") and p.get("location")
+    ]
 
 
 def count_police_stations(point: LatLng, radius_m: float = 150) -> int:

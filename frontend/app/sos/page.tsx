@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import { NavBar } from '@/app/page'
+import { Icon } from '@iconify/react'
 
 const EMERGENCY_CONTACTS_KEY = 'nightmama_contacts'
 
@@ -183,22 +184,22 @@ function SOSContent() {
           />
           <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
           <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-            💬 LINE 語音來電…
+            <Icon icon="mdi:phone-in-talk-outline" width={16} height={16} /> LINE 語音來電…
           </div>
           {!audioUnlocked && (
-            <div style={{ fontSize: 11, background: 'rgba(6,199,85,0.2)', color: '#06C755', padding: '4px 12px', borderRadius: 999, border: '1px solid rgba(6,199,85,0.3)', marginTop: 4 }}>
-              🔔 點擊螢幕解鎖鈴聲
+            <div style={{ fontSize: 11, background: 'rgba(6,199,85,0.2)', color: '#06C755', padding: '4px 12px', borderRadius: 999, border: '1px solid rgba(6,199,85,0.3)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Icon icon="mdi:bell-outline" width={13} height={13} /> 點擊螢幕解鎖鈴聲
             </div>
           )}
         </div>
 
         <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <button onClick={endCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}>📵</button>
+            <button onClick={endCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon icon="mdi:phone-hangup" width={32} height={32} /></button>
             <span style={{ fontSize: 12, opacity: 0.8 }}>拒絕</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <button onClick={acceptCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)' }}>📞</button>
+            <button onClick={acceptCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon icon="mdi:phone" width={32} height={32} /></button>
             <span style={{ fontSize: 12, opacity: 0.8 }}>接聽</span>
           </div>
         </div>
@@ -231,9 +232,9 @@ function SOSContent() {
             endCall()
             router.back()
           }}
-          style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}
+          style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          📵
+          <Icon icon="mdi:phone-hangup" width={32} height={32} />
         </button>
       </div>
     )
@@ -243,7 +244,9 @@ function SOSContent() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-primary)' }}>
       {/* Header */}
       <div style={{ padding: '52px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ fontWeight: 900, fontSize: 20 }}>🆘 緊急協助</div>
+        <div style={{ fontWeight: 900, fontSize: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon icon="mdi:lifebuoy" width={22} height={22} /> 緊急協助
+        </div>
         <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>
           按下 SOS 將自動通知緊急聯絡人並發送定位
         </div>
@@ -279,16 +282,16 @@ function SOSContent() {
                 </div>
                 <button
                   onClick={cancelSOS}
-                  style={{ padding: '12px 32px', borderRadius: 999, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 700 }}
+                  style={{ padding: '12px 32px', borderRadius: 999, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white', fontSize: 15, cursor: 'pointer', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  ✕ 取消
+                  <Icon icon="mdi:close" width={16} height={16} /> 取消
                 </button>
               </div>
             )}
           </>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginTop: 20, textAlign: 'center' }}>
-            <div style={{ fontSize: 60 }}>✅</div>
+            <Icon icon="mdi:check-circle" width={60} height={60} style={{ color: '#10b981' }} />
             <div style={{ fontWeight: 700, fontSize: 18, color: '#10b981' }}>SOS 已發送！</div>
             <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
               已通知緊急聯絡人並附上你的位置
@@ -298,9 +301,9 @@ function SOSContent() {
                 href={`https://maps.google.com/?q=${currentLocation.lat},${currentLocation.lng}`}
                 target="_blank"
                 rel="noreferrer"
-                style={{ color: '#60a5fa', fontSize: 13, textDecoration: 'none' }}
+                style={{ color: '#60a5fa', fontSize: 13, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
               >
-                📍 查看目前位置
+                <Icon icon="mdi:map-marker-outline" width={14} height={14} /> 查看目前位置
               </a>
             )}
           </div>
@@ -308,26 +311,30 @@ function SOSContent() {
 
         {/* Fake call option */}
         <div className="glass" style={{ width: '100%', padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>📞 假裝來電</div>
+          <div style={{ fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon icon="mdi:phone-outline" width={16} height={16} /> 假裝來電
+          </div>
           <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 14 }}>
             感到不適時，假裝正在通話可嚇阻潛在威脅
           </div>
           <button
             className="btn-primary"
-            style={{ background: 'linear-gradient(135deg, #10b981, #047857)' }}
+            style={{ background: 'linear-gradient(135deg, #10b981, #047857)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             onClick={() => { setFakeCallActive(true); setFakeCallState('ringing'); setCallDuration(0); }}
           >
-            📞 開始假裝來電
+            <Icon icon="mdi:phone-outline" width={16} height={16} /> 開始假裝來電
           </button>
         </div>
 
         {/* Safety tips */}
         <div className="glass" style={{ width: '100%', padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>🛡️ 緊急求助資訊</div>
+          <div style={{ fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon icon="mdi:shield-outline" width={16} height={16} /> 緊急求助資訊
+          </div>
           {[
-            { icon: '👮', label: '警察局', number: '110' },
-            { icon: '🚑', label: '救護車', number: '119' },
-            { icon: '📞', label: '婦幼保護專線', number: '113' },
+            { icon: 'mdi:police-badge-outline', label: '警察局', number: '110' },
+            { icon: 'mdi:ambulance', label: '救護車', number: '119' },
+            { icon: 'mdi:phone-outline', label: '婦幼保護專線', number: '113' },
           ].map(item => (
             <a
               key={item.number}
@@ -335,7 +342,7 @@ function SOSContent() {
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'white' }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 20 }}>{item.icon}</span>
+                <Icon icon={item.icon} width={20} height={20} />
                 <span style={{ fontSize: 15 }}>{item.label}</span>
               </div>
               <span style={{ color: '#60a5fa', fontWeight: 700, fontSize: 18 }}>{item.number}</span>

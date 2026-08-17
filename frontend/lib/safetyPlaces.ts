@@ -2,6 +2,8 @@
  * 沿途 24 小時營業「台灣便利商店」與「警察局 / 派出所」全涵蓋地圖標記工具
  */
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+
 export interface SafetyPlace {
   id: string
   name: string
@@ -244,7 +246,7 @@ export async function drawAnxietyReportMarkers(
   infoWindow?: google.maps.InfoWindow
 ): Promise<google.maps.Marker[]> {
   try {
-    const res = await fetch('/api/report')
+    const res = await fetch(`${BACKEND_URL}/report`)
     if (!res.ok) return []
     const { reports } = await res.json()
     if (!Array.isArray(reports)) return []
@@ -256,7 +258,7 @@ export async function drawAnxietyReportMarkers(
       const marker = new google.maps.Marker({
         position: { lat: Number(rep.lat), lng: Number(rep.lng) },
         map,
-        title: `⚠️ 不安通報：${rep.category}`,
+        title: `⚠️ 不安通報：${rep.reason}`,
         icon: {
           url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="%23DC2626" stroke="%23FFFFFF" stroke-width="2.5"/><text x="17" y="22" font-size="16" text-anchor="middle">⚠️</text></svg>',
           scaledSize: new google.maps.Size(30, 30),
@@ -266,13 +268,13 @@ export async function drawAnxietyReportMarkers(
       })
 
       marker.addListener('click', () => {
-        const timeStr = new Date(rep.timestamp).toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
+        const timeStr = new Date(rep.reported_at).toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
         const content = `
           <div style="padding: 10px 14px; color: #111827; font-family: system-ui, sans-serif; min-width: 200px;">
             <div style="font-weight: 800; font-size: 13px; color: #DC2626; margin-bottom: 3px;">
               ⚠️ 夜間治安不安通報熱點
             </div>
-            <div style="font-size: 15px; font-weight: 800; color: #111827;">${rep.category}</div>
+            <div style="font-size: 15px; font-weight: 800; color: #111827;">${rep.reason}</div>
             <div style="font-size: 12px; color: #4B5563; margin-top: 4px;">通報時間：${timeStr}</div>
             <div style="font-size: 11px; color: #DC2626; margin-top: 6px; font-weight: 700; background: #FEE2E2; padding: 3px 8px; border-radius: 6px; display: inline-block;">
               ● 已同步發送 LINE 警訊並調整路線權重

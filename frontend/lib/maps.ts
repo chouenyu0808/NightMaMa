@@ -145,6 +145,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
             light_count: number
             camera_count: number
             police_count: number
+            store_count: number
             segment_scores: number[]
           }>).map((r) => ({
             type: r.type,
@@ -157,7 +158,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
             cameraCount: r.camera_count,
             policeCount: r.police_count,
             segmentScores: r.segment_scores || [],
-            storeCount: Math.floor(r.distance_m / 250) + 2,
+            storeCount: r.store_count,
             points: decodePolyline(r.polyline),
             // Backend doesn't return turn-by-turn steps yet; navigate/page.tsx falls
             // back to generateStepsFromPoints() when this is empty.
@@ -190,17 +191,19 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
             const pathPoints: LatLng[] = (r.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() }))
             const polylineStr = r.overview_polyline || ''
             return {
+              // 後端連不上才會走到這裡：沒有 BigQuery/Places 資料，不可能算出真的安全分數，
+              // 與其編一個看起來合理的假數字，不如誠實回報「未知」讓 UI 顯示提醒
               type: i === 0 ? 'fastest' : i === 1 ? 'safest' : 'balanced',
               polyline: polylineStr,
               durationSec: leg?.duration?.value || 600,
               distanceM: leg?.distance?.value || 1000,
-              score: 85 - i * 5,
-              reason: null,
-              lightCount: Math.floor(pathPoints.length * 1.5),
-              cameraCount: Math.floor(pathPoints.length * 0.8),
-              policeCount: Math.floor(pathPoints.length * 0.2),
+              score: 0,
+              reason: '離線路線規劃，暫無路燈/監視器/店家等即時安全資料',
+              lightCount: 0,
+              cameraCount: 0,
+              policeCount: 0,
               segmentScores: [],
-              storeCount: Math.floor(pathPoints.length * 0.4) + 3,
+              storeCount: 0,
               points: pathPoints,
               steps: (leg?.steps || []).map(s => {
                 const rawInstruction = s.instructions || ''
