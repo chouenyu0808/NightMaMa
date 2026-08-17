@@ -833,6 +833,31 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {selectedRoute.typeLabel === '大眾運輸' && (
+                <div style={{
+                  background: 'rgba(2, 132, 199, 0.15)',
+                  border: '1px solid rgba(2, 132, 199, 0.4)',
+                  borderRadius: 12,
+                  padding: '10px 12px',
+                  marginBottom: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>🚌 搭乘路線資訊</span>
+                    <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 8px', borderRadius: 8, fontWeight: 800 }}>
+                      299 號公車 / 板南線
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div>🚶 <strong>步行起點</strong> ➔ <strong>[市政府公車站]</strong> (夜間安全防護 🛡️)</div>
+                    <div>🚌 <strong>上車搭乘 299 公車</strong> ➔ <strong>[松山高中站]</strong> 下車 (約 6 分鐘)</div>
+                    <div>🏠 <strong>下車步行</strong> ➔ <strong>[回家目的地]</strong> (夜間安全防護 🛡️)</div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: 6 }}>
                 <span style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '2px 8px', borderRadius: 999 }}>
                   🏪 {selectedRoute.storeCount || 4} 家24h超商

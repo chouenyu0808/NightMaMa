@@ -238,19 +238,19 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
             const transitLegs: TransitLeg[] = [
               {
                 mode: 'WALK',
-                departureStop: '起點公車站',
+                departureStop: '市政府公車站',
                 points: basePts.slice(0, walk1End + 1),
               },
               {
                 mode: 'BUS',
-                lineName: '299 號公車',
-                departureStop: '轉乘公車站',
-                arrivalStop: '下車公車站',
+                lineName: '299 號公車 / 板南線',
+                departureStop: '市政府公車站',
+                arrivalStop: '松山高中站',
                 points: basePts.slice(walk1End, busEnd + 1),
               },
               {
                 mode: 'WALK',
-                arrivalStop: '下車公車站',
+                arrivalStop: '松山高中站',
                 points: basePts.slice(busEnd),
               },
             ]
@@ -263,7 +263,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
               durationSec: Math.round(routes[0].durationSec * 0.85),
               distanceM: routes[0].distanceM,
               score: 92,
-              reason: '搭乘 299 公車轉乘，僅頭尾段步行實施夜間安全防護',
+              reason: '搭乘 299 公車 (或板南線轉乘)，僅頭尾段步行實施夜間安全防護',
               lightCount: routes[0].lightCount,
               cameraCount: routes[0].cameraCount,
               policeCount: routes[0].policeCount,
@@ -272,21 +272,21 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
               points: basePts,
               steps: [
                 {
-                  instruction: '🚶 步行前往 [轉乘公車站]（夜間安全檢測防護中）',
+                  instruction: '🚶 步行前往 [市政府公車站]（夜間安全檢測防護中）',
                   maneuver: 'turn-straight',
                   distanceM: 250,
                   startLocation: basePts[0],
                   endLocation: basePts[walk1End] || basePts[0],
                 },
                 {
-                  instruction: '🚌 搭乘 [299 號公車] 車廂內安全（行駛約 6 分鐘）',
+                  instruction: '🚌 搭乘 [299 號公車 / 板南線] 車廂內安全（行駛約 6 分鐘）',
                   maneuver: 'straight',
                   distanceM: 600,
                   startLocation: basePts[walk1End] || basePts[0],
                   endLocation: basePts[busEnd] || basePts[basePts.length - 1],
                 },
                 {
-                  instruction: '🚏 在 [下車公車站] 下車',
+                  instruction: '🚏 在 [松山高中站] 下車準備步行',
                   maneuver: 'turn-right',
                   distanceM: 50,
                   startLocation: basePts[busEnd] || basePts[basePts.length - 1],
