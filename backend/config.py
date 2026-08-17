@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     gcp_project_id: str = ""
     google_maps_api_key: str = ""
     gemini_api_key: str = ""
+    geocoding_api_key: str = ""  # optional: separate GCP project/key for the one-off bulk geocode script
     bq_dataset: str = "nightmama"
     pubsub_topic_sos: str = "sos-triggered"
     cors_origins: list[str] = ["*"]

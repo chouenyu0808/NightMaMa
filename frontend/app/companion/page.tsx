@@ -35,7 +35,8 @@ function CompanionContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<AnySpeechRecognition | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
-  const pendingReplyRef = useRef<((text: string) => void) | null>(null)
+  const pendingReplyRef = useRef<((data: { text: string; audio?: string }) => void) | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const userIdRef = useRef<string>('')
   if (!userIdRef.current) userIdRef.current = crypto.randomUUID()
 
@@ -59,7 +60,8 @@ function CompanionContent() {
     const ws = new WebSocket(`${backendUrl.replace(/^http/, 'ws')}/stream/${userIdRef.current}`)
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data)
-      pendingReplyRef.current?.(data.type === 'urgent' ? data.message : data.text)
+      const text = data.type === 'urgent' ? data.message : data.text
+      pendingReplyRef.current?.({ text, audio: data.audio })
       pendingReplyRef.current = null
     }
     wsRef.current = ws
@@ -72,18 +74,35 @@ function CompanionContent() {
 
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
 
-  // Text-to-Speech
-  const speak = useCallback((text: string) => {
-    if (!window.speechSynthesis) return
-    window.speechSynthesis.cancel()
-    const utt = new SpeechSynthesisUtterance(text)
-    utt.lang = 'zh-TW'
-    utt.rate = 1.05
-    utt.pitch = 1.1
-    utt.onstart = () => setIsSpeaking(true)
-    utt.onend = () => setIsSpeaking(false)
-    window.speechSynthesis.speak(utt)
+  // Text-to-Speech — plays natural Gemini-generated voice audio (base64 WAV)
+  // sent by the backend, instead of the browser's robotic speechSynthesis.
+  const playAudio = useCallback((base64Wav: string) => {
+    audioRef.current?.pause()
+    const audio = new Audio(`data:audio/wav;base64,${base64Wav}`)
+    audioRef.current = audio
+    audio.onplay = () => setIsSpeaking(true)
+    audio.onended = () => setIsSpeaking(false)
+    audio.onerror = () => setIsSpeaking(false)
+    audio.play().catch(() => setIsSpeaking(false))
   }, [])
+
+  // Fetch + play speech for text that didn't come through the /stream reply
+  // (e.g. the hardcoded initial greeting, or a fallback error message).
+  const speak = useCallback(async (text: string, urgent = false) => {
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+      const res = await fetch(`${backendUrl}/speak`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, urgent }),
+      })
+      if (!res.ok) return
+      const { audio } = await res.json()
+      playAudio(audio)
+    } catch {
+      // TTS is a nice-to-have; silently skip playback on failure so chat still works
+    }
+  }, [playAudio])
 
   // Auto-speak initial message
   useEffect(() => {
@@ -99,7 +118,7 @@ function CompanionContent() {
     setIsThinking(true)
 
     try {
-      const reply = await new Promise<string>((resolve, reject) => {
+      const { text: reply, audio } = await new Promise<{ text: string; audio?: string }>((resolve, reject) => {
         if (wsRef.current?.readyState !== WebSocket.OPEN) {
           reject(new Error('ws not open'))
           return
@@ -109,7 +128,10 @@ function CompanionContent() {
       })
       const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
       setMessages(prev => [...prev, aiMsg])
-      speak(reply)
+      // Backend already synthesized audio for this reply — play it directly
+      // instead of re-fetching from /speak.
+      if (audio) playAudio(audio)
+      else speak(reply)
     } catch {
       const errMsg: Message = { role: 'ai', text: '抱歉，連線有點問題，但我還在這裡陪你！', timestamp: Date.now() }
       setMessages(prev => [...prev, errMsg])
@@ -117,7 +139,7 @@ function CompanionContent() {
     } finally {
       setIsThinking(false)
     }
-  }, [isThinking, speak])
+  }, [isThinking, speak, playAudio])
 
   // Speech recognition
   const toggleListening = useCallback(() => {

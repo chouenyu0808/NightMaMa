@@ -31,8 +31,12 @@ async def stream(websocket: WebSocket, user_id: str) -> None:
             elif message.get("type") == "speech":
                 text = message.get("text", "")
                 if gemini_service.detect_urgent_tone(text):
-                    await websocket.send_json({"type": "urgent", "message": "偵測到危險語氣，是否需要協助？"})
+                    reply_text = "偵測到危險語氣，是否需要協助？"
+                    audio = gemini_service.synthesize_speech(reply_text, urgent=True)
+                    await websocket.send_json({"type": "urgent", "message": reply_text, "audio": audio})
                 else:
-                    await websocket.send_json({"type": "reply", "text": gemini_service.chat_reply(text)})
+                    reply_text = gemini_service.chat_reply(text)
+                    audio = gemini_service.synthesize_speech(reply_text)
+                    await websocket.send_json({"type": "reply", "text": reply_text, "audio": audio})
     except WebSocketDisconnect:
         pass

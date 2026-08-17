@@ -48,3 +48,12 @@ class ReportRequest(BaseModel):
     lat: float
     lng: float
     reason: str
+
+
+class SpeakRequest(BaseModel):
+    text: str
+    urgent: bool = False
+
+
+class SpeakResponse(BaseModel):
+    audio: str  # base64-encoded WAV, per Gemini TTS output_audio.data
