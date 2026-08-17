@@ -67,6 +67,32 @@ export function decodePolyline(encoded: string): LatLng[] {
   return points
 }
 
+/** 把 LatLng 陣列編碼回 Google polyline 字串（decodePolyline 的反向）。 */
+export function encodePolyline(points: LatLng[]): string {
+  const encodeValue = (v: number): string => {
+    let value = v < 0 ? ~(v << 1) : v << 1
+    let out = ''
+    while (value >= 0x20) {
+      out += String.fromCharCode((0x20 | (value & 0x1f)) + 63)
+      value >>= 5
+    }
+    out += String.fromCharCode(value + 63)
+    return out
+  }
+
+  let result = ''
+  let prevLat = 0
+  let prevLng = 0
+  for (const p of points) {
+    const lat = Math.round(p.lat * 1e5)
+    const lng = Math.round(p.lng * 1e5)
+    result += encodeValue(lat - prevLat) + encodeValue(lng - prevLng)
+    prevLat = lat
+    prevLng = lng
+  }
+  return result
+}
+
 export interface RouteStep {
   instruction: string
   maneuver: string

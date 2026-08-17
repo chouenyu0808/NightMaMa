@@ -559,7 +559,8 @@ export default function HomePage() {
         scored.push({
           ...tr,
           typeLabel: '大眾運輸',
-          description: tr.reason || `🚌 大眾運輸轉乘路線`,
+          // 註明評分只涵蓋步行段，避免使用者誤以為整段車程也被評估過
+          description: `${tr.reason || '🚌 大眾運輸轉乘路線'}${tr.score !== null ? '（安全評分僅計算步行路段）' : ''}`,
         })
       }
 
@@ -1137,7 +1138,22 @@ export default function HomePage() {
               const stepsParam = selectedRoute.steps && selectedRoute.steps.length > 0
                 ? `&steps=${encodeURIComponent(JSON.stringify(selectedRoute.steps))}`
                 : ''
-              router.push(`/navigate?polyline=${encodeURIComponent(selectedRoute.polyline || '')}&dest=${encodeURIComponent(destination)}&dist=${selectedRoute.distanceM || 1000}&dur=${selectedRoute.durationSec || 600}${selectedRoute.score === null ? '' : `&safety=${selectedRoute.score}`}&orig=${encodeURIComponent(origin)}${stepsParam}`)
+
+              // 搭車區間的起訖座標。導航頁只收到一條 polyline 字串，
+              // 沒有這個參數就無從得知哪一段是搭車 —— 它先前是硬把中間
+              // 50% 當成公車路段，害步行路線也被畫成公車線。
+              const busLegs = (selectedRoute.transitLegs ?? []).filter(
+                l => l.mode === 'BUS' && l.points && l.points.length >= 2
+              )
+              let busParam = ''
+              if (selectedRoute.isTransit && busLegs.length > 0) {
+                const first = busLegs[0].points[0]
+                const lastLeg = busLegs[busLegs.length - 1].points
+                const last = lastLeg[lastLeg.length - 1]
+                busParam = `&bus=${first.lat},${first.lng},${last.lat},${last.lng}`
+              }
+
+              router.push(`/navigate?polyline=${encodeURIComponent(selectedRoute.polyline || '')}&dest=${encodeURIComponent(destination)}&dist=${selectedRoute.distanceM || 1000}&dur=${selectedRoute.durationSec || 600}${selectedRoute.score === null ? '' : `&safety=${selectedRoute.score}`}&orig=${encodeURIComponent(origin)}${stepsParam}${busParam}`)
             }}
             style={{
               width: '100%', height: 48, borderRadius: 14,

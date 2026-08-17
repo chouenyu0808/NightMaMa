@@ -6,7 +6,7 @@
  * （一段暗巷不會被其他明亮路段平均掉）。路燈與 CCTV 來自 BigQuery 的
  * 台北市開放資料，超商與派出所來自 Google Places。
  */
-import type { RouteResult } from './maps'
+import { encodePolyline, type RouteResult } from './maps'
 
 interface ScoredRouteItem {
   score: number
@@ -27,6 +27,41 @@ export interface ScoreOutcome {
 }
 
 /**
+ * 決定一條路線要送哪些 polyline 去評分。
+ *
+ * 步行路線就是整條。大眾運輸路線則「只送步行段」—— 搭車途中人在車上，
+ * 公車行經的暗路不構成風險，但「取最差路段」會讓那段直接決定整條分數，
+ * 使轉乘路線幾乎必然墊底。只評分實際暴露在街上的路段才有意義。
+ *
+ * 每個步行段各自送出而非串接成一條：兩段之間隔著整段車程，串起來會生出
+ * 一條橫跨市區的假直線，那條線上的取樣點根本不在任何實際路徑上。
+ */
+function polylinesFor(route: RouteResult): string[] {
+  if (!route.isTransit) {
+    return route.polyline ? [route.polyline] : []
+  }
+
+  const walkLegs = (route.transitLegs ?? []).filter(
+    l => l.mode === 'WALK' && l.points && l.points.length >= 2
+  )
+  return walkLegs.map(l => encodePolyline(l.points))
+}
+
+/** 把一條路線的多個步行段結果合成一筆。 */
+function combine(items: ScoredRouteItem[]): ScoredRouteItem | null {
+  if (!items.length) return null
+  return {
+    // 沿用後端「取最差路段」的語意：多個步行段之間也取最差的那段
+    score: Math.min(...items.map(i => i.score)),
+    light_count: items.reduce((s, i) => s + i.light_count, 0),
+    camera_count: items.reduce((s, i) => s + i.camera_count, 0),
+    police_count: items.reduce((s, i) => s + i.police_count, 0),
+    store_count: items.reduce((s, i) => s + i.store_count, 0),
+    segment_scores: items.flatMap(i => i.segment_scores),
+  }
+}
+
+/**
  * 把後端算出的安全數據併回路線陣列。
  *
  * 取不到評分時**不會**退回捏造的數字：回傳的路線 score 維持 null，
@@ -35,8 +70,16 @@ export interface ScoreOutcome {
 export async function attachSafetyScores(routes: RouteResult[]): Promise<ScoreOutcome> {
   if (!routes.length) return { status: 'ok', routes }
 
-  const polylines = routes.map(r => r.polyline)
-  if (polylines.some(p => !p)) {
+  // 攤平成一份請求，同時記住每條路線佔用哪幾個位置
+  const polylines: string[] = []
+  const spans: Array<{ start: number; count: number }> = []
+  for (const r of routes) {
+    const ps = polylinesFor(r)
+    spans.push({ start: polylines.length, count: ps.length })
+    polylines.push(...ps)
+  }
+
+  if (!polylines.length) {
     return { status: 'unavailable', routes, message: '路線資料不完整，無法計算安全評分' }
   }
 
@@ -59,21 +102,27 @@ export async function attachSafetyScores(routes: RouteResult[]): Promise<ScoreOu
     const data = await res.json()
     const scores: ScoredRouteItem[] = Array.isArray(data?.scores) ? data.scores : []
 
-    if (scores.length !== routes.length) {
+    if (scores.length !== polylines.length) {
       return { status: 'unavailable', routes, message: '安全評分回傳筆數不符' }
     }
 
     return {
       status: 'ok',
-      routes: routes.map((r, i) => ({
-        ...r,
-        score: scores[i].score,
-        lightCount: scores[i].light_count,
-        cameraCount: scores[i].camera_count,
-        policeCount: scores[i].police_count,
-        storeCount: scores[i].store_count,
-        segmentScores: scores[i].segment_scores ?? [],
-      })),
+      routes: routes.map((r, i) => {
+        const { start, count } = spans[i]
+        const merged = combine(scores.slice(start, start + count))
+        // 沒有任何可評分的路段（例如全程搭車）就維持 null，不要編一個分數
+        if (!merged) return r
+        return {
+          ...r,
+          score: merged.score,
+          lightCount: merged.light_count,
+          cameraCount: merged.camera_count,
+          policeCount: merged.police_count,
+          storeCount: merged.store_count,
+          segmentScores: merged.segment_scores,
+        }
+      }),
     }
   } catch {
     return { status: 'unavailable', routes, message: '無法連線至安全評分服務' }

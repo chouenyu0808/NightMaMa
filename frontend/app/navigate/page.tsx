@@ -83,6 +83,40 @@ function calculateHeading(lat1: number, lng1: number, lat2: number, lng2: number
   return (brng + 360) % 360
 }
 
+/**
+ * 解析 `bus=上車lat,上車lng,下車lat,下車lng` 參數，換算成 polyline 上的索引區間。
+ *
+ * 傳座標而不是索引，是因為 page.tsx 手上的搭車路段點位來自 transitLegs，
+ * 與整條 overview polyline 的取樣點並非一一對應，用最近點對齊比較可靠。
+ *
+ * 參數不存在或格式不對就回傳 null，呼叫端會把整條路線當成步行處理。
+ */
+function parseBusRange(
+  param: string | null,
+  points: Array<{ lat: number; lng: number }>
+): { start: number; end: number } | null {
+  if (!param || points.length < 2) return null
+  const nums = param.split(',').map(Number)
+  if (nums.length !== 4 || nums.some(n => !Number.isFinite(n))) return null
+
+  const [startLat, startLng, endLat, endLng] = nums
+  const nearest = (lat: number, lng: number) => {
+    let best = 0
+    let bestD = Infinity
+    points.forEach((p, i) => {
+      const d = haversineMeters(lat, lng, p.lat, p.lng)
+      if (d < bestD) { bestD = d; best = i }
+    })
+    return best
+  }
+
+  const start = nearest(startLat, startLng)
+  const end = nearest(endLat, endLng)
+  // 對齊後若順序顛倒或長度為零，代表對不上這條 polyline，寧可當成步行
+  if (end <= start) return null
+  return { start, end }
+}
+
 function generateStepsFromPoints(points: Array<{ lat: number; lng: number }>, destination: string): NavStep[] {
   if (points.length < 2) {
     return [{ instruction: `前往 ${destination}`, distanceM: 100, maneuver: 'STRAIGHT', streetName: destination, icon: 'straight' }]
@@ -298,14 +332,18 @@ function NavigateContent() {
         styles: googleNavMapStyle,
       })
 
-      // Draw 3-Leg Public Transit or Walking Safety Polylines
-      const len = points.length
-      const walk1End = Math.floor(len * 0.25)
-      const busEnd = Math.floor(len * 0.75)
+      // 搭車區間由 page.tsx 以 `bus=上車lat,上車lng,下車lat,下車lng` 傳入，
+      // 只有大眾運輸路線才會有這個參數。
+      //
+      // 先前這裡不看路線種類，一律把 polyline 切成 25% / 50% / 25%，
+      // 把中間半條畫成藍色公車線並插上站牌圖示 —— 使用者明明選了步行，
+      // 地圖上卻出現一段公車路線。導航頁只收到一條 polyline 字串，
+      // 根本無從得知是不是大眾運輸，所以那段切割純粹是憑空編的。
+      const busRange = parseBusRange(searchParams.get('bus'), points)
 
-      const walk1 = points.slice(0, walk1End + 1)
-      const bus = points.slice(walk1End, busEnd + 1)
-      const walk2 = points.slice(busEnd)
+      const walk1 = busRange ? points.slice(0, busRange.start + 1) : points
+      const bus = busRange ? points.slice(busRange.start, busRange.end + 1) : []
+      const walk2 = busRange ? points.slice(busRange.end) : []
 
       // Leg 1: Walk to Bus Stop (Safety Evaluation & Green Shields)
       if (walk1.length >= 2) {
@@ -322,7 +360,7 @@ function NavigateContent() {
           new google.maps.Marker({
             position: walk1[midIdx],
             map: mapInstance.current!,
-            title: '🛡️ 步行至公車站夜間安全防護段',
+            title: busRange ? '🛡️ 步行至公車站夜間安全防護段' : '🛡️ 夜間安全防護路段',
             icon: {
               url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
                 '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
