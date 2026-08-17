@@ -4,8 +4,7 @@ Client sends already-transcribed text (STT happens client-side or via a
 separate audio pipe); this handles the companion reply and urgency-detection
 loop, plus location updates. Real-time audio ingestion is out of scope here.
 """
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from google.cloud import firestore
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from clients import firestore_client
 from deps import get_firestore
@@ -15,7 +14,7 @@ router = APIRouter()
 
 
 @router.websocket("/stream/{user_id}")
-async def stream(websocket: WebSocket, user_id: str, db: firestore.Client = Depends(get_firestore)) -> None:
+async def stream(websocket: WebSocket, user_id: str) -> None:
     await websocket.accept()
     try:
         while True:
@@ -24,8 +23,9 @@ async def stream(websocket: WebSocket, user_id: str, db: firestore.Client = Depe
             # wrap with starlette.concurrency.run_in_threadpool if WS latency
             # becomes noticeable under concurrent load
             if message.get("type") == "location":
+                # lazy: only chat-only sessions (no location pings) should never need GCP creds
                 firestore_client.set_session_status(
-                    db, user_id, session_id="current", status="walking",
+                    get_firestore(), user_id, session_id="current", status="walking",
                     lat=message["lat"], lng=message["lng"],
                 )
             elif message.get("type") == "speech":

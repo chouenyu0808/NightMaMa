@@ -14,8 +14,12 @@ let mapsReady = false
 
 export async function loadMaps(): Promise<typeof google.maps> {
   if (mapsReady) return google.maps
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
+  if (!apiKey) {
+    throw new Error('NEXT_PUBLIC_GOOGLE_MAPS_KEY 未設定，請在 frontend/.env.local 填入')
+  }
   setOptions({
-    key: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY!,
+    key: apiKey,
     v: 'weekly',
   })
   await importLibrary('maps')

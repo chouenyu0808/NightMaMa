@@ -3,8 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
-import { sendMessage, type CompanionContext } from '@/lib/gemini'
 import { NavBar } from '@/app/page'
+
+interface RouteContext {
+  origin: string
+  destination: string
+  safetyScore: number
+  durationMin: number
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySpeechRecognition = any
@@ -28,6 +34,10 @@ function CompanionContent() {
   const router = useRouter()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<AnySpeechRecognition | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const pendingReplyRef = useRef<((text: string) => void) | null>(null)
+  const userIdRef = useRef<string>('')
+  if (!userIdRef.current) userIdRef.current = crypto.randomUUID()
 
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE])
   const [input, setInput] = useState('')
@@ -35,14 +45,26 @@ function CompanionContent() {
   const [isThinking, setIsThinking] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
 
-  // Route context from URL params
-  const context: CompanionContext = {
+  // Route context from URL params (display only — chat now goes through the backend)
+  const context: RouteContext = {
     origin: searchParams.get('origin') || '出發地',
     destination: searchParams.get('destination') || '目的地',
     safetyScore: parseInt(searchParams.get('safety') || '70'),
     durationMin: Math.round(parseInt(searchParams.get('duration') || '600') / 60),
-    nearbyPlaces: ['全家便利商店', '7-ELEVEN'],
   }
+
+  // Connect to backend chat WebSocket
+  useEffect(() => {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+    const ws = new WebSocket(`${backendUrl.replace(/^http/, 'ws')}/stream/${userIdRef.current}`)
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data)
+      pendingReplyRef.current?.(data.type === 'urgent' ? data.message : data.text)
+      pendingReplyRef.current = null
+    }
+    wsRef.current = ws
+    return () => ws.close()
+  }, [])
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -76,10 +98,15 @@ function CompanionContent() {
     setInput('')
     setIsThinking(true)
 
-    const history = messages.map(m => ({ role: m.role === 'ai' ? 'model' as const : 'user' as const, text: m.text }))
-
     try {
-      const reply = await sendMessage(text, history, context)
+      const reply = await new Promise<string>((resolve, reject) => {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          reject(new Error('ws not open'))
+          return
+        }
+        pendingReplyRef.current = resolve
+        wsRef.current.send(JSON.stringify({ type: 'speech', text }))
+      })
       const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
       setMessages(prev => [...prev, aiMsg])
       speak(reply)
@@ -90,7 +117,7 @@ function CompanionContent() {
     } finally {
       setIsThinking(false)
     }
-  }, [messages, context, isThinking, speak])
+  }, [isThinking, speak])
 
   // Speech recognition
   const toggleListening = useCallback(() => {

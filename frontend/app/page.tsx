@@ -91,25 +91,84 @@ export default function HomePage() {
     return () => clearTimeout(timer)
   }, [appState])
 
-  const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number) => {
+  const markersRef = useRef<google.maps.Marker[]>([])
+  const [isSheetCollapsed, setIsSheetCollapsed] = useState(false)
+  const [isSearchCollapsed, setIsSearchCollapsed] = useState(false)
+
+  const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number, sheetCollapsed = false, searchCollapsed = false) => {
     polylinesRef.current.forEach(p => p.setMap(null))
     polylinesRef.current = []
-    if (!mapInstance.current) return
+    markersRef.current.forEach(m => m.setMap(null))
+    markersRef.current = []
+
+    if (!mapInstance.current || !scoredRoutes.length) return
+
+    // Draw polylines
     scoredRoutes.forEach((route, i) => {
       const isSelected = i === selected
       const polyline = new google.maps.Polyline({
         path: route.points.map(p => ({ lat: p.lat, lng: p.lng })),
         map: mapInstance.current!,
-        strokeColor: isSelected ? route.safety.color : 'rgba(255,255,255,0.2)',
-        strokeWeight: isSelected ? 6 : 3,
+        strokeColor: isSelected ? route.safety.color : 'rgba(255,255,255,0.25)',
+        strokeWeight: isSelected ? 7 : 4,
         strokeOpacity: isSelected ? 1 : 0.4,
         zIndex: isSelected ? 10 : 1,
       })
       polylinesRef.current.push(polyline)
     })
+
+    const selectedRoute = scoredRoutes[selected]
+    const points = selectedRoute.points
+
+    if (points.length >= 2) {
+      // Start marker (Origin)
+      const startMarker = new google.maps.Marker({
+        position: points[0],
+        map: mapInstance.current!,
+        title: '出發地',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: '#8b5cf6',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3,
+        },
+        zIndex: 20,
+      })
+      // End marker (Destination)
+      const endMarker = new google.maps.Marker({
+        position: points[points.length - 1],
+        map: mapInstance.current!,
+        title: '目的地',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 11,
+          fillColor: '#10b981',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3,
+        },
+        zIndex: 20,
+      })
+      markersRef.current.push(startMarker, endMarker)
+    }
+
+    // Auto fit bounds to full route
     const bounds = new google.maps.LatLngBounds()
-    scoredRoutes[selected].points.forEach(p => bounds.extend(p))
-    mapInstance.current!.fitBounds(bounds, { top: 120, bottom: 420, left: 20, right: 20 })
+    points.forEach(p => bounds.extend(p))
+
+    // Top padding: ~110px if collapsed, ~240px if expanded
+    const topPad = searchCollapsed ? 110 : 240
+    // Bottom padding: ~90px if collapsed, ~240px if expanded
+    const bottomPad = sheetCollapsed ? 90 : 240
+
+    mapInstance.current!.fitBounds(bounds, {
+      top: topPad,
+      bottom: bottomPad,
+      left: 35,
+      right: 35,
+    })
   }, [])
 
   const handleSearch = async () => {
@@ -147,7 +206,8 @@ export default function HomePage() {
       scored.sort((a, b) => b.safety.total - a.safety.total)
       setRoutes(scored)
       setSelectedIdx(0)
-      drawRoutes(scored, 0)
+      setIsSearchCollapsed(true)
+      drawRoutes(scored, 0, false, true)
       setShowSheet(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '路線搜尋失敗，請重試')
@@ -158,7 +218,15 @@ export default function HomePage() {
 
   const handleSelectRoute = (idx: number) => {
     setSelectedIdx(idx)
-    drawRoutes(routes, idx)
+    drawRoutes(routes, idx, isSheetCollapsed, isSearchCollapsed)
+  }
+
+  const toggleCollapse = () => {
+    const nextState = !isSheetCollapsed
+    setIsSheetCollapsed(nextState)
+    if (routes.length > 0) {
+      drawRoutes(routes, selectedIdx, nextState, isSearchCollapsed)
+    }
   }
 
   const handleStartNavigation = () => {
@@ -198,36 +266,73 @@ export default function HomePage() {
           <span style={{ fontSize: 18, fontWeight: 900 }} className="gradient-text">NightMaMa</span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>📍</span>
-            <input
-              ref={originInputRef}
-              className="input-field"
-              style={{ paddingLeft: 42 }}
-              placeholder="出發地（例：松山車站）"
-              value={origin}
-              onChange={e => { setOrigin(e.target.value); setOriginLatLng(null) }}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            />
+        {isSearchCollapsed && routes.length > 0 ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 14px',
+              background: 'rgba(17,24,39,0.85)',
+              borderRadius: 16,
+              border: '1px solid rgba(255,255,255,0.12)',
+              backdropFilter: 'blur(12px)',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, paddingRight: 8 }}>
+              📍 {origin.split('區')[1] || origin.slice(0, 10)} → 🏠 {destination.split('區')[1] || destination.slice(0, 10)}
+            </div>
+            <button
+              onClick={() => {
+                setIsSearchCollapsed(false)
+                drawRoutes(routes, selectedIdx, isSheetCollapsed, false)
+              }}
+              style={{
+                background: 'rgba(139,92,246,0.2)',
+                color: '#c4b5fd',
+                border: '1px solid rgba(139,92,246,0.4)',
+                borderRadius: 999,
+                padding: '4px 10px',
+                fontSize: 11,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ✏️ 編輯搜尋
+            </button>
           </div>
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>🏠</span>
-            <input
-              ref={destInputRef}
-              className="input-field"
-              style={{ paddingLeft: 42 }}
-              placeholder="目的地"
-              value={destination}
-              onChange={e => { setDestination(e.target.value); setDestLatLng(null) }}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>📍</span>
+              <input
+                ref={originInputRef}
+                className="input-field"
+                style={{ paddingLeft: 42 }}
+                placeholder="出發地（例：松山車站）"
+                value={origin}
+                onChange={e => { setOrigin(e.target.value); setOriginLatLng(null) }}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 14 }}>🏠</span>
+              <input
+                ref={destInputRef}
+                className="input-field"
+                style={{ paddingLeft: 42 }}
+                placeholder="目的地"
+                value={destination}
+                onChange={e => { setDestination(e.target.value); setDestLatLng(null) }}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            {error && <p style={{ color: '#ef4444', fontSize: 13, paddingLeft: 4 }}>{error}</p>}
+            <button className="btn-primary" onClick={handleSearch} disabled={isLoading}>
+              {isLoading ? '⏳ 計算安全路線中…' : '🔍 找最安全路線'}
+            </button>
           </div>
-          {error && <p style={{ color: '#ef4444', fontSize: 13, paddingLeft: 4 }}>{error}</p>}
-          <button className="btn-primary" onClick={handleSearch} disabled={isLoading}>
-            {isLoading ? '⏳ 計算安全路線中…' : '🔍 找最安全路線'}
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Route bottom sheet */}
@@ -236,23 +341,50 @@ export default function HomePage() {
           className="bottom-sheet glass"
           style={{
             bottom: '64px',
-            paddingBottom: '20px',
-            maxHeight: '52dvh',
+            paddingBottom: isSheetCollapsed ? '12px' : '20px',
+            maxHeight: isSheetCollapsed ? '70px' : '52dvh',
             zIndex: 60,
+            overflow: 'hidden',
+            transition: 'all 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
           }}
         >
-          <div className="bottom-sheet-handle" />
-          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
-            找到 {routes.length} 條路線・依安全評分排序 ↓
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '32dvh', overflowY: 'auto' }} className="scrollable">
-            {routes.map((route, i) => (
-              <RouteCard key={i} route={route} isSelected={selectedIdx === i} onClick={() => handleSelectRoute(i)} />
-            ))}
+          <div
+            onClick={toggleCollapse}
+            style={{ cursor: 'pointer', padding: '4px 0 8px' }}
+          >
+            <div className="bottom-sheet-handle" />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                找到 {routes.length} 條路線 · 依安全評分排序 ↓
+              </p>
+              <button
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: 'white',
+                  borderRadius: 999,
+                  padding: '3px 10px',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                {isSheetCollapsed ? '📋 展開卡片' : '🗺️ 看全景地圖'}
+              </button>
+            </div>
           </div>
-          <button className="btn-primary" style={{ marginTop: 12 }} onClick={handleStartNavigation}>
-            🚶 開始導航・{routes[selectedIdx]?.safety.label}路線
-          </button>
+
+          {!isSheetCollapsed && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '30dvh', overflowY: 'auto' }} className="scrollable">
+                {routes.map((route, i) => (
+                  <RouteCard key={i} route={route} isSelected={selectedIdx === i} onClick={() => handleSelectRoute(i)} />
+                ))}
+              </div>
+              <button className="btn-primary" style={{ marginTop: 12 }} onClick={handleStartNavigation}>
+                🚶 開始導航 · {routes[selectedIdx]?.safety.label}路線
+              </button>
+            </>
+          )}
         </div>
       )}
 
