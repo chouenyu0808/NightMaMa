@@ -22,6 +22,8 @@ data/TaipeiLight.csv
 
 # Duplicate data folder at root (only keep frontend/public/data/)
 public/
+!frontend/public/
+!frontend/public/**
 
 # OS
 .DS_Store
