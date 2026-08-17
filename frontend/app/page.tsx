@@ -62,6 +62,7 @@ export default function HomePage() {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [error, setError] = useState('')
   const [showSheet, setShowSheet] = useState(false)
+  const [isSheetMinimized, setIsSheetMinimized] = useState(false)
 
   const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
@@ -359,10 +360,10 @@ export default function HomePage() {
       const bounds = new google.maps.LatLngBounds()
       activeRoute.points.forEach(p => bounds.extend(p))
       mapInstance.current.fitBounds(bounds, {
-        top: 100,
-        bottom: 450,
-        left: 40,
-        right: 40,
+        top: 90,
+        bottom: 540,
+        left: 35,
+        right: 35,
       })
 
       // Start marker
@@ -858,78 +859,62 @@ export default function HomePage() {
                     </span>
                   </div>
 
-                  {/* Horizontal Node Progress Bar */}
+                  {/* Horizontal 5-Step Stepper Progress Bar (1:1 Inspired by User Screenshot 2) */}
                   {(() => {
                     const busLeg = selectedRoute.transitLegs?.find(l => l.mode === 'BUS')
                     const depStop = busLeg?.departureStop || '上車站'
                     const arrStop = busLeg?.arrivalStop || '下車站'
-                    const lineName = busLeg?.lineName || '公車'
+                    const lineName = busLeg?.lineName || '大眾運輸'
 
                     const origShort = origin.replace(/臺北市|台北市|新北市|市|區|路|街/g, '').slice(0, 4) || '起點'
                     const destShort = destination.replace(/臺北市|台北市|新北市|市|區|路|街/g, '').slice(0, 4) || '終點'
 
+                    const stepsData = [
+                      { num: '1', title: '起點', subtitle: origShort, bg: '#8b5cf6', ring: '#ddd6fe', shadow: 'rgba(139,92,246,0.6)' },
+                      { num: '2', title: '上車', subtitle: depStop, bg: '#10b981', ring: '#a7f3d0', shadow: 'rgba(16,185,129,0.6)' },
+                      { num: '3', title: lineName, subtitle: '搭乘中', bg: '#0284c7', ring: '#bae6fd', shadow: 'rgba(2,132,199,0.8)' },
+                      { num: '4', title: '下車', subtitle: arrStop, bg: '#06b6d4', ring: '#cffaff', shadow: 'rgba(6,182,212,0.6)' },
+                      { num: '5', title: '終點', subtitle: destShort, bg: '#ef4444', ring: '#fecaca', shadow: 'rgba(239,68,68,0.6)' },
+                    ]
+
                     return (
-                      <div style={{ display: 'flex', alignItems: 'center', position: 'relative', padding: '6px 0 2px' }}>
-                        {/* Node 1: Start */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 55, flexShrink: 0, zIndex: 2 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#8b5cf6', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 0 8px rgba(139,92,246,0.6)' }}>
-                            起
+                      <div style={{
+                        position: 'relative', width: '100%', padding: '6px 2px 4px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        boxSizing: 'border-box'
+                      }}>
+                        {/* Connecting Track Line behind circles */}
+                        <div style={{
+                          position: 'absolute', top: 21, left: '8%', right: '8%', height: 4,
+                          background: 'linear-gradient(90deg, #10b981 0%, #34d399 35%, #0284c7 65%, #34d399 100%)',
+                          borderRadius: 2, zIndex: 1
+                        }} />
+
+                        {stepsData.map((step, idx) => (
+                          <div key={idx} style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            zIndex: 2, width: '18%', boxSizing: 'border-box'
+                          }}>
+                            {/* Glowing Circle Button */}
+                            <div style={{
+                              width: 30, height: 30, borderRadius: '50%',
+                              background: step.bg, border: `2.5px solid ${step.ring}`,
+                              color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 12, fontWeight: 900, boxShadow: `0 0 10px ${step.shadow}`,
+                              transition: 'transform 0.2s ease'
+                            }}>
+                              {step.num}
+                            </div>
+                            {/* Top Title */}
+                            <span style={{ fontSize: 10, fontWeight: 800, color: 'white', marginTop: 4, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.title}>
+                              {step.title}
+                            </span>
+                            {/* Subtitle */}
+                            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.65)', marginTop: 1, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={step.subtitle}>
+                              {step.subtitle}
+                            </span>
                           </div>
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 55 }}>
-                            {origShort}
-                          </span>
-                        </div>
-
-                        {/* Bar 1: Green Walk */}
-                        <div style={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #10b981, #34d399)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: 9, background: '#065f46', color: '#34d399', padding: '1px 4px', borderRadius: 4, fontWeight: 700, border: '1px solid #10b981', transform: 'translateY(-11px)', whiteSpace: 'nowrap' }}>
-                            🚶 🛡️
-                          </span>
-                        </div>
-
-                        {/* Node 2: Boarding Stop */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 68, flexShrink: 0, zIndex: 2 }}>
-                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#0284c7', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, border: '2px solid #38bdf8', boxShadow: '0 0 10px rgba(2,132,199,0.8)' }}>
-                            🚏
-                          </div>
-                          <span style={{ fontSize: 10, color: '#38bdf8', marginTop: 4, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 68 }} title={depStop}>
-                            {depStop}
-                          </span>
-                        </div>
-
-                        {/* Bar 2: Cyan Bus */}
-                        <div style={{ flex: 1.4, height: 5, background: 'linear-gradient(90deg, #0284c7, #38bdf8)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: 9, background: '#0369a1', color: 'white', padding: '1px 6px', borderRadius: 6, fontWeight: 800, border: '1px solid #38bdf8', transform: 'translateY(-12px)', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.4)' }}>
-                            🚌 {lineName}
-                          </span>
-                        </div>
-
-                        {/* Node 3: Alighting Stop */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 68, flexShrink: 0, zIndex: 2 }}>
-                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#0284c7', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, border: '2px solid #38bdf8', boxShadow: '0 0 10px rgba(2,132,199,0.8)' }}>
-                            🚏
-                          </div>
-                          <span style={{ fontSize: 10, color: '#38bdf8', marginTop: 4, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 68 }} title={arrStop}>
-                            {arrStop}
-                          </span>
-                        </div>
-
-                        {/* Bar 3: Green Walk */}
-                        <div style={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #34d399, #10b981)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <span style={{ fontSize: 9, background: '#065f46', color: '#34d399', padding: '1px 4px', borderRadius: 4, fontWeight: 700, border: '1px solid #10b981', transform: 'translateY(-11px)', whiteSpace: 'nowrap' }}>
-                            🚶 🛡️
-                          </span>
-                        </div>
-
-                        {/* Node 4: Destination */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 55, flexShrink: 0, zIndex: 2 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#ef4444', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
-                            終
-                          </div>
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 55 }}>
-                            {destShort}
-                          </span>
-                        </div>
+                        ))}
                       </div>
                     )
                   })()}
