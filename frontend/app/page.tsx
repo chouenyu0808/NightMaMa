@@ -17,7 +17,7 @@ type AppState = 'landing' | 'map'
 
 export default function HomePage() {
   const router = useRouter()
-  const [appState, setAppState] = useState<AppState>('landing')
+  const [appState, setAppState] = useState<AppState>('map')
 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<google.maps.Map | null>(null)
@@ -477,8 +477,8 @@ function LandingPage({ onStart, dataLoaded }: { onStart: () => void; dataLoaded:
 
   const features = [
     { icon: '💡', title: '路燈密度分析', desc: '台北市 145,919 盞路燈即時評分' },
-    { icon: '📹', title: '監視器覆蓋率', desc: '417 支 CCTV，守護每條路段' },
-    { icon: '🎙️', title: 'AI 語音陪聊', desc: 'Gemini 全程陪伴，化解夜行焦慮' },
+    { icon: '📹', title: '監視器覆蓋率', desc: '5,036 支 警察局 CCTV 涵蓋全台北' },
+    { icon: '🎙️', title: 'AI 語音陪聊', desc: 'Gemini 3.6 Flash 全程陪伴，化解夜行焦慮' },
     { icon: '🆘', title: '一鍵緊急通知', desc: 'LINE 即時定位發送給緊急聯絡人' },
   ]
 
@@ -491,10 +491,10 @@ function LandingPage({ onStart, dataLoaded }: { onStart: () => void; dataLoaded:
       <div style={{ position: 'absolute', top: '8%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
       <div style={{ position: 'absolute', top: '15%', right: '10%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(6,182,212,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-      <div className="scrollable" style={{ position: 'relative', zIndex: 10, height: '100%', display: 'flex', flexDirection: 'column', padding: '60px 24px 100px', gap: 0 }}>
+      <div className="scrollable" style={{ position: 'relative', zIndex: 10, height: '100%', display: 'flex', flexDirection: 'column', padding: '50px 24px 100px', gap: 0 }}>
 
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32, animation: 'fadeIn 0.8s ease' }}>
+        <div style={{ textAlign: 'center', marginBottom: 24, animation: 'fadeIn 0.8s ease' }}>
           <div style={{ fontSize: 56, marginBottom: 8, filter: 'drop-shadow(0 0 20px rgba(139,92,246,0.6))' }}>🌙</div>
           <h1 style={{ fontSize: 38, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
             <span className="gradient-text">NightMaMa</span>
@@ -505,14 +505,14 @@ function LandingPage({ onStart, dataLoaded }: { onStart: () => void; dataLoaded:
         </div>
 
         {/* Hero stats */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 28, animation: 'fadeIn 0.8s ease 0.1s both' }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24, animation: 'fadeIn 0.8s ease 0.1s both' }}>
           {[
             { num: '14.5萬', label: '路燈點位' },
-            { num: '417', label: '監視器' },
-            { num: 'AI', label: 'Gemini 陪聊' },
+            { num: '5,036', label: '警察局監視器' },
+            { num: 'Gemini', label: '3.6 Flash 陪聊' },
           ].map(s => (
-            <div key={s.label} className="glass" style={{ flex: 1, padding: '12px 8px', borderRadius: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 900, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{s.num}</div>
+            <div key={s.label} className="glass" style={{ flex: 1, padding: '12px 6px', borderRadius: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 17, fontWeight: 900, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{s.num}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
             </div>
           ))}
