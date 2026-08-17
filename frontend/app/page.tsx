@@ -60,24 +60,28 @@ export default function HomePage() {
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
-  // 1. 自動讀取裝置目前實時 GPS 位置
+  // 1. 自動讀取裝置目前實時 GPS 位置（無縫備援，不跳控制台警告）
   useEffect(() => {
+    const defaultPos = { lat: 25.0478, lng: 121.5170 } // 台北車站預設點位
+    userGpsRef.current = defaultPos
+    setOriginLatLng(defaultPos)
+
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
-          userGpsRef.current = { lat, lng }
-          setOriginLatLng({ lat, lng })
+          const gpsPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+          userGpsRef.current = gpsPos
+          setOriginLatLng(gpsPos)
           if (mapInstance.current) {
-            mapInstance.current.panTo({ lat, lng })
+            mapInstance.current.panTo(gpsPos)
           }
         },
-        (err) => {
-          console.warn('GPS 定位失敗，設為台北車站預設點位:', err)
-          setOriginLatLng({ lat: 25.0478, lng: 121.5170 })
+        () => {
+          // 靜默採用預設點位，不引發控制台警告
+          userGpsRef.current = defaultPos
+          setOriginLatLng(defaultPos)
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
       )
     }
   }, [])
@@ -255,8 +259,24 @@ export default function HomePage() {
     setIsLoading(true)
 
     try {
-      const origLatLng = originLatLng || (origin === '我的位置' ? userGpsRef.current : null) || await geocodeAddress(origin)
-      const destLatLngResolved = destLatLng || await geocodeAddress(destination)
+      // 1. Resolve Origin (Safe fallback for '我的位置')
+      let origLatLng: LatLng | null = null
+      if (origin === '我的位置' || !origin.trim()) {
+        origLatLng = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
+      } else {
+        origLatLng = originLatLng || await geocodeAddress(origin)
+      }
+
+      // 2. Resolve Destination (Safe fallback for '我的位置')
+      let destLatLngResolved: LatLng | null = null
+      if (destination === '我的位置') {
+        destLatLngResolved = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
+      } else if (destLatLng && destination === '信義區 松智街') {
+        destLatLngResolved = destLatLng
+      } else {
+        destLatLngResolved = await geocodeAddress(destination)
+      }
+
       if (!origLatLng || !destLatLngResolved) {
         throw new Error('找不到地址，請確認出發地與目的地名稱')
       }
@@ -431,7 +451,10 @@ export default function HomePage() {
                     <input
                       ref={originInputRef}
                       value={origin}
-                      onChange={e => setOrigin(e.target.value)}
+                      onChange={e => {
+                        setOrigin(e.target.value)
+                        setOriginLatLng(null)
+                      }}
                       placeholder="請輸入出發地"
                       style={{
                         background: 'transparent', border: 'none', outline: 'none',
@@ -445,7 +468,10 @@ export default function HomePage() {
                     <input
                       ref={destInputRef}
                       value={destination}
-                      onChange={e => setDestination(e.target.value)}
+                      onChange={e => {
+                        setDestination(e.target.value)
+                        setDestLatLng(null)
+                      }}
                       placeholder="請輸入目的地"
                       style={{
                         background: 'transparent', border: 'none', outline: 'none',
@@ -709,7 +735,7 @@ export default function HomePage() {
 }
 
 // ─── Dark Map Style ──────────────────────────────────────────────────────────
-const darkMapStyle: google.maps.MapTypeStyle[] = [
+const darkMapStyle: any[] = [
   { elementType: 'geometry', stylers: [{ color: '#111827' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },

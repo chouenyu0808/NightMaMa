@@ -170,6 +170,87 @@ function NavigateContent() {
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
+  // ─── Split Screen AI Companion State ──────────────────────────────────────
+  const [showCompanionSplit, setShowCompanionSplit] = useState(false)
+  const [companionMessages, setCompanionMessages] = useState<Array<{ role: 'user' | 'ai'; text: string; time: string }>>([
+    { role: 'ai', text: '寶貝，我有在線上聽你說話喔！導航繼續開啟中，走夜路記得隨時保持警覺喔 💜', time: '剛剛' }
+  ])
+  const [companionInput, setCompanionInput] = useState('')
+  const [isThinkingCompanion, setIsThinkingCompanion] = useState(false)
+  const [isListeningCompanion, setIsListeningCompanion] = useState(false)
+  const companionEndRef = useRef<HTMLDivElement>(null)
+  const recognitionRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (showCompanionSplit) {
+      companionEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [showCompanionSplit, companionMessages])
+
+  const sendCompanionMsg = async (textToSend?: string) => {
+    const msgText = (textToSend || companionInput).trim()
+    if (!msgText || isThinkingCompanion) return
+
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    setCompanionMessages(prev => [...prev, { role: 'user', text: msgText, time: now }])
+    if (!textToSend) setCompanionInput('')
+    setIsThinkingCompanion(true)
+
+    try {
+      const res = await fetch('/api/companion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userMessage: msgText,
+          context: { origin, destination, safetyScore, durationMin: Math.round(remainingSec / 60) }
+        }),
+      })
+      const data = await res.json()
+      const reply = data.reply || '寶貝，我有在聽喔！繼續往目的地前進，媽媽陪著你！'
+      setCompanionMessages(prev => [...prev, { role: 'ai', text: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
+      speakInstruction(reply)
+    } catch {
+      setCompanionMessages(prev => [...prev, { role: 'ai', text: '寶貝別擔心，媽咪在線上守護你！記得走大馬路喔！', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
+    } finally {
+      setIsThinkingCompanion(false)
+    }
+  }
+
+  const toggleSpeechRecognition = () => {
+    if (typeof window === 'undefined') return
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('您的瀏覽器不支援語音辨識功能，請使用文字輸入。')
+      return
+    }
+
+    if (isListeningCompanion && recognitionRef.current) {
+      recognitionRef.current.stop()
+      setIsListeningCompanion(false)
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'zh-TW'
+    recognition.interimResults = false
+    recognition.continuous = false
+
+    recognition.onstart = () => setIsListeningCompanion(true)
+    recognition.onend = () => setIsListeningCompanion(false)
+    recognition.onerror = () => setIsListeningCompanion(false)
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0]?.[0]?.transcript
+      if (transcript) {
+        setCompanionInput(transcript)
+        sendCompanionMsg(transcript)
+      }
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+  }
+
   // 超商/警局標記改成按需查詢，不用一進導航頁就自動打 Places API
   const toggleSafetyPlaces = useCallback(async () => {
     if (showSafetyPlaces) {
@@ -250,7 +331,6 @@ function NavigateContent() {
         center: points[0],
         zoom: 18.3,
         heading: 0,
-        tilt: 45,
         disableDefaultUI: true,
         gestureHandling: 'greedy',
         styles: googleNavMapStyle,
@@ -390,16 +470,11 @@ function NavigateContent() {
         )
       }
 
-      // Initial camera view — fit bounds with detailed maxZoom (18.3) for clear street detail
-      const bounds = new google.maps.LatLngBounds()
-      points.forEach(p => bounds.extend(p))
-      mapInstance.current.fitBounds(bounds, { top: 180, bottom: 180, left: 60, right: 60 })
-
-      google.maps.event.addListenerOnce(mapInstance.current, 'idle', () => {
-        if (mapInstance.current && (mapInstance.current.getZoom() || 0) > 18.8) {
-          mapInstance.current.setZoom(18.3)
-        }
-      })
+      // Initial camera view — start directly in close-up tracking view (zoom 18.3 on user start position)
+      if (mapInstance.current && points[0]) {
+        mapInstance.current.setCenter(points[0])
+        mapInstance.current.setZoom(18.3)
+      }
     })
 
     return () => {
@@ -428,7 +503,15 @@ function NavigateContent() {
   return (
     <div style={{ position: 'relative', height: '100dvh', overflow: 'hidden', background: '#0a0e1a' }}>
       {/* Map view */}
-      <div ref={mapRef} style={{ position: 'absolute', inset: 0 }} />
+      <div
+        ref={mapRef}
+        style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0,
+          height: showCompanionSplit ? '45dvh' : '100dvh',
+          transition: 'height 0.3s ease-in-out',
+        }}
+      />
 
       {/* ─── Top Google Navigation Banner (Dark Teal) ────────────────────────── */}
       <div style={{
@@ -666,10 +749,25 @@ function NavigateContent() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn-primary"
-              style={{ flex: 1, padding: '12px 6px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              onClick={() => router.push(`/companion?origin=${origin}&destination=${destination}&safety=${safetyScore}&duration=${remainingSec}`)}
+              style={{
+                flex: 1, padding: '12px 6px',
+                background: showCompanionSplit ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
+                fontSize: 13, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                border: showCompanionSplit ? '1px solid #c084fc' : 'none',
+                boxShadow: showCompanionSplit ? '0 0 16px rgba(168,85,247,0.6)' : 'none',
+              }}
+              onClick={() => {
+                const nextState = !showCompanionSplit
+                setShowCompanionSplit(nextState)
+                setTimeout(() => {
+                  if (mapInstance.current) {
+                    google.maps.event.trigger(mapInstance.current, 'resize')
+                  }
+                }, 320)
+              }}
             >
-              <IconMic size={15} /> AI 陪聊
+              <IconMic size={15} /> {showCompanionSplit ? '收起陪聊' : 'AI 陪聊'}
             </button>
             <button
               className="btn-primary"
@@ -688,6 +786,168 @@ function NavigateContent() {
           </div>
         </div>
       </div>
+
+      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 55dvh) ───────────── */}
+      {showCompanionSplit && (
+        <div style={{
+          position: 'absolute',
+          bottom: 0, left: 0, right: 0,
+          height: '55dvh',
+          zIndex: 60,
+          background: 'rgba(15, 17, 35, 0.96)',
+          backdropFilter: 'blur(20px)',
+          borderTop: '1px solid rgba(167, 139, 250, 0.4)',
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.8)',
+          display: 'flex',
+          flexDirection: 'column',
+          animation: 'slideUp 0.3s ease-out'
+        }}>
+          {/* Companion Drawer Header Bar */}
+          <div style={{
+            padding: '12px 16px',
+            background: 'rgba(30, 27, 75, 0.9)',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16
+              }}>
+                🌙
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  NightMaMa AI 陪聊
+                  <span style={{ fontSize: 10, background: 'rgba(16,185,129,0.2)', color: '#34d399', padding: '1px 6px', borderRadius: 99, border: '1px solid rgba(16,185,129,0.4)' }}>
+                    🟢 線上陪伴中
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>導航持續進行中 · 雙向語音守護</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowCompanionSplit(false)
+                setTimeout(() => {
+                  if (mapInstance.current) {
+                    google.maps.event.trigger(mapInstance.current, 'resize')
+                  }
+                }, 320)
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white',
+                borderRadius: 16, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+              }}
+            >
+              ▼ 收起
+            </button>
+          </div>
+
+          {/* Companion Messages Area */}
+          <div style={{ flex: 1, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {companionMessages.map((msg, idx) => (
+              <div key={idx} style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              }}>
+                <div style={{
+                  maxWidth: '82%',
+                  padding: '10px 14px',
+                  borderRadius: msg.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                  background: msg.role === 'user'
+                    ? 'linear-gradient(135deg, #6366f1, #3b82f6)'
+                    : 'rgba(30, 27, 75, 0.95)',
+                  border: msg.role === 'user' ? 'none' : '1px solid rgba(167, 139, 250, 0.3)',
+                  color: 'white',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                }}>
+                  {msg.text}
+                </div>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2, padding: '0 4px' }}>
+                  {msg.time}
+                </span>
+              </div>
+            ))}
+            {isThinkingCompanion && (
+              <div style={{ alignSelf: 'flex-start', background: 'rgba(30,27,75,0.8)', padding: '8px 14px', borderRadius: 18, fontSize: 12, color: '#c084fc' }}>
+                💭 媽媽思考中...
+              </div>
+            )}
+            <div ref={companionEndRef} />
+          </div>
+
+          {/* Companion Input Bar */}
+          <div style={{
+            padding: '10px 12px 14px',
+            background: 'rgba(10, 14, 26, 0.95)',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            {/* Speech Mic Button */}
+            <button
+              onClick={toggleSpeechRecognition}
+              style={{
+                width: 40, height: 40, borderRadius: '50%',
+                background: isListeningCompanion ? '#ef4444' : 'rgba(139, 92, 246, 0.25)',
+                border: isListeningCompanion ? '2px solid #f87171' : '1px solid rgba(139, 92, 246, 0.5)',
+                color: 'white', fontSize: 18, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              title={isListeningCompanion ? '按一下停止錄音' : '按一下開始語音輸入'}
+            >
+              🎙️
+            </button>
+
+            {/* Text Input Box */}
+            <input
+              type="text"
+              value={companionInput}
+              onChange={e => setCompanionInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && sendCompanionMsg()}
+              placeholder={isListeningCompanion ? '聆聽語音中...' : '說點什麼或問問路線狀況...'}
+              style={{
+                flex: 1,
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 20,
+                padding: '10px 14px',
+                color: 'white',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+
+            {/* Send Button */}
+            <button
+              onClick={() => sendCompanionMsg()}
+              disabled={!companionInput.trim() || isThinkingCompanion}
+              style={{
+                background: companionInput.trim() ? 'linear-gradient(135deg, #a855f7, #6366f1)' : 'rgba(255,255,255,0.1)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 20,
+                padding: '10px 16px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: companionInput.trim() ? 'pointer' : 'default',
+                opacity: companionInput.trim() ? 1 : 0.5
+              }}
+            >
+              傳送
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Anxiety Report Modal */}
       <AnxietyReportModal
@@ -763,7 +1023,7 @@ const floatingControlStyle: React.CSSProperties = {
 }
 
 // Google Navigation style map — standard, natural (green) colors
-const googleNavMapStyle: google.maps.MapTypeStyle[] = [
+const googleNavMapStyle: any[] = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },

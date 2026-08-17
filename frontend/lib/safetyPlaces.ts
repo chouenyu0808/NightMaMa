@@ -55,14 +55,14 @@ export async function searchNearbySafetyPlaces(
 
   const service = new google.maps.places.PlacesService(map)
 
-  // 每隔約 150 公尺取一個採樣點，確保沿線「所有便利商店」與「警察局」全數涵蓋不遺漏
+  // 每隔約 500 公尺取一個採樣點（搭配 600m 半徑），高效涵蓋沿線所有超商與警局
   const samplePoints: Array<{ lat: number; lng: number }> = []
   let lastPt = points[0]
   samplePoints.push(lastPt)
 
   for (let i = 1; i < points.length; i++) {
     const dist = haversineM(lastPt.lat, lastPt.lng, points[i].lat, points[i].lng)
-    if (dist >= 150 || i === points.length - 1) {
+    if (dist >= 500 || i === points.length - 1) {
       samplePoints.push(points[i])
       lastPt = points[i]
     }
@@ -77,7 +77,7 @@ export async function searchNearbySafetyPlaces(
     // 1. 搜尋全類別便利商店
     new Promise<void>(resolve => {
       service.nearbySearch(
-        { location: pt, radius: 400, type: 'convenience_store' },
+        { location: pt, radius: 600, type: 'convenience_store' },
         (res, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && res) {
             res.forEach(p => {
