@@ -24,6 +24,19 @@ app.include_router(users.router)
 app.include_router(places.router)
 
 
+@app.get("/health")
+def health() -> dict:
+    """Health check. Use /health, not /healthz.
+
+    Google's frontend intercepts /healthz on *.run.app and returns its own HTML
+    404 before the request ever reaches this app, so a monitor pointed at
+    /healthz reports the service as down even when it is healthy. Every other
+    path routes through normally.
+    """
+    return {"status": "ok"}
+
+
 @app.get("/healthz")
 def healthz() -> dict:
+    """Kept for non-Cloud-Run deployments; unreachable behind *.run.app."""
     return {"status": "ok"}
