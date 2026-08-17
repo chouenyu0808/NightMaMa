@@ -92,33 +92,48 @@ export default function HomePage() {
     }
   }, [])
 
-  // 1. 自動讀取裝置目前實時 GPS 位置（無縫備援，不跳控制台警告）
+  // 1. 自動讀取裝置目前實時 GPS 位置（雙策略定位 + 持續監聽）
   useEffect(() => {
     const defaultPos = { lat: 25.0478, lng: 121.5170 } // 台北車站預設點位
     userGpsRef.current = defaultPos
     setOriginLatLng(defaultPos)
 
-    if (typeof window !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const gpsPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-          userGpsRef.current = gpsPos
-          setOriginLatLng(gpsPos)
-          if (mapInstance.current) {
-            mapInstance.current.panTo(gpsPos)
-            updateUserGpsMarker(gpsPos)
-          }
-        },
-        () => {
-          // 靜默採用預設點位，不引發控制台警告
-          userGpsRef.current = defaultPos
-          setOriginLatLng(defaultPos)
-          if (mapInstance.current) {
-            updateUserGpsMarker(defaultPos)
-          }
-        },
-        { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 }
-      )
+    if (typeof window === 'undefined' || !navigator.geolocation) return
+
+    let watchId: number | null = null
+
+    // Strategy 1: Quick low-accuracy position first
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const gpsPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        userGpsRef.current = gpsPos
+        setOriginLatLng(gpsPos)
+        if (mapInstance.current) {
+          mapInstance.current.panTo(gpsPos)
+          updateUserGpsMarker(gpsPos)
+        }
+      },
+      () => { /* silent fallback */ },
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+    )
+
+    // Strategy 2: High-accuracy GPS + continuous watch
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const gpsPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        userGpsRef.current = gpsPos
+        setOriginLatLng(gpsPos)
+        if (mapInstance.current) {
+          mapInstance.current.panTo(gpsPos)
+          updateUserGpsMarker(gpsPos)
+        }
+      },
+      () => { /* silent */ },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    )
+
+    return () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId)
     }
   }, [updateUserGpsMarker])
 
@@ -212,64 +227,60 @@ export default function HomePage() {
       if (isSelected && route.points.length > 0) {
         const places = fetchedSafetyPlacesRef.current || []
 
-        if (route.isTransit && route.transitLegs && route.transitLegs.length >= 3) {
+        if (route.isTransit && route.transitLegs && route.transitLegs.length > 0) {
           // ─── PUBLIC TRANSIT MULTI-MODAL SAFETY RENDERING ───
-          // Leg 0: Walking to Bus Stop (NightMaMa Safety Detection)
-          const walk1 = route.transitLegs[0].points
-          const bus = route.transitLegs[1].points
-          const walk2 = route.transitLegs[2].points
+          // Dynamically iterate ALL transit legs (supports multi-transfer)
+          route.transitLegs.forEach(leg => {
+            if (leg.mode === 'WALK' && leg.points && leg.points.length >= 2) {
+              // Walking segment: apply safety coloring
+              drawSegmentSafety(leg.points, places)
+            } else if (leg.mode === 'BUS' && leg.points && leg.points.length >= 2) {
+              // Transit vehicle segment: solid cyan
+              const busPoly = new google.maps.Polyline({
+                path: leg.points,
+                map: mapInstance.current!,
+                strokeColor: '#0284c7',
+                strokeWeight: 9,
+                strokeOpacity: 0.95,
+                zIndex: 15,
+              })
+              polylinesRef.current.push(busPoly)
 
-          // 1. Walk 1 Safety Polyline
-          drawSegmentSafety(walk1, places)
-
-          // 2. Bus Ride Polyline (Solid Cyan #0284c7 with Bus Stop Markers)
-          if (bus.length >= 2) {
-            const busPoly = new google.maps.Polyline({
-              path: bus,
-              map: mapInstance.current!,
-              strokeColor: '#0284c7',
-              strokeWeight: 9,
-              strokeOpacity: 0.95,
-              zIndex: 15,
-            })
-            polylinesRef.current.push(busPoly)
-
-            // Bus Stop Markers
-            const busBoardingStop = new google.maps.Marker({
-              position: bus[0],
-              map: mapInstance.current!,
-              title: '🚏 上車公車站 (299號公車)',
-              icon: {
-                url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-                  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
-                  '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
-                  '</svg>'
-                ),
-                scaledSize: new google.maps.Size(28, 28),
-                anchor: new google.maps.Point(14, 14),
-              },
-              zIndex: 35,
-            })
-            const busAlightingStop = new google.maps.Marker({
-              position: bus[bus.length - 1],
-              map: mapInstance.current!,
-              title: '🚏 下車公車站 (準備夜間步行回家)',
-              icon: {
-                url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-                  '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
-                  '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
-                  '</svg>'
-                ),
-                scaledSize: new google.maps.Size(28, 28),
-                anchor: new google.maps.Point(14, 14),
-              },
-              zIndex: 35,
-            })
-            markersRef.current.push(busBoardingStop, busAlightingStop)
-          }
-
-          // 3. Walk 2 Safety Polyline
-          drawSegmentSafety(walk2, places)
+              // Boarding stop marker
+              const boardMarker = new google.maps.Marker({
+                position: leg.points[0],
+                map: mapInstance.current!,
+                title: `🚏 上車站 (${leg.lineName || '大眾運輸'})`,
+                icon: {
+                  url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+                    '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+                    '</svg>'
+                  ),
+                  scaledSize: new google.maps.Size(28, 28),
+                  anchor: new google.maps.Point(14, 14),
+                },
+                zIndex: 35,
+              })
+              // Alighting stop marker
+              const alightMarker = new google.maps.Marker({
+                position: leg.points[leg.points.length - 1],
+                map: mapInstance.current!,
+                title: `🚏 下車站 (${leg.lineName || '大眾運輸'})`,
+                icon: {
+                  url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+                    '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+                    '</svg>'
+                  ),
+                  scaledSize: new google.maps.Size(28, 28),
+                  anchor: new google.maps.Point(14, 14),
+                },
+                zIndex: 35,
+              })
+              markersRef.current.push(boardMarker, alightMarker)
+            }
+          })
         } else {
           // Standard Walking Safety Polyline
           drawSegmentSafety(route.points, places)
@@ -307,19 +318,16 @@ export default function HomePage() {
           if (p.type === 'police' && minD <= 450) nearbyPoliceCount++
         })
 
-        let color = '#ef4444'
-        let isSafe = false
-        let isDanger = true
+        let color = '#ef4444' // Default: RED (dangerous - no facilities nearby)
 
-        if (nearbyPoliceCount >= 1 || nearbyStoreCount >= 2 || (nearbyStoreCount >= 1 && idx < chunkSize * 2)) {
-          color = '#10b981'
-          isSafe = true
-          isDanger = false
-        } else if (nearbyStoreCount >= 1 || idx % 2 === 0) {
-          color = '#f59e0b'
-          isSafe = false
-          isDanger = false
+        if (nearbyPoliceCount >= 1 && nearbyStoreCount >= 1) {
+          color = '#10b981' // GREEN: Both police + store nearby
+        } else if (nearbyPoliceCount >= 1 || nearbyStoreCount >= 2) {
+          color = '#10b981' // GREEN: Police station or 2+ stores
+        } else if (nearbyStoreCount >= 1) {
+          color = '#f59e0b' // ORANGE: Only 1 store, no police
         }
+        // else: stays RED - no convenience stores, no police stations
 
         const poly = new google.maps.Polyline({
           path: sub,
@@ -327,11 +335,11 @@ export default function HomePage() {
           strokeColor: color,
           strokeWeight: 9,
           strokeOpacity: 0.95,
-          zIndex: isDanger ? 12 : 10,
+          zIndex: color === '#ef4444' ? 12 : 10,
         })
         polylinesRef.current.push(poly)
 
-        if (isSafe) {
+        if (color === '#10b981') {
           const midPt = sub[Math.floor(sub.length / 2)]
           if (midPt) {
             const shield = new google.maps.Marker({
@@ -557,10 +565,27 @@ export default function HomePage() {
               }
             })
 
+            // Dynamically recalculate safety score based on REAL store/police density
+            // Formula: base 50, +2 per nearby store, +5 per nearby police, capped at 95
+            // For transit routes, keep the transit-calculated score
+            const distKm = Math.max(1, r.distanceM / 1000)
+            let dynamicScore = r.score
+            if (!r.isTransit) {
+              const storeDensity = storeCount / distKm   // stores per km
+              const policeDensity = policeCount / distKm  // police per km
+              dynamicScore = Math.round(
+                Math.max(15, Math.min(95,
+                  35 + storeDensity * 6 + policeDensity * 15
+                ))
+              )
+            }
+
             return {
               ...r,
               storeCount,
               policeCount,
+              score: dynamicScore,
+              safety: scoreToVisual(dynamicScore),
             }
           })
 

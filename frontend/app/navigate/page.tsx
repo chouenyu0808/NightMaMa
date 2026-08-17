@@ -336,7 +336,7 @@ function NavigateContent() {
         new google.maps.Marker({
           position: bus[0],
           map: mapInstance.current!,
-          title: '🚏 上車公車站 (299號公車)',
+          title: '🚏 上車公車站',
           icon: {
             url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
               '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +

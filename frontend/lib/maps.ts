@@ -289,20 +289,39 @@ export async function fetchRoutes(
                     const firstDep = busLegs[0]?.departureStop || '上車站'
                     const finalArr = busLegs[busLegs.length - 1]?.arrivalStop || '下車站'
 
+                    // Calculate transit safety score based on walking segment distance
+                    const walkLegs = transitLegs.filter(l => l.mode === 'WALK')
+                    const totalWalkPts = walkLegs.reduce((sum, l) => sum + (l.points?.length || 0), 0)
+                    // Transit is inherently safer (vehicle), but walking segments reduce the score
+                    // Short walks (<500m total) = high score, long walks = lower score
+                    const totalWalkDistM = walkLegs.reduce((sum, l) => {
+                      if (!l.points || l.points.length < 2) return sum
+                      let d = 0
+                      for (let k = 1; k < l.points.length; k++) {
+                        const R2 = 6371000
+                        const dLa = (l.points[k].lat - l.points[k-1].lat) * Math.PI / 180
+                        const dLo = (l.points[k].lng - l.points[k-1].lng) * Math.PI / 180
+                        const aa = Math.sin(dLa/2)*Math.sin(dLa/2) + Math.cos(l.points[k-1].lat*Math.PI/180)*Math.cos(l.points[k].lat*Math.PI/180)*Math.sin(dLo/2)*Math.sin(dLo/2)
+                        d += R2 * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa))
+                      }
+                      return sum + d
+                    }, 0)
+                    const transitScore = Math.max(30, Math.min(95, 90 - Math.floor(totalWalkDistM / 100)))
+
                     const realTransitRoute: RouteResult = {
                       type: 'transit',
                       isTransit: true,
                       transitLegs,
-                      polyline: tr.overview_polyline || routes[0]?.polyline || '',
-                      durationSec: tLeg?.duration?.value || Math.round(routes[0]?.durationSec * 0.85 || 600),
-                      distanceM: tLeg?.distance?.value || routes[0]?.distanceM || 1000,
-                      score: 92,
+                      polyline: tr.overview_polyline || '',
+                      durationSec: tLeg?.duration?.value || 600,
+                      distanceM: tLeg?.distance?.value || 1000,
+                      score: transitScore,
                       reason: `搭乘 ${busSummary || '大眾運輸'}（${firstDep} 上車 ➔ ${finalArr} 下車），僅頭尾步行實施夜間安全防護`,
-                      lightCount: Math.floor((routes[0]?.lightCount || 40) * 0.8),
-                      cameraCount: Math.floor((routes[0]?.cameraCount || 20) * 0.8),
-                      policeCount: routes[0]?.policeCount || 2,
+                      lightCount: totalWalkPts * 2,
+                      cameraCount: totalWalkPts,
+                      policeCount: 0,
                       segmentScores: [],
-                      storeCount: routes[0]?.storeCount || 4,
+                      storeCount: 0,
                       points: (tr.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() })),
                       steps,
                     }
