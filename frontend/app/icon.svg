@@ -1,53 +1,16 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="112" fill="#0F172A" />
   <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0B0F19" />
-      <stop offset="50%" stop-color="#1E1035" />
-      <stop offset="100%" stop-color="#090D16" />
-    </linearGradient>
-
-    <linearGradient id="moonGrad" x1="120" y1="120" x2="380" y2="380" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FFF59D" />
-      <stop offset="35%" stop-color="#FDE047" />
-      <stop offset="70%" stop-color="#F59E0B" />
-      <stop offset="100%" stop-color="#D97706" />
-    </linearGradient>
-
-    <linearGradient id="pulseGrad" x1="180" y1="140" x2="420" y2="380" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#38BDF8" />
-      <stop offset="50%" stop-color="#8B5CF6" />
-      <stop offset="100%" stop-color="#EC4899" />
-    </linearGradient>
-
-    <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
+    <mask id="moon-cutout">
+      <rect width="512" height="512" fill="white" />
+      <circle cx="310" cy="190" r="130" fill="black" />
+    </mask>
   </defs>
-
-  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.15)" stroke-width="6" />
-
-  <circle cx="270" cy="250" r="150" fill="#8B5CF6" opacity="0.2" filter="url(#glowFilter)" />
-  <circle cx="350" cy="190" r="85" fill="#38BDF8" opacity="0.25" filter="url(#glowFilter)" />
-
-  <path
-    d="M 140 270 A 150 150 0 0 1 390 140"
-    stroke="url(#pulseGrad)"
-    stroke-width="12"
-    stroke-linecap="round"
-    opacity="0.75"
-    stroke-dasharray="16 10"
-  />
-
-  <path
-    d="M336.5 352.5C266.084 352.5 209 295.416 209 225C209 178.653 233.729 138.077 272.247 115.15C191.077 122.95 128 191.246 128 275C128 363.366 199.634 435 288 435C355.834 435 413.784 392.835 433.824 332.615C406.879 345.362 372.825 352.5 336.5 352.5Z"
-    fill="url(#moonGrad)"
-  />
-
-  <circle cx="340" cy="190" r="36" fill="url(#pulseGrad)" filter="url(#glowFilter)" />
-  <circle cx="340" cy="190" r="16" fill="#FFFFFF" />
-  <circle cx="340" cy="190" r="8" fill="#0B0F19" />
-
-  <path d="M 175 160 L 179 172 L 191 176 L 179 180 L 175 192 L 171 180 L 159 176 L 171 172 Z" fill="#FDE047" opacity="0.95" />
-  <path d="M 400 310 L 403 318 L 411 321 L 403 324 L 400 332 L 397 324 L 389 321 L 397 318 Z" fill="#38BDF8" opacity="0.9" />
+  <circle cx="230" cy="270" r="150" fill="#FDE047" mask="url(#moon-cutout)" />
+  <g>
+    <path d="M330 160 C302.4 160 280 182.4 280 210 C280 250 330 320 330 320 C330 320 380 250 380 210 C380 182.4 357.6 160 330 160 Z" fill="#38BDF8" />
+    <circle cx="330" cy="205" r="16" fill="#0F172A" />
+  </g>
+  <circle cx="160" cy="150" r="8" fill="#FDE047" opacity="0.9" />
+  <circle cx="120" cy="230" r="4" fill="#FDE047" opacity="0.6" />
 </svg>
