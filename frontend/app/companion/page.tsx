@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import { sendMessage, type CompanionContext } from '@/lib/gemini'
-import { NavBar } from '@/app/page'
+import Logo from '@/components/Logo'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySpeechRecognition = any
@@ -19,8 +19,13 @@ interface Message {
 
 const INITIAL_MESSAGE: Message = {
   role: 'ai',
-  text: '嗨！我是 NightMaMa 🌙 我會一路陪你走回家。有任何問題或感到不安都可以跟我說！',
+  text: '嗨！我是 NightMaMa 🌙 我會一路陪你走回家。有任何問題或感到不安都可以跟我說喔！',
   timestamp: Date.now(),
+}
+
+function formatTime(timestamp: number): string {
+  const d = new Date(timestamp)
+  return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 function CompanionContent() {
@@ -34,12 +39,13 @@ function CompanionContent() {
   const [isListening, setIsListening] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [showQuickPrompts, setShowQuickPrompts] = useState(true)
 
   // Route context from URL params
   const context: CompanionContext = {
-    origin: searchParams.get('origin') || '出發地',
+    origin: searchParams.get('origin') || '我的位置',
     destination: searchParams.get('destination') || '目的地',
-    safetyScore: parseInt(searchParams.get('safety') || '70'),
+    safetyScore: parseInt(searchParams.get('safety') || '85'),
     durationMin: Math.round(parseInt(searchParams.get('duration') || '600') / 60),
     nearbyPlaces: ['全家便利商店', '7-ELEVEN'],
   }
@@ -57,10 +63,9 @@ function CompanionContent() {
 
     const utt = new SpeechSynthesisUtterance(text)
     utt.lang = 'zh-TW'
-    utt.rate = 0.95 // slightly slower for gentle pacing
-    utt.pitch = 1.25 // warm pitch for cozy tone
+    utt.rate = 0.95
+    utt.pitch = 1.25
 
-    // Try finding warm female Chinese voice
     const voices = window.speechSynthesis.getVoices()
     const warmVoice = voices.find(v =>
       v.lang.includes('zh') &&
@@ -135,164 +140,309 @@ function CompanionContent() {
     setIsListening(true)
   }, [isListening, sendMsg])
 
-  const safetyColor = context.safetyScore >= 65 ? '#10b981' : context.safetyScore >= 40 ? '#f59e0b' : '#ef4444'
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-primary)' }}>
-      {/* Header */}
-      <div className="glass" style={{
-        padding: '52px 20px 16px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100dvh',
+      background: 'linear-gradient(180deg, #7b9ebf 0%, #6b8fb2 40%, #5d82a6 100%)',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    }}>
+
+      {/* LINE Style Header */}
+      <div style={{
+        padding: '50px 16px 12px',
+        background: '#7599bd',
+        borderBottom: '1px solid rgba(255,255,255,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        color: '#FFFFFF',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        zIndex: 50,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => router.back()} className="btn-icon" style={{ width: 36, height: 36, fontSize: 16 }}>←</button>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>🎙️ AI 語音陪聊</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              {context.origin} → {context.destination}
-            </div>
+        {/* Left: Back & Avatar Info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => router.back()}
+            style={{ background: 'none', border: 'none', color: '#FFFFFF', fontSize: 24, cursor: 'pointer', padding: '0 4px' }}
+          >
+            ‹
+          </button>
+          <div style={{ position: 'relative' }}>
+            <Logo size={40} style={{ borderRadius: '50%', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }} />
+            <div style={{
+              position: 'absolute', right: -2, bottom: -2, width: 12, height: 12, borderRadius: '50%',
+              background: '#10B981', border: '2px solid #7599bd'
+            }} />
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ color: safetyColor, fontWeight: 700, fontSize: 18 }}>{context.safetyScore}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>安全分</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+              NightMaMa 陪伴媽媽
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.85 }}>
+              {isSpeaking ? '🔊 語音播報中…' : '🟢 在線陪伴中'}
+            </div>
           </div>
         </div>
 
-        {/* Speaking indicator */}
-        {isSpeaking && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, color: '#8b5cf6', fontSize: 12 }}>
-            <SoundWave />
-            <span>NightMaMa 說話中…</span>
-          </div>
-        )}
+        {/* Right Action Icons (LINE Style) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 18 }}>
+          <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', fontSize: 18 }} title="搜尋">🔍</button>
+          <button
+            style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', fontSize: 18 }}
+            onClick={() => router.push('/sos?fakeCall=1')}
+            title="撥打假電話"
+          >
+            📞
+          </button>
+          <button style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', fontSize: 18 }} title="安全記錄">📅</button>
+          <button
+            style={{ background: 'none', border: 'none', color: '#FFFFFF', cursor: 'pointer', fontSize: 18 }}
+            onClick={() => setShowQuickPrompts(v => !v)}
+            title="選單"
+          >
+            ☰
+          </button>
+        </div>
       </div>
 
-      {/* Messages */}
+      {/* Messages Scroll Area */}
       <div
         className="scrollable"
-        style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}
+        style={{
+          flex: 1,
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
       >
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
-            }}
-          >
-            {msg.role === 'ai' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 16 }}>🌙</span>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>NightMaMa</span>
-              </div>
-            )}
-            <div className={`voice-bubble ${msg.role === 'ai' ? 'ai' : 'user'}`}>
-              {msg.text}
-            </div>
-          </div>
-        ))}
+        {/* Date Divider Pill */}
+        <div style={{ textAlign: 'center', margin: '4px 0 8px' }}>
+          <span style={{
+            background: 'rgba(0,0,0,0.22)',
+            color: '#FFFFFF',
+            borderRadius: 14,
+            padding: '4px 12px',
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.03em',
+          }}>
+            今天 {formatTime(INITIAL_MESSAGE.timestamp)}
+          </span>
+        </div>
 
+        {messages.map((msg, i) => {
+          const isUser = msg.role === 'user'
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: isUser ? 'flex-end' : 'flex-start',
+                gap: 8,
+              }}
+            >
+              {/* AI Avatar */}
+              {!isUser && (
+                <Logo size={38} style={{ borderRadius: '50%', flexShrink: 0, marginTop: 2 }} />
+              )}
+
+              {/* User Side Timestamp & Read status */}
+              {isUser && (
+                <div style={{ textAlign: 'right', alignSelf: 'flex-end', paddingBottom: 2, flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>已讀</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{formatTime(msg.timestamp)}</div>
+                </div>
+              )}
+
+              {/* Chat Bubble */}
+              <div
+                style={{
+                  maxWidth: '72%',
+                  padding: '10px 14px',
+                  borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                  background: isUser ? '#86E260' : '#FFFFFF',
+                  color: '#000000',
+                  fontSize: 14,
+                  lineHeight: 1.45,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+                  wordBreak: 'break-word',
+                  fontWeight: 400,
+                }}
+              >
+                {msg.text}
+              </div>
+
+              {/* AI Side Timestamp */}
+              {!isUser && (
+                <div style={{ alignSelf: 'flex-end', paddingBottom: 2, flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{formatTime(msg.timestamp)}</div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {/* AI Typing Indicator */}
         {isThinking && (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-            <span style={{ fontSize: 16 }}>🌙</span>
-            <div className="voice-bubble ai" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <Logo size={38} style={{ borderRadius: '50%', flexShrink: 0 }} />
+            <div style={{
+              background: '#FFFFFF',
+              borderRadius: '18px 18px 18px 4px',
+              padding: '10px 16px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
+            }}>
               <ThinkingDots />
             </div>
           </div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick prompts */}
-      <div style={{ padding: '8px 20px', display: 'flex', gap: 8, overflowX: 'auto' }} className="scrollable">
-        {['附近有超商嗎？', '我有點害怕', '還要走多久？', '幫我撥打假電話'].map(prompt => (
-          <button
-            key={prompt}
-            onClick={() => prompt === '幫我撥打假電話' ? router.push('/sos?fakeCall=1') : sendMsg(prompt)}
-            style={{
-              whiteSpace: 'nowrap',
-              padding: '7px 14px',
-              borderRadius: 999,
-              border: '1px solid rgba(139,92,246,0.3)',
-              background: 'rgba(139,92,246,0.1)',
-              color: '#c4b5fd',
-              fontSize: 13,
-              cursor: 'pointer',
-            }}
-          >
-            {prompt}
-          </button>
-        ))}
-      </div>
+      {/* Quick Prompts Chips Bar */}
+      {showQuickPrompts && (
+        <div style={{
+          padding: '8px 12px',
+          background: 'rgba(0,0,0,0.15)',
+          display: 'flex',
+          gap: 8,
+          overflowX: 'auto',
+          backdropFilter: 'blur(6px)',
+        }} className="scrollable">
+          {['🏪 附近有超商嗎？', '😰 我有點害怕', '⏱️ 還要走多久？', '📞 撥打假電話'].map(prompt => (
+            <button
+              key={prompt}
+              onClick={() => prompt === '📞 撥打假電話' ? router.push('/sos?fakeCall=1') : sendMsg(prompt.replace(/^[^\s]+\s*/, ''))}
+              style={{
+                whiteSpace: 'nowrap',
+                padding: '6px 12px',
+                borderRadius: 16,
+                border: 'none',
+                background: 'rgba(255,255,255,0.92)',
+                color: '#1F2937',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              }}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Input area */}
-      <div className="glass" style={{
-        padding: '12px 20px',
-        paddingBottom: 'calc(76px + env(safe-area-inset-bottom))',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
+      {/* LINE Style Bottom Input Toolbar */}
+      <div style={{
+        padding: '8px 12px',
+        paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+        background: '#FFFFFF',
+        borderTop: '1px solid #E5E7EB',
         display: 'flex',
-        gap: 10,
         alignItems: 'center',
+        gap: 10,
+        boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
       }}>
-        <input
-          className="input-field"
-          style={{ flex: 1 }}
-          placeholder="輸入訊息…"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMsg(input)}
-        />
-        <button className="btn-icon" onClick={() => sendMsg(input)} style={{ background: 'rgba(139,92,246,0.3)' }}>➤</button>
+        {/* Left Action Buttons (+, 📷, 🖼️) */}
+        <button style={{ background: 'none', border: 'none', fontSize: 22, color: '#6B7280', cursor: 'pointer', padding: 0 }} title="更多">
+          +
+        </button>
+        <button style={{ background: 'none', border: 'none', fontSize: 20, color: '#6B7280', cursor: 'pointer', padding: 0 }} title="相機">
+          📷
+        </button>
+
+        {/* Input Capsule Field */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          background: '#F3F4F6',
+          borderRadius: 20,
+          padding: '6px 14px',
+        }}>
+          <input
+            style={{
+              flex: 1,
+              border: 'none',
+              background: 'transparent',
+              outline: 'none',
+              fontSize: 15,
+              color: '#111827',
+            }}
+            placeholder="輸入訊息…"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMsg(input)}
+          />
+          {input.trim() ? (
+            <button
+              onClick={() => sendMsg(input)}
+              style={{
+                background: '#86E260',
+                border: 'none',
+                color: '#000000',
+                fontWeight: 700,
+                borderRadius: 14,
+                padding: '4px 10px',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              傳送
+            </button>
+          ) : (
+            <button style={{ background: 'none', border: 'none', fontSize: 18, color: '#9CA3AF', cursor: 'pointer' }}>
+              😊
+            </button>
+          )}
+        </div>
+
+        {/* Microphone Voice Button */}
         <button
-          className={`mic-btn ${isListening ? 'recording' : ''}`}
-          style={{ width: 52, height: 52 }}
           onClick={toggleListening}
+          style={{
+            background: isListening ? '#EF4444' : '#F3F4F6',
+            color: isListening ? '#FFFFFF' : '#4B5563',
+            border: 'none',
+            borderRadius: '50%',
+            width: 38,
+            height: 38,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            cursor: 'pointer',
+            boxShadow: isListening ? '0 0 10px rgba(239,68,68,0.5)' : 'none',
+            transition: 'all 0.2s ease',
+          }}
+          title={isListening ? '停止錄音' : '語音輸入'}
         >
           {isListening ? '⏹' : '🎙️'}
         </button>
       </div>
-
-      <NavBar active="companion" />
-    </div>
-  )
-}
-
-function SoundWave() {
-  return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'center', height: 16 }}>
-      {[1, 2, 3, 4].map(i => (
-        <div key={i} style={{
-          width: 3, background: '#8b5cf6', borderRadius: 2,
-          animation: `soundWave 0.8s ease-in-out infinite`,
-          animationDelay: `${i * 0.1}s`,
-        }} />
-      ))}
-      <style>{`
-        @keyframes soundWave {
-          0%, 100% { height: 4px; }
-          50% { height: 14px; }
-        }
-      `}</style>
     </div>
   )
 }
 
 function ThinkingDots() {
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
-      {[0, 1, 2].map(i => (
+    <div style={{ display: 'flex', gap: 4, padding: '4px 0' }}>
+      {[1, 2, 3].map(i => (
         <div key={i} style={{
-          width: 7, height: 7, borderRadius: '50%',
-          background: 'rgba(255,255,255,0.5)',
-          animation: 'bounce 1.2s infinite',
-          animationDelay: `${i * 0.2}s`,
+          width: 7, height: 7, borderRadius: '50%', background: '#9CA3AF',
+          animation: 'pulse 1.2s infinite ease-in-out',
+          animationDelay: `${i * 0.2}s`
         }} />
       ))}
       <style>{`
-        @keyframes bounce {
-          0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
-          40% { transform: scale(1.1); opacity: 1; }
+        @keyframes pulse {
+          0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+          40% { opacity: 1; transform: scale(1.1); }
         }
       `}</style>
     </div>
@@ -301,7 +451,11 @@ function ThinkingDots() {
 
 export default function CompanionPage() {
   return (
-    <Suspense fallback={<div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>載入中…</div>}>
+    <Suspense fallback={
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#7b9ebf', color: 'white' }}>
+        載入陪伴模式中…
+      </div>
+    }>
       <CompanionContent />
     </Suspense>
   )
