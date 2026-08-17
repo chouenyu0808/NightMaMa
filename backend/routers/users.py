@@ -1,10 +1,11 @@
 """User profile, emergency contacts, addresses, session status and conversation history."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from google.cloud import firestore
 
 from clients import firestore_client
 from deps import get_firestore
 from models.schemas import (
+    BindContactRequest,
     ConversationHistoryResponse,
     ConversationMessage,
     EmergencyContact,
@@ -110,3 +111,21 @@ def add_route_rating(
         distance_m=req.distance_m,
     )
     return {"status": "saved"}
+
+
+@router.post("/contacts/bind", status_code=201)
+def bind_contact(
+    user_id: str, req: BindContactRequest, db: firestore.Client = Depends(get_firestore)
+) -> dict:
+    """由 LINE Login 回呼呼叫：把授權的登入者綁成 user_id 的緊急聯絡人。
+
+    只新增/更新單一筆，不覆蓋整份清單 —— 綁定發生在聯絡人的裝置上，
+    覆蓋會清掉邀請者其他尚未同步的聯絡人。
+    """
+    if not req.line_user_id:
+        raise HTTPException(status_code=400, detail="缺少 line_user_id")
+
+    contact = firestore_client.upsert_emergency_contact(
+        db, user_id, name=req.name, line_user_id=req.line_user_id, phone=req.phone
+    )
+    return {"status": "bound", "contact": contact}

@@ -18,6 +18,7 @@ import {
   syncAddressesToBackend,
   loadAddressesFromBackend,
 } from '@/lib/addresses'
+import { getUserId } from '@/lib/user'
 
 export default function SettingsPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -28,6 +29,11 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
   const [isSendingTest, setIsSendingTest] = useState(false)
+
+  // LINE 綁定邀請
+  const [inviteUrl, setInviteUrl] = useState('')
+  const [inviteMsg, setInviteMsg] = useState('')
+  const [isInviting, setIsInviting] = useState(false)
 
   // 常用地址
   const [homeAddress, setHomeAddress] = useState('')
@@ -107,6 +113,34 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  /**
+   * 產生邀請連結給緊急聯絡人。
+   *
+   * 綁定必須由聯絡人本人完成 —— LINE Login 只會回傳登入者自己的 userId，
+   * 沒有任何 API 能讓你查出別人的。
+   */
+  const createInvite = async () => {
+    setIsInviting(true)
+    setInviteMsg('')
+    try {
+      const res = await fetch('/api/line/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: getUserId() }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.url) {
+        setInviteMsg(data?.error || `產生邀請連結失敗（HTTP ${res.status}）`)
+        return
+      }
+      setInviteUrl(data.url)
+    } catch {
+      setInviteMsg('網路連線失敗，無法產生邀請連結')
+    } finally {
+      setIsInviting(false)
+    }
+  }
+
   const removeContact = (id: string) => {
     const updated = contacts.filter(c => c.id !== id)
     setContacts(updated)
@@ -182,23 +216,81 @@ export default function SettingsPage() {
         {/* LINE Official Account Contact Setup */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><IconHeart size={16} color="#06C755" /> LINE 緊急求救通知設定</div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
-            一般使用者只需加入 <b>NightMaMa 官方帳號好友</b>，設定緊急聯絡人姓名與 LINE ID，觸發 SOS 時即可自動發送即時 GPS 定位警報！
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>
+            綁定後，觸發 SOS 或平安抵達時系統會<b>自動推播</b>給聯絡人。
+            未綁定也能使用 —— 屆時會開啟 LINE 讓你手動選擇收件人送出。
           </div>
 
-          <a
-            href="https://line.me/R/ti/p/@344bwjhh"
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: '#06C755', color: '#FFFFFF', fontWeight: 800, padding: '12px',
-              borderRadius: 14, textDecoration: 'none', fontSize: 14, marginBottom: 14,
-              boxShadow: '0 2px 8px rgba(6,199,85,0.3)'
-            }}
-          >
-            💬 第一步：點此加入 NightMaMa 官方帳號好友 (@344bwjhh)
-          </a>
+          {/* 邀請綁定：必須由聯絡人本人授權，LINE 不提供查詢他人 userId 的方式 */}
+          <div style={{
+            background: 'rgba(6,199,85,0.08)', border: '1px solid rgba(6,199,85,0.3)',
+            borderRadius: 16, padding: 14, marginBottom: 14,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#4ade80', marginBottom: 6 }}>
+              🔗 邀請聯絡人綁定 LINE（可自動推播）
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 10 }}>
+              產生邀請連結傳給對方，他點開後用 LINE 登入即可完成綁定。
+              對方需要在授權時<b>同意加入官方帳號好友</b>，否則 LINE 不允許推播。
+            </div>
+
+            {!inviteUrl ? (
+              <button
+                onClick={createInvite}
+                disabled={isInviting}
+                style={{
+                  width: '100%', padding: '11px', borderRadius: 12, border: 'none',
+                  background: '#06C755', color: '#fff', fontSize: 14, fontWeight: 800,
+                  cursor: isInviting ? 'wait' : 'pointer', opacity: isInviting ? 0.6 : 1,
+                }}
+              >
+                {isInviting ? '產生中…' : '產生邀請連結'}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{
+                  background: 'rgba(0,0,0,0.35)', borderRadius: 10, padding: '9px 11px',
+                  fontSize: 10, color: 'rgba(255,255,255,0.65)', wordBreak: 'break-all',
+                  lineHeight: 1.5, maxHeight: 70, overflowY: 'auto',
+                }}>
+                  {inviteUrl}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <a
+                    href={`https://line.me/R/msg/text/?${encodeURIComponent(
+                      `我想把你設為 NightMaMa 的緊急聯絡人，夜間獨自走路時能讓你收到我的位置。請點這裡完成綁定：\n${inviteUrl}`
+                    )}`}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 10, background: '#06C755',
+                      color: '#fff', fontSize: 13, fontWeight: 800, textAlign: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    用 LINE 傳送
+                  </a>
+                  <button
+                    onClick={() => { navigator.clipboard?.writeText(inviteUrl); setInviteMsg('已複製連結') }}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 10, cursor: 'pointer',
+                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#fff', fontSize: 13, fontWeight: 700,
+                    }}
+                  >
+                    複製連結
+                  </button>
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  連結 24 小時內有效
+                </div>
+              </div>
+            )}
+
+            {inviteMsg && (
+              <div style={{ fontSize: 11, color: '#fbbf24', marginTop: 8, fontWeight: 600 }}>
+                {inviteMsg}
+              </div>
+            )}
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <input

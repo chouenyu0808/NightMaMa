@@ -106,6 +106,13 @@ class EmergencyContactsRequest(BaseModel):
     contacts: list[EmergencyContact]
 
 
+class BindContactRequest(BaseModel):
+    """LINE Login 綁定完成後，把登入者加入邀請者的緊急聯絡人。"""
+    name: str
+    line_user_id: str
+    phone: str = ""
+
+
 class UserProfile(BaseModel):
     name: str = ""
     phone: str = ""

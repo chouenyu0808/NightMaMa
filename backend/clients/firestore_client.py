@@ -71,6 +71,39 @@ def set_emergency_contacts(db: firestore.Client, user_id: str, contacts: list[di
     )
 
 
+def upsert_emergency_contact(
+    db: firestore.Client, user_id: str, name: str, line_user_id: str, phone: str = ""
+) -> dict:
+    """新增或更新單一緊急聯絡人，以 line_user_id 為識別。
+
+    LINE Login 綁定完成時由回呼呼叫。刻意不是覆蓋整份清單：綁定發生在
+    「聯絡人的裝置」上，而完整清單在「邀請者的裝置」，覆蓋會把邀請者
+    其他還沒同步上來的聯絡人清掉。
+
+    已存在同一個 line_user_id 時就更新名稱（對方可能改過 LINE 暱稱），
+    並保留原本手動填的電話。
+    """
+    contacts = get_emergency_contacts(db, user_id)
+
+    for c in contacts:
+        if c.get("line_user_id") == line_user_id:
+            c["name"] = name or c.get("name", "")
+            if phone:
+                c["phone"] = phone
+            set_emergency_contacts(db, user_id, contacts)
+            return c
+
+    new_contact = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "phone": phone,
+        "line_user_id": line_user_id,
+    }
+    contacts.append(new_contact)
+    set_emergency_contacts(db, user_id, contacts)
+    return new_contact
+
+
 def get_addresses(db: firestore.Client, user_id: str) -> dict:
     doc = db.collection("users").document(user_id).get()
     if not doc.exists:
