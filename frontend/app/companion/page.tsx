@@ -40,6 +40,10 @@ function CompanionContent() {
   const [isThinking, setIsThinking] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [showQuickPrompts, setShowQuickPrompts] = useState(true)
+  const [isMounted, setIsMounted] = useState(false)
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // Route context from URL params
   const context: CompanionContext = {
@@ -245,16 +249,19 @@ function stripEmojis(str: string): string {
       >
         {/* Date Divider Pill */}
         <div style={{ textAlign: 'center', margin: '4px 0 8px' }}>
-          <span style={{
-            background: 'rgba(0,0,0,0.22)',
-            color: '#FFFFFF',
-            borderRadius: 14,
-            padding: '4px 12px',
-            fontSize: 11,
-            fontWeight: 500,
-            letterSpacing: '0.03em',
-          }}>
-            今天 {formatTime(INITIAL_MESSAGE.timestamp)}
+          <span
+            suppressHydrationWarning
+            style={{
+              background: 'rgba(0,0,0,0.22)',
+              color: '#FFFFFF',
+              borderRadius: 14,
+              padding: '4px 12px',
+              fontSize: 11,
+              fontWeight: 500,
+              letterSpacing: '0.03em',
+            }}
+          >
+            今天 {isMounted ? formatTime(messages[0]?.timestamp || Date.now()) : ''}
           </span>
         </div>
 
@@ -279,7 +286,7 @@ function stripEmojis(str: string): string {
               {isUser && (
                 <div style={{ textAlign: 'right', alignSelf: 'flex-end', paddingBottom: 2, flexShrink: 0 }}>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.9)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>已讀</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{formatTime(msg.timestamp)}</div>
+                  <div suppressHydrationWarning style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{isMounted ? formatTime(msg.timestamp) : ''}</div>
                 </div>
               )}
 
@@ -304,7 +311,7 @@ function stripEmojis(str: string): string {
               {/* AI Side Timestamp */}
               {!isUser && (
                 <div style={{ alignSelf: 'flex-end', paddingBottom: 2, flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{formatTime(msg.timestamp)}</div>
+                  <div suppressHydrationWarning style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>{isMounted ? formatTime(msg.timestamp) : ''}</div>
                 </div>
               )}
             </div>
