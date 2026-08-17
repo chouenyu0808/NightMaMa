@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, type RouteResult, type RouteStep } from '@/lib/maps'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers } from '@/lib/safetyPlaces'
 
 interface NavStep {
   instruction: string
@@ -264,6 +265,13 @@ function NavigateContent() {
           strokeWeight: 3,
         },
       })
+
+      // Draw nearby 24h convenience stores & police stations on navigation map
+      searchNearbySafetyPlaces(mapInstance.current!, points).then(places => {
+        if (mapInstance.current) {
+          drawSafetyPlaceMarkers(mapInstance.current, places)
+        }
+      }).catch(console.error)
 
       let currentPoints = points
 

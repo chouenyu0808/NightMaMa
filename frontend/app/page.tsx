@@ -6,6 +6,7 @@ import { loadMaps, fetchRoutes, formatDuration, formatDistance, type RouteResult
 import { calcSafetyScore, sampleRoutePoints, type Light, type CCTV, type SafetyScore } from '@/lib/safetyScore'
 import { generateRouteDescription } from '@/lib/gemini'
 import Logo from '@/components/Logo'
+import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, type SafetyPlace } from '@/lib/safetyPlaces'
 
 interface ScoredRoute extends RouteResult {
   safety: SafetyScore
@@ -23,6 +24,7 @@ export default function HomePage() {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<google.maps.Map | null>(null)
   const polylinesRef = useRef<google.maps.Polyline[]>([])
+  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
   const autocompleteOriginRef = useRef<google.maps.places.Autocomplete | null>(null)
   const autocompleteDestRef = useRef<google.maps.places.Autocomplete | null>(null)
   const originInputRef = useRef<HTMLInputElement>(null)
@@ -152,6 +154,19 @@ export default function HomePage() {
         zIndex: 20,
       })
       markersRef.current.push(startMarker, endMarker)
+    }
+
+    // Search and display 24h convenience stores & police stations along route
+    if (mapInstance.current) {
+      if (!infoWindowRef.current) {
+        infoWindowRef.current = new google.maps.InfoWindow()
+      }
+      searchNearbySafetyPlaces(mapInstance.current, points).then(places => {
+        if (mapInstance.current) {
+          const placeMarkers = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
+          markersRef.current.push(...placeMarkers)
+        }
+      }).catch(console.error)
     }
 
     // Auto fit bounds to full route
