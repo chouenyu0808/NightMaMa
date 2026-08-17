@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { NavBar } from '@/app/page'
+import { NavBar } from '@/app/components/NavBar'
 
 const CONTACTS_KEY = 'nightmama_contacts'
 const GEMINI_KEY_STORAGE = 'nightmama_gemini_key'

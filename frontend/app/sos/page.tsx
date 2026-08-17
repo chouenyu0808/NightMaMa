@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
-import { NavBar } from '@/app/page'
+import { NavBar } from '@/app/components/NavBar'
 
 const EMERGENCY_CONTACTS_KEY = 'nightmama_contacts'
 
