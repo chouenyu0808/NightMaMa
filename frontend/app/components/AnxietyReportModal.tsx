@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { IconAlertTriangle, IconUser, IconBulb, IconVolume2, IconShield } from '@/components/Icons'
 
 interface AnxietyReportModalProps {
   isOpen: boolean
@@ -10,10 +11,10 @@ interface AnxietyReportModalProps {
 }
 
 const CATEGORIES = [
-  { id: 'follower', label: '👤 疑似有人跟隨', desc: '感覺後方有可疑人士尾隨' },
-  { id: 'dark', label: '💡 路燈故障 / 巷弄極暗', desc: '現場視線不良、缺乏照明' },
-  { id: 'noise', label: '🔊 異常聲響 / 可疑群聚', desc: '前方有吵鬧、醉漢或聚集' },
-  { id: 'general', label: '👁️ 感到不安 / 留存紀錄', desc: '直覺不對勁，預防性報備' },
+  { id: 'follower', label: '疑似有人跟隨', icon: <IconUser size={18} color="#DC2626" />, desc: '感覺後方有可疑人士尾隨' },
+  { id: 'dark', label: '路燈故障 / 巷弄極暗', icon: <IconBulb size={18} color="#F59E0B" />, desc: '現場視線不良、缺乏照明' },
+  { id: 'noise', label: '異常聲響 / 可疑群聚', icon: <IconVolume2 size={18} color="#3B82F6" />, desc: '前方有吵鬧、醉漢或聚集' },
+  { id: 'general', label: '感到不安 / 留存紀錄', icon: <IconShield size={18} color="#10B981" />, desc: '直覺不對勁，預防性報備' },
 ]
 
 export default function AnxietyReportModal({
@@ -73,7 +74,7 @@ export default function AnxietyReportModal({
         body: JSON.stringify({ message: lineMessage }),
       }).catch(() => {})
 
-      setSuccessMsg(`✅ 不安通報已發送！系統已發送 LINE 安全警訊給緊急聯絡人，並在安全地圖上記錄通報點。`)
+      setSuccessMsg(`不安通報已成功發送！系統已發送 LINE 安全警訊給緊急聯絡人，並在安全地圖上記錄通報點。`)
       onReportSuccess?.(categoryLabel, lat, lng)
 
       setTimeout(() => {
@@ -82,7 +83,7 @@ export default function AnxietyReportModal({
         onClose()
       }, 2500)
     } catch {
-      setSuccessMsg(`✅ 不安通報已成功記錄並發送通報！`)
+      setSuccessMsg(`不安通報已成功記錄並發送通報！`)
       setTimeout(() => {
         setSuccessMsg(null)
         setLoadingCategory(null)
@@ -108,7 +109,7 @@ export default function AnxietyReportModal({
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 24 }}>⚠️</span>
+            <IconAlertTriangle size={24} color="#DC2626" />
             <div>
               <div style={{ fontSize: 18, fontWeight: 800, color: '#DC2626' }}>不安通報</div>
               <div style={{ fontSize: 12, color: '#6B7280' }}>預防性警訊發送與社區安全記錄</div>
@@ -133,7 +134,7 @@ export default function AnxietyReportModal({
         ) : (
           <>
             <div style={{ fontSize: 13, color: '#4B5563', marginBottom: 16, lineHeight: 1.5 }}>
-              感到周遭狀況不對勁？請點擊以下分類，系統將<b>立即發送 LINE 警訊給緊急聯絡人</b>，並在地圖記錄治安熱點：
+              感到周遭狀況不對勁？請點擊以下分類，系統將<b>發送 LINE 警訊給緊急聯絡人</b>，並在地圖記錄治安熱點：
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -151,10 +152,11 @@ export default function AnxietyReportModal({
                     boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                   }}
                 >
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>
-                    {loadingCategory === c.label ? '⏳ 發送通報中...' : c.label}
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {c.icon}
+                    {loadingCategory === c.label ? '發送通報中...' : c.label}
                   </div>
-                  <div style={{ fontSize: 12, color: '#6B7280' }}>{c.desc}</div>
+                  <div style={{ fontSize: 12, color: '#6B7280', paddingLeft: 26 }}>{c.desc}</div>
                 </button>
               ))}
             </div>

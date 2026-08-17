@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import Logo from '@/components/Logo'
+import { IconMap, IconMic, IconSos, IconSettings, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconFlag, IconPencil, IconSearch } from '@/components/Icons'
 
 interface RouteVisual {
   total: number
@@ -28,48 +29,10 @@ interface ScoredRoute extends RouteResult {
 
 type AppState = 'landing' | 'map'
 
-// ─── Line Icons（取代 emoji，風格參考 Google Maps）───────────────────────────────
-function IconShield({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z" /></svg>
-}
-function IconBolt({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 11 14 11 22 21 10 13 10 13 2" /></svg>
-}
-function IconBalance({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="3" x2="12" y2="21" /><path d="M5 7h14" /><path d="M5 7 2 13a3 3 0 0 0 6 0z" /><path d="M19 7l-3 6a3 3 0 0 0 6 0z" /></svg>
-}
-function IconBulb({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z" /></svg>
-}
-function IconCamera({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-}
-function IconStore({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1-5h16l1 5" /><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" /><path d="M9 20v-6h6v6" /><path d="M3 9h18" /></svg>
-}
-function IconBadge({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5" /><path d="M8.5 13 7 22l5-3 5 3-1.5-9" /></svg>
-}
-function IconPin({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-}
-function IconFlag({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22V4" /><path d="M4 4h14l-2 4 2 4H4" /></svg>
-}
-function IconPencil({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
-}
-function IconSearch({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-}
-function IconWalk({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13" cy="4" r="2" /><path d="M9 22l1-6-2-2 1-5 3-2 3 2 3 4-2 1-2-3-1 3 2 2-1 6" /><path d="M8 22l2-6" /></svg>
-}
-
 function typeIconFor(label: '最安全' | '最快' | '平衡', size?: number) {
   if (label === '最安全') return <IconShield size={size} />
-  if (label === '最快') return <IconBolt size={size} />
-  return <IconBalance size={size} />
+  if (label === '最快') return <IconZap size={size} />
+  return <IconScale size={size} />
 }
 
 export default function HomePage() {
@@ -975,10 +938,10 @@ function LandingPage({ onStart }: { onStart: () => void }) {
   }, [])
 
   const features = [
-    { icon: '💡', title: '路燈密度分析', desc: '台北市 145,919 盞路燈即時評分' },
-    { icon: '📹', title: '監視器覆蓋率', desc: '5,036 支 警察局 CCTV 涵蓋全台北' },
-    { icon: '🎙️', title: 'AI 語音陪聊', desc: 'Gemini 3.6 Flash 全程陪伴，化解夜行焦慮' },
-    { icon: '🆘', title: '一鍵緊急通知', desc: 'LINE 即時定位發送給緊急聯絡人' },
+    { icon: <IconBulb size={24} color="#f59e0b" />, title: '路燈密度分析', desc: '台北市 145,919 盞路燈即時評分' },
+    { icon: <IconCamera size={24} color="#3b82f6" />, title: '監視器覆蓋率', desc: '5,036 支 警察局 CCTV 涵蓋全台北' },
+    { icon: <IconMic size={24} color="#8b5cf6" />, title: 'AI 語音陪聊', desc: 'Gemini Live 全程陪伴，化解夜行焦慮' },
+    { icon: <IconSos size={24} color="#ef4444" />, title: '一鍵緊急通知', desc: 'LINE 即時定位發送給緊急聯絡人' },
   ]
 
   return (
@@ -1010,10 +973,10 @@ function LandingPage({ onStart }: { onStart: () => void }) {
           {[
             { num: '14.5萬', label: '路燈點位' },
             { num: '5,036', label: '警察局監視器' },
-            { num: 'Gemini', label: '3.6 Flash 陪聊' },
+            { num: '24/7', label: 'AI 線上陪伴' },
           ].map(s => (
-            <div key={s.label} className="glass" style={{ flex: 1, padding: '12px 6px', borderRadius: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 17, fontWeight: 900, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{s.num}</div>
+            <div key={s.label} className="glass" style={{ flex: 1, padding: '14px 8px', borderRadius: 18, textAlign: 'center' }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: 'white' }}>{s.num}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
             </div>
           ))}
@@ -1154,17 +1117,17 @@ function RouteRow({ route, onClick }: { route: ScoredRoute; onClick: () => void 
 export function NavBar({ active }: { active: 'home' | 'companion' | 'sos' | 'settings' }) {
   const router = useRouter()
   const items = [
-    { id: 'home', icon: '🗺️', label: '導航', path: '/' },
-    { id: 'companion', icon: '🎙️', label: '陪聊', path: '/companion' },
-    { id: 'sos', icon: '🆘', label: 'SOS', path: '/sos' },
-    { id: 'settings', icon: '⚙️', label: '設定', path: '/settings' },
-  ] as const
+    { id: 'home', icon: <IconMap size={22} />, label: '導航', path: '/' },
+    { id: 'companion', icon: <IconMic size={22} />, label: '陪聊', path: '/companion' },
+    { id: 'sos', icon: <IconSos size={22} color="#ef4444" />, label: 'SOS', path: '/sos' },
+    { id: 'settings', icon: <IconSettings size={22} />, label: '設定', path: '/settings' },
+  ]
 
   return (
     <nav className="nav-bar glass" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
       {items.map(item => (
         <button key={item.id} className={`nav-item ${active === item.id ? 'active' : ''}`} onClick={() => router.push(item.path)}>
-          <span style={{ fontSize: item.id === 'sos' ? 20 : 22 }}>{item.icon}</span>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
           <span>{item.label}</span>
         </button>
       ))}

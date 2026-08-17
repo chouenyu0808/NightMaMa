@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
+import { IconPhoneOff } from '@/components/Icons'
 
 interface RouteContext {
   origin: string
@@ -1040,11 +1041,12 @@ RULES:
                   onClick={endVoiceCall}
                   style={{
                     width: 72, height: 72, borderRadius: '50%', background: '#EF4444',
-                    border: 'none', color: 'white', fontSize: 32, cursor: 'pointer',
+                    border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
                     boxShadow: '0 4px 20px rgba(239,68,68,0.6)', transition: 'transform 0.15s ease'
                   }}
+                  title="掛斷通話"
                 >
-                  📵 掛斷
+                  <IconPhoneOff size={28} color="white" />
                 </button>
 
                 <button

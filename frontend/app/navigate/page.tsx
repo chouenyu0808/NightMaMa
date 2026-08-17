@@ -6,6 +6,7 @@ import { Suspense } from 'react'
 import { loadMaps, decodePolyline, formatDuration, formatDistance, fetchRoutes, type RouteResult, type RouteStep } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
+import { IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle, IconSos } from '@/components/Icons'
 
 interface NavStep {
   instruction: string
@@ -539,7 +540,7 @@ function NavigateContent() {
           style={floatingControlStyle}
           title="指北針"
         >
-          🧭
+          <IconCompass size={20} color="white" />
         </button>
 
         {/* Voice Announcements Toggle */}
@@ -556,7 +557,7 @@ function NavigateContent() {
           }}
           title={voiceMuted ? '開啟語音播報' : '靜音'}
         >
-          {voiceMuted ? '🔇' : '🔊'}
+          {voiceMuted ? <IconVolumeX size={20} color="#ef4444" /> : <IconVolume2 size={20} color="white" />}
         </button>
 
         {/* Recenter Map Button */}
@@ -569,7 +570,7 @@ function NavigateContent() {
           }}
           title="重新對焦我的位置"
         >
-          🎯
+          <IconTarget size={20} color={isCentering ? '#3b82f6' : 'white'} />
         </button>
 
         {/* Safety Places Toggle (store/police markers — fetched on demand) */}
@@ -596,26 +597,29 @@ function NavigateContent() {
         background: 'linear-gradient(to top, rgba(10,14,26,0.98) 85%, transparent)',
       }}>
         <div style={{
-          background: 'rgba(17, 24, 39, 0.92)',
-          backdropFilter: 'blur(20px)',
+          background: 'rgba(17,24,39,0.9)',
           borderRadius: 24,
-          padding: '16px 20px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',
+          padding: '14px 18px',
+          border: '1px solid rgba(255,255,255,0.12)',
+          backdropFilter: 'blur(16px)',
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
         }}>
-          {/* Top Info Bar: ETA + Exit Button + Steps Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            {/* Exit navigation button */}
+          {/* Main Info Line */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* End Navigation Button */}
             <button
               onClick={() => router.push('/')}
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: '50%',
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                color: 'white',
-                fontSize: 20,
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.4)',
+                color: '#ef4444',
+                fontSize: 18,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -654,7 +658,7 @@ function NavigateContent() {
               }}
               title="詳細路線"
             >
-              🔀
+              <IconMap size={20} color="white" />
             </button>
           </div>
 
@@ -662,17 +666,17 @@ function NavigateContent() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn-primary"
-              style={{ flex: 1, padding: '12px 6px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 13, fontWeight: 700 }}
+              style={{ flex: 1, padding: '12px 6px', background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={() => router.push(`/companion?origin=${origin}&destination=${destination}&safety=${safetyScore}&duration=${remainingSec}`)}
             >
-              🎙️ AI 陪聊
+              <IconMic size={15} /> AI 陪聊
             </button>
             <button
               className="btn-primary"
-              style={{ flex: 1, padding: '12px 6px', background: '#dc2626', fontSize: 13, fontWeight: 700 }}
+              style={{ flex: 1, padding: '12px 6px', background: '#dc2626', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={() => setShowAnxietyModal(true)}
             >
-              ⚠️ 不安通報
+              <IconAlertTriangle size={15} color="white" /> 不安通報
             </button>
             <button
               className="btn-primary btn-danger"
