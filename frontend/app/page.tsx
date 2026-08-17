@@ -46,7 +46,7 @@ export default function HomePage() {
   const originInputRef = useRef<HTMLInputElement>(null)
   const destInputRef = useRef<HTMLInputElement>(null)
 
-  const [origin, setOrigin] = useState('台北車站')
+  const [origin, setOrigin] = useState('我的位置')
   const [destination, setDestination] = useState('信義區 松智街')
   const [originLatLng, setOriginLatLng] = useState<LatLng | null>(null)
   const [destLatLng, setDestLatLng] = useState<LatLng | null>(null)
@@ -60,7 +60,29 @@ export default function HomePage() {
   const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
   const [showAnxietyModal, setShowAnxietyModal] = useState(false)
 
-  // Init Google Map
+  // 1. 自動讀取裝置目前實時 GPS 位置
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude
+          const lng = pos.coords.longitude
+          userGpsRef.current = { lat, lng }
+          setOriginLatLng({ lat, lng })
+          if (mapInstance.current) {
+            mapInstance.current.panTo({ lat, lng })
+          }
+        },
+        (err) => {
+          console.warn('GPS 定位失敗，設為台北車站預設點位:', err)
+          setOriginLatLng({ lat: 25.0478, lng: 121.5170 })
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    }
+  }, [])
+
+  // 2. Init Google Map
   useEffect(() => {
     let isSubscribed = true
 
@@ -213,6 +235,15 @@ export default function HomePage() {
 
     // Draw community anxiety report markers
     drawAnxietyReportMarkers(mapInstance.current!)
+
+    // Automatically search & display ALL 24h convenience stores & police stations along the selected route
+    searchNearbySafetyPlaces(mapInstance.current!, activeRoute.points).then((places) => {
+      if (mapInstance.current) {
+        if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
+        safetyMarkersRef.current.forEach(m => m.setMap(null))
+        safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
+      }
+    }).catch(console.error)
   }, [])
 
   const handleSearch = async () => {
