@@ -508,7 +508,7 @@ function NavigateContent() {
         style={{
           position: 'absolute',
           top: 0, left: 0, right: 0,
-          height: showCompanionSplit ? '45dvh' : '100dvh',
+          height: showCompanionSplit ? '62dvh' : '100dvh',
           transition: 'height 0.3s ease-in-out',
         }}
       />
@@ -674,10 +674,13 @@ function NavigateContent() {
 
       {/* ─── Bottom Google Navigation Bar (ETA Card) ─────────────────────────── */}
       <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        zIndex: 50,
-        padding: '12px 16px 28px',
-        background: 'linear-gradient(to top, rgba(10,14,26,0.98) 85%, transparent)',
+        position: 'absolute',
+        bottom: showCompanionSplit ? '38dvh' : 0,
+        left: 0, right: 0,
+        zIndex: 70,
+        padding: showCompanionSplit ? '6px 12px' : '12px 16px 28px',
+        background: showCompanionSplit ? 'rgba(10, 14, 26, 0.95)' : 'linear-gradient(to top, rgba(10,14,26,0.98) 85%, transparent)',
+        transition: 'all 0.3s ease-in-out',
       }}>
         <div style={{
           background: 'rgba(17,24,39,0.9)',
@@ -787,12 +790,12 @@ function NavigateContent() {
         </div>
       </div>
 
-      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 55dvh) ───────────── */}
+      {/* ─── Split Screen AI Companion Chat Drawer (Bottom 38dvh) ───────────── */}
       {showCompanionSplit && (
         <div style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
-          height: '55dvh',
+          height: '38dvh',
           zIndex: 60,
           background: 'rgba(15, 17, 35, 0.96)',
           backdropFilter: 'blur(20px)',
