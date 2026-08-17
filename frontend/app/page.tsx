@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers, haversineM, type SafetyPlace } from '@/lib/safetyPlaces'
+import { NavBar } from '@/app/components/NavBar'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget, IconHome, IconArrowUpDown, IconArrowRight, IconX, IconUser } from '@/components/Icons'
 
@@ -407,11 +408,13 @@ export default function HomePage() {
     }
   }, [])
 
-  const handleSearch = async () => {
-    if (!origin.trim() || !destination.trim()) {
+  const handleSearch = async (overrideDest?: string) => {
+    const targetDest = overrideDest !== undefined ? overrideDest : destination
+    if (!origin.trim() || !targetDest.trim()) {
       setError('請輸入出發地與目的地')
       return
     }
+    if (overrideDest !== undefined) setDestination(overrideDest)
     setError('')
     setIsLoading(true)
 
@@ -426,12 +429,10 @@ export default function HomePage() {
 
       // 2. Resolve Destination (Safe fallback for '我的位置')
       let destLatLngResolved: LatLng | null = null
-      if (destination === '我的位置') {
+      if (targetDest === '我的位置') {
         destLatLngResolved = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
-      } else if (destLatLng && destination === '信義區 松智街') {
-        destLatLngResolved = destLatLng
       } else {
-        destLatLngResolved = await geocodeAddress(destination)
+        destLatLngResolved = await geocodeAddress(targetDest)
       }
 
       if (!origLatLng || !destLatLngResolved) {
@@ -679,8 +680,7 @@ export default function HomePage() {
                   onClick={() => {
                     const home = localStorage.getItem('nightmama_home_address')
                     if (home && home.trim()) {
-                      setDestination(home.trim())
-                      setDestLatLng(null)
+                      handleSearch(home.trim())
                     } else {
                       alert('請先至右下角「設定」頁面填寫住家地址喔！')
                     }
@@ -699,8 +699,7 @@ export default function HomePage() {
                   onClick={() => {
                     const work = localStorage.getItem('nightmama_work_address')
                     if (work && work.trim()) {
-                      setDestination(work.trim())
-                      setDestLatLng(null)
+                      handleSearch(work.trim())
                     } else {
                       alert('請先至右下角「設定」頁面填寫公司地址喔！')
                     }
@@ -720,7 +719,7 @@ export default function HomePage() {
               {error && <p style={{ color: '#ef4444', fontSize: 11, marginBottom: 8, textAlign: 'center' }}>{error}</p>}
 
               <button
-                onClick={handleSearch}
+                onClick={() => handleSearch()}
                 disabled={isLoading}
                 style={{
                   width: '100%', height: 46, borderRadius: 14,
@@ -1009,47 +1008,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ─── Bottom Navigation Bar (導航 | 陪伴 | SOS) ─────────────────── */}
-      <nav style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
-        height: 72, background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(20px)',
-        borderTop: '1px solid rgba(255,255,255,0.08)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-around'
-      }}>
-        <button
-          onClick={() => {}}
-          style={{
-            background: 'none', border: 'none', color: '#a78bfa',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer'
-          }}
-        >
-          <IconMap size={22} color="#a78bfa" />
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa' }}>導航</span>
-          <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#a78bfa' }} />
-        </button>
-
-        <button
-          onClick={() => router.push('/companion')}
-          style={{
-            background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer'
-          }}
-        >
-          <IconMic size={22} color="rgba(255,255,255,0.5)" />
-          <span style={{ fontSize: 11, fontWeight: 500 }}>陪伴</span>
-        </button>
-
-        <button
-          onClick={() => router.push('/sos')}
-          style={{
-            background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer'
-          }}
-        >
-          <IconSos size={22} color="rgba(255,255,255,0.5)" />
-          <span style={{ fontSize: 11, fontWeight: 500 }}>SOS</span>
-        </button>
-      </nav>
+      {/* ─── Bottom Navigation Bar (導航 | 陪伴 | SOS | 設定) ─────────────────── */}
+      <NavBar active="home" />
 
       {/* Anxiety Report Modal */}
       <AnxietyReportModal

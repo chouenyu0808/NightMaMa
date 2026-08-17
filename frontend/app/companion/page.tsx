@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 
+import { NavBar } from '@/app/components/NavBar'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import {
   IconPhoneOff, IconChevronLeft, IconSearch, IconPhoneCall, IconCalendar, IconMenu,
@@ -1061,6 +1062,7 @@ RULES:
           ])
         }}
       />
+      {!embeddedInNav && <NavBar active="companion" />}
     </div>
   )
 }
