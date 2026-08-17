@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { NavBar } from '@/app/page'
-import { Icon } from '@iconify/react'
+import { NavBar } from '@/app/components/NavBar'
 
 const CONTACTS_KEY = 'nightmama_contacts'
 const GEMINI_KEY_STORAGE = 'nightmama_gemini_key'
@@ -68,9 +67,7 @@ export default function SettingsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg-primary)' }}>
       {/* Header */}
       <div style={{ padding: '52px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ fontWeight: 900, fontSize: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Icon icon="mdi:cog-outline" width={22} height={22} /> 設定
-        </div>
+        <div style={{ fontWeight: 900, fontSize: 20 }}>⚙️ 設定</div>
         <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4 }}>管理緊急聯絡人與 LINE 通知</div>
       </div>
 
@@ -80,9 +77,7 @@ export default function SettingsPage() {
 
         {/* LINE Official Account Contact Setup */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon icon="mdi:heart-outline" width={18} height={18} style={{ color: '#06C755' }} /> LINE 緊急求救通知設定
-          </div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>💚 LINE 緊急求救通知設定</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
             一般使用者只需加入 <b>NightMaMa 官方帳號好友</b>，設定緊急聯絡人姓名與 LINE ID，觸發 SOS 時即可自動發送即時 GPS 定位警報！
           </div>
@@ -98,7 +93,7 @@ export default function SettingsPage() {
               boxShadow: '0 2px 8px rgba(6,199,85,0.3)'
             }}
           >
-            <Icon icon="simple-icons:line" width={16} height={16} /> 第一步：點此加入 NightMaMa 官方帳號好友 (@344bwjhh)
+            💬 第一步：點此加入 NightMaMa 官方帳號好友 (@344bwjhh)
           </a>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -115,8 +110,8 @@ export default function SettingsPage() {
               onChange={e => setLineToken(e.target.value)}
             />
 
-            <button className="btn-primary" onClick={saveContact} style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              {saved ? <><Icon icon="mdi:check-circle" width={16} height={16} /> 已成功綁定緊急聯絡人！</> : '+ 儲存緊急聯絡人'}
+            <button className="btn-primary" onClick={saveContact} style={{ marginTop: 4 }}>
+              {saved ? '✅ 已成功綁定緊急聯絡人！' : '+ 儲存緊急聯絡人'}
             </button>
           </div>
         </div>
@@ -124,9 +119,7 @@ export default function SettingsPage() {
         {/* Contacts list */}
         {contacts.length > 0 && (
           <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-            <div style={{ fontWeight: 700, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon icon="mdi:card-account-phone-outline" width={16} height={16} /> 緊急聯絡人
-            </div>
+            <div style={{ fontWeight: 700, marginBottom: 14 }}>📋 緊急聯絡人</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {contacts.map(contact => (
                 <div key={contact.id} className="glass-light" style={{ padding: '12px 16px', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -143,14 +136,14 @@ export default function SettingsPage() {
                       onClick={() => sendTestNotification(contact.lineToken)}
                       disabled={isSendingTest}
                     >
-                      <Icon icon={testSent ? 'mdi:check-circle' : 'mdi:send-outline'} width={16} height={16} />
+                      {testSent ? '✅' : '📤'}
                     </button>
                     <button
                       className="btn-icon"
-                      style={{ width: 36, height: 36, background: 'rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ width: 36, height: 36, fontSize: 14, background: 'rgba(239,68,68,0.2)' }}
                       onClick={() => removeContact(contact.id)}
                     >
-                      <Icon icon="mdi:trash-can-outline" width={16} height={16} />
+                      🗑️
                     </button>
                   </div>
                 </div>
@@ -161,14 +154,12 @@ export default function SettingsPage() {
 
         {/* About */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Icon icon="mdi:moon-waning-crescent" width={16} height={16} /> 關於 NightMaMa
-          </div>
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>🌙 關於 NightMaMa</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon icon="mdi:lightbulb-on-outline" width={14} height={14} /> 路燈資料：台北市 145,919 盞路燈（data.taipei）</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon icon="mdi:cctv" width={14} height={14} /> CCTV 資料：台北市 5,036 支警察局監視器</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon icon="mdi:robot-outline" width={14} height={14} /> AI 陪聊：Google Gemini 3.6 Flash / 2.5 Flash</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Icon icon="mdi:map-marker-path" width={14} height={14} /> 地圖路線：Google Maps Routes API (Custom Safety Matrix)</div>
+            <div>🗺️ 路燈資料：台北市 145,919 盞路燈（data.taipei）</div>
+            <div>📹 CCTV 資料：台北市 5,036 支警察局監視器</div>
+            <div>🤖 AI 陪聊：Google Gemini 3.6 Flash / 2.5 Flash</div>
+            <div>🗺️ 地圖路線：Google Maps Routes API (Custom Safety Matrix)</div>
           </div>
         </div>
       </div>

@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadMaps, fetchRoutes, geocodeAddress, formatDuration, formatDistance, sampleIndices, scoreToColor, type RouteResult, type LatLng } from '@/lib/maps'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers } from '@/lib/safetyPlaces'
-import Logo from '@/components/Logo'
-import { Icon } from '@iconify/react'
+import AnxietyReportModal from '@/app/components/AnxietyReportModal'
+import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget } from '@/components/Icons'
 
 interface RouteVisual {
   total: number
@@ -27,61 +27,14 @@ interface ScoredRoute extends RouteResult {
   extraMin: number
 }
 
-type AppState = 'landing' | 'map'
-
-// ─── Line Icons（取代 emoji，風格參考 Google Maps）───────────────────────────────
-function IconShield({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5z" /></svg>
-}
-function IconBolt({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 11 14 11 22 21 10 13 10 13 2" /></svg>
-}
-function IconBalance({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="3" x2="12" y2="21" /><path d="M5 7h14" /><path d="M5 7 2 13a3 3 0 0 0 6 0z" /><path d="M19 7l-3 6a3 3 0 0 0 6 0z" /></svg>
-}
-function IconBulb({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z" /></svg>
-}
-function IconCamera({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
-}
-function IconStore({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1-5h16l1 5" /><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" /><path d="M9 20v-6h6v6" /><path d="M3 9h18" /></svg>
-}
-function IconBadge({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5" /><path d="M8.5 13 7 22l5-3 5 3-1.5-9" /></svg>
-}
-function IconPin({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-}
-function IconFlag({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22V4" /><path d="M4 4h14l-2 4 2 4H4" /></svg>
-}
-function IconPencil({ size = 14 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
-}
-function IconSearch({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-}
-function IconWalk({ size = 16 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13" cy="4" r="2" /><path d="M9 22l1-6-2-2 1-5 3-2 3 2 3 4-2 1-2-3-1 3 2 2-1 6" /><path d="M8 22l2-6" /></svg>
-}
-
 function typeIconFor(label: '最安全' | '最快' | '平衡', size?: number) {
   if (label === '最安全') return <IconShield size={size} />
-  if (label === '最快') return <IconBolt size={size} />
-  return <IconBalance size={size} />
-}
-
-const typeLabelOf: Record<string, '最安全' | '最快' | '平衡'> = {
-  safest: '最安全',
-  fastest: '最快',
-  balanced: '平衡',
+  if (label === '最快') return <IconZap size={size} />
+  return <IconScale size={size} />
 }
 
 export default function HomePage() {
   const router = useRouter()
-  const [appState, setAppState] = useState<AppState>('map')
 
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<google.maps.Map | null>(null)
@@ -93,8 +46,8 @@ export default function HomePage() {
   const originInputRef = useRef<HTMLInputElement>(null)
   const destInputRef = useRef<HTMLInputElement>(null)
 
-  const [origin, setOrigin] = useState('')
-  const [destination, setDestination] = useState('')
+  const [origin, setOrigin] = useState('我的位置')
+  const [destination, setDestination] = useState('信義區 松智街')
   const [originLatLng, setOriginLatLng] = useState<LatLng | null>(null)
   const [destLatLng, setDestLatLng] = useState<LatLng | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -102,11 +55,35 @@ export default function HomePage() {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [error, setError] = useState('')
   const [showSheet, setShowSheet] = useState(false)
-  const [navBarVisible, setNavBarVisible] = useState(false)
 
-  // Init map when entering map state
+  const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
+  const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
+  const [showAnxietyModal, setShowAnxietyModal] = useState(false)
+
+  // 1. 自動讀取裝置目前實時 GPS 位置
   useEffect(() => {
-    if (appState !== 'map') return
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude
+          const lng = pos.coords.longitude
+          userGpsRef.current = { lat, lng }
+          setOriginLatLng({ lat, lng })
+          if (mapInstance.current) {
+            mapInstance.current.panTo({ lat, lng })
+          }
+        },
+        (err) => {
+          console.warn('GPS 定位失敗，設為台北車站預設點位:', err)
+          setOriginLatLng({ lat: 25.0478, lng: 121.5170 })
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    }
+  }, [])
+
+  // 2. Init Google Map
+  useEffect(() => {
     let isSubscribed = true
 
     const timer = setTimeout(() => {
@@ -115,8 +92,8 @@ export default function HomePage() {
         if (!isSubscribed || !mapRef.current) return
         
         mapInstance.current = new google.maps.Map(mapRef.current, {
-          center: { lat: 25.0478, lng: 121.5319 },
-          zoom: 14,
+          center: { lat: 25.0339, lng: 121.5645 },
+          zoom: 14.5,
           disableDefaultUI: true,
           gestureHandling: 'greedy',
           styles: darkMapStyle,
@@ -128,9 +105,9 @@ export default function HomePage() {
           }
         }, 150)
 
-        // If routes were already present, redraw them immediately on the fresh map
+        // Draw routes if present
         if (routes.length > 0) {
-          drawRoutes(routes, selectedIdx, isSheetCollapsed, isSearchCollapsed)
+          drawRoutes(routes, selectedIdx)
         }
 
         if (originInputRef.current) {
@@ -165,15 +142,10 @@ export default function HomePage() {
       clearTimeout(timer)
       mapInstance.current = null
     }
-  }, [appState])
+  }, [])
 
   const markersRef = useRef<google.maps.Marker[]>([])
   const safetyMarkersRef = useRef<google.maps.Marker[]>([])
-  const [isSheetCollapsed, setIsSheetCollapsed] = useState(false)
-  const [isFullExpanded, setIsFullExpanded] = useState(false)
-  const [isSearchCollapsed, setIsSearchCollapsed] = useState(false)
-  const [showSafetyPlaces, setShowSafetyPlaces] = useState(false)
-  const [isLoadingSafetyPlaces, setIsLoadingSafetyPlaces] = useState(false)
 
   const clearSafetyPlaces = useCallback(() => {
     safetyMarkersRef.current.forEach(m => m.setMap(null))
@@ -181,29 +153,7 @@ export default function HomePage() {
     setShowSafetyPlaces(false)
   }, [])
 
-  // 超商/警局標記改成按需查詢 —— 只有使用者按下按鈕才打 Places API，
-  // 不用每次畫路線就自動查一次
-  const toggleSafetyPlaces = useCallback(async () => {
-    if (showSafetyPlaces) {
-      clearSafetyPlaces()
-      return
-    }
-    const route = routes[selectedIdx]
-    if (!mapInstance.current || !route) return
-    setIsLoadingSafetyPlaces(true)
-    if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
-    try {
-      const places = await searchNearbySafetyPlaces(mapInstance.current, route.points)
-      if (mapInstance.current) {
-        safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
-        setShowSafetyPlaces(true)
-      }
-    } finally {
-      setIsLoadingSafetyPlaces(false)
-    }
-  }, [showSafetyPlaces, clearSafetyPlaces, routes, selectedIdx])
-
-  const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number, sheetCollapsed = false, searchCollapsed = false) => {
+  const drawRoutes = useCallback((scoredRoutes: ScoredRoute[], selected: number) => {
     polylinesRef.current.forEach(p => p.setMap(null))
     polylinesRef.current = []
     markersRef.current.forEach(m => m.setMap(null))
@@ -211,59 +161,46 @@ export default function HomePage() {
 
     if (!mapInstance.current || !scoredRoutes.length) return
 
-    // Draw polylines — selected route 依路段安全分數畫成平滑漸層（暗藍→亮黃）
+    // Draw polylines
     scoredRoutes.forEach((route, i) => {
       const isSelected = i === selected
-      if (isSelected && route.segmentScores.length > 0) {
-        const idx = sampleIndices(route.points.length, route.segmentScores.length + 1)
-        const segCount = Math.min(idx.length - 1, route.segmentScores.length)
-        const scores = route.segmentScores.slice(0, segCount)
-        // 同一條路線內部相對拉伸到 0-100，確保最暗/最亮的路段色差一定明顯，
-        // 不會因為整條路線分數都擠在同一區間（例如都落在 30-60）而看起來像單色。
-        const lo = Math.min(...scores)
-        const hi = Math.max(...scores)
-        const stretch = (v: number) => (hi - lo < 1 ? 50 : ((v - lo) / (hi - lo)) * 100)
-        for (let s = 0; s < segCount; s++) {
-          const slice = route.points.slice(idx[s], idx[s + 1] + 1)
-          if (slice.length < 2) continue
-          // 跟下一段的分數做內插，逐點畫一小截一小截的顏色，銜接處平滑過渡
-          // 而不是路段跟路段之間顏色硬切。
-          const scoreStart = scores[s]
-          const scoreEnd = s < segCount - 1 ? scores[s + 1] : scores[s]
-          for (let p = 0; p < slice.length - 1; p++) {
-            const localT = slice.length > 2 ? p / (slice.length - 2) : 0
-            const blended = scoreStart + (scoreEnd - scoreStart) * localT
-            const segPolyline = new google.maps.Polyline({
-              path: [slice[p], slice[p + 1]].map(pt => ({ lat: pt.lat, lng: pt.lng })),
-              map: mapInstance.current!,
-              strokeColor: scoreToColor(stretch(blended)),
-              strokeWeight: 7,
-              strokeOpacity: 1,
-              zIndex: 10,
-            })
-            polylinesRef.current.push(segPolyline)
-          }
-        }
-      } else {
+      if (isSelected && route.points.length > 0) {
         const polyline = new google.maps.Polyline({
-          path: route.points.map(p => ({ lat: p.lat, lng: p.lng })),
+          path: route.points,
           map: mapInstance.current!,
-          strokeColor: isSelected ? route.safety.color : 'rgba(255,255,255,0.25)',
-          strokeWeight: isSelected ? 7 : 4,
-          strokeOpacity: isSelected ? 1 : 0.4,
-          zIndex: isSelected ? 10 : 1,
+          strokeColor: '#34d399',
+          strokeWeight: 8,
+          strokeOpacity: 0.95,
+          zIndex: 10,
         })
         polylinesRef.current.push(polyline)
+      } else if (route.points.length > 0) {
+        const unselectedPolyline = new google.maps.Polyline({
+          path: route.points,
+          map: mapInstance.current!,
+          strokeColor: '#6b7280',
+          strokeWeight: 5,
+          strokeOpacity: 0.4,
+          zIndex: 1,
+        })
+        polylinesRef.current.push(unselectedPolyline)
       }
     })
 
-    const selectedRoute = scoredRoutes[selected]
-    const points = selectedRoute.points
+    const activeRoute = scoredRoutes[selected]
+    if (activeRoute && activeRoute.points.length) {
+      const bounds = new google.maps.LatLngBounds()
+      activeRoute.points.forEach(p => bounds.extend(p))
+      mapInstance.current.fitBounds(bounds, {
+        top: 100,
+        bottom: 280,
+        left: 40,
+        right: 40,
+      })
 
-    if (points.length >= 2) {
-      // Start marker (Origin)
+      // Start marker
       const startMarker = new google.maps.Marker({
-        position: points[0],
+        position: activeRoute.points[0],
         map: mapInstance.current!,
         title: '出發地',
         icon: {
@@ -276,9 +213,9 @@ export default function HomePage() {
         },
         zIndex: 20,
       })
-      // End marker (Destination) — classic red drop pin
+      // End marker
       const endMarker = new google.maps.Marker({
-        position: points[points.length - 1],
+        position: activeRoute.points[activeRoute.points.length - 1],
         map: mapInstance.current!,
         title: '目的地',
         icon: {
@@ -296,93 +233,18 @@ export default function HomePage() {
       markersRef.current.push(startMarker, endMarker)
     }
 
-    // Anxiety report hotspots always show; store/police stay behind the
-    // on-demand toggle (toggleSafetyPlaces) so we don't fire Places on every draw.
-    if (mapInstance.current) {
-      if (!infoWindowRef.current) {
-        infoWindowRef.current = new google.maps.InfoWindow()
+    // Draw community anxiety report markers
+    drawAnxietyReportMarkers(mapInstance.current!)
+
+    // Automatically search & display ALL 24h convenience stores & police stations along the selected route
+    searchNearbySafetyPlaces(mapInstance.current!, activeRoute.points).then((places) => {
+      if (mapInstance.current) {
+        if (!infoWindowRef.current) infoWindowRef.current = new google.maps.InfoWindow()
+        safetyMarkersRef.current.forEach(m => m.setMap(null))
+        safetyMarkersRef.current = drawSafetyPlaceMarkers(mapInstance.current, places, infoWindowRef.current || undefined)
       }
-      drawAnxietyReportMarkers(mapInstance.current, infoWindowRef.current || undefined).then(repMarkers => {
-        markersRef.current.push(...repMarkers)
-      }).catch(console.error)
-    }
-
-    // Auto fit bounds to full route
-    const bounds = new google.maps.LatLngBounds()
-    points.forEach(p => bounds.extend(p))
-
-    // Top padding: ~110px if collapsed, ~240px if expanded
-    const topPad = searchCollapsed ? 110 : 240
-    // Bottom padding: ~90px if collapsed, ~240px if expanded
-    const bottomPad = sheetCollapsed ? 90 : 240
-
-    if (mapInstance.current) {
-      google.maps.event.trigger(mapInstance.current, 'resize')
-      mapInstance.current.fitBounds(bounds, {
-        top: topPad,
-        bottom: bottomPad,
-        left: 35,
-        right: 35,
-      })
-    }
+    }).catch(console.error)
   }, [])
-
-  // Continuous GPS tracking with high accuracy
-  useEffect(() => {
-    if (appState === 'map' && navigator.geolocation) {
-      const watchId = navigator.geolocation.watchPosition(
-        pos => {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-          userGpsRef.current = coords
-          if (!origin) setOrigin('我的位置')
-        },
-        err => console.warn('GPS tracking notice:', err),
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
-      )
-      return () => navigator.geolocation.clearWatch(watchId)
-    }
-  }, [appState, origin])
-  const [showReportModal, setShowReportModal] = useState(false)
-  const [reportType, setReportType] = useState('💡 路燈故障/昏暗')
-  const [reportNote, setReportNote] = useState('')
-  const [reportedSpots, setReportedSpots] = useState<Array<{ id: number; type: string; note: string; lat: number; lng: number }>>([])
-
-  useEffect(() => {
-    const saved = localStorage.getItem('nightmama_unsafe_spots')
-    if (saved) {
-      try { setReportedSpots(JSON.parse(saved)) } catch {}
-    }
-  }, [])
-
-  const submitReport = () => {
-    const lat = userGpsRef.current?.lat || 25.0478
-    const lng = userGpsRef.current?.lng || 121.5170
-    const newSpot = { id: Date.now(), type: reportType, note: reportNote, lat, lng }
-    const updated = [...reportedSpots, newSpot]
-    setReportedSpots(updated)
-    localStorage.setItem('nightmama_unsafe_spots', JSON.stringify(updated))
-    setShowReportModal(false)
-    setReportNote('')
-
-    if (mapInstance.current) {
-      const dangerMarker = new google.maps.Marker({
-        position: { lat, lng },
-        map: mapInstance.current,
-        title: `🚨 社群回報暗區: ${reportType}`,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: '#ef4444',
-          fillOpacity: 0.9,
-          strokeColor: '#ffffff',
-          strokeWeight: 2,
-        },
-      })
-      markersRef.current.push(dangerMarker)
-    }
-
-    alert('不安暗區點位已成功匿名通報！地圖已為您與其他使用者建立警示標籤。')
-  }
 
   const handleSearch = async () => {
     if (!origin.trim() || !destination.trim()) {
@@ -391,12 +253,8 @@ export default function HomePage() {
     }
     setError('')
     setIsLoading(true)
-    setShowSheet(false)
 
     try {
-      // Autocomplete's place_changed sometimes doesn't fire (Enter-key race,
-      // browser's own address autofill) leaving *LatLng null even though the
-      // field looks filled in — geocode the typed text as a fallback.
       const origLatLng = originLatLng || (origin === '我的位置' ? userGpsRef.current : null) || await geocodeAddress(origin)
       const destLatLngResolved = destLatLng || await geocodeAddress(destination)
       if (!origLatLng || !destLatLngResolved) {
@@ -414,17 +272,36 @@ export default function HomePage() {
       const computedRoutes = rawRoutes.map(route => {
         const safety = scoreToVisual(Math.round(route.score))
         const extraMin = Math.round((route.durationSec - minDuration) / 60)
-        const typeLabel = typeLabelOf[route.type] ?? '平衡'
-        const description = route.reason || `${safety.emoji} 安全評分 ${safety.total} 分，沿途 ${route.lightCount} 盞路燈`
-        return { ...route, safety, typeLabel, description, extraMin }
+        return {
+          ...route,
+          safety,
+          extraMin,
+        }
       })
 
-      // Sort by Safety Total Score descending (Highest safety score at the top!)
-      computedRoutes.sort((a, b) => b.safety.total - a.safety.total)
-      setRoutes(computedRoutes)
+      computedRoutes.sort((a, b) => b.score - a.score)
+
+      const scored: ScoredRoute[] = computedRoutes.map((route, i) => {
+        let typeLabel: ScoredRoute['typeLabel'] = '平衡'
+        if (i === 0) {
+          typeLabel = '最安全'
+        } else if (route.extraMin === 0) {
+          typeLabel = '最快'
+        } else {
+          typeLabel = '平衡'
+        }
+
+        const description = route.reason || `${route.safety.emoji} 安全評分 ${route.safety.total} 分，沿途 ${route.lightCount} 盞路燈`
+        return {
+          ...route,
+          typeLabel,
+          description,
+        }
+      })
+
+      setRoutes(scored)
       setSelectedIdx(0)
-      setIsSearchCollapsed(true)
-      drawRoutes(computedRoutes, 0, false, true)
+      drawRoutes(scored, 0)
       setShowSheet(true)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '路線搜尋失敗，請重試')
@@ -436,754 +313,408 @@ export default function HomePage() {
   const handleSelectRoute = (idx: number) => {
     clearSafetyPlaces()
     setSelectedIdx(idx)
-    drawRoutes(routes, idx, isSheetCollapsed, isSearchCollapsed)
+    drawRoutes(routes, idx)
   }
 
-  const setSheetCollapsed = (next: boolean) => {
-    setIsSheetCollapsed(next)
-    if (routes.length > 0) {
-      drawRoutes(routes, selectedIdx, next, isSearchCollapsed)
-    }
+  const swapOriginDest = () => {
+    const tempOrig = origin
+    const tempOrigLatLng = originLatLng
+    setOrigin(destination)
+    setOriginLatLng(destLatLng)
+    setDestination(tempOrig)
+    setDestLatLng(tempOrigLatLng)
   }
 
-  const toggleCollapse = () => setSheetCollapsed(!isSheetCollapsed)
-
-  // 底部路線卡片可上下拖曳展開/完全拉高/收合 (3段式拖曳)
-  const draggingRef = useRef(false)
-  const dragMovedRef = useRef(false)
-  const onSheetDragStart = (e: React.PointerEvent) => {
-    draggingRef.current = true
-    dragMovedRef.current = false
-    const startY = e.clientY
-    const onMove = (ev: PointerEvent) => {
-      if (Math.abs(ev.clientY - startY) > 8) dragMovedRef.current = true
-    }
-    const onUp = (ev: PointerEvent) => {
-      draggingRef.current = false
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      const delta = ev.clientY - startY
-
-      if (delta < -30) {
-        // Dragged UP
-        if (isSheetCollapsed) {
-          setIsSheetCollapsed(false)
-          setIsFullExpanded(false)
-        } else {
-          setIsFullExpanded(true)
-        }
-      } else if (delta > 30) {
-        // Dragged DOWN
-        if (isFullExpanded) {
-          setIsFullExpanded(false)
-        } else {
-          setIsSheetCollapsed(true)
-        }
-      }
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+  const selectedRoute = routes[selectedIdx] || {
+    score: 88,
+    lightCount: 45,
+    cameraCount: 28,
+    policeCount: 2,
+    storeCount: 4,
   }
-
-  // 底部導航列預設隱藏，往上滑手把才展開（節省地圖空間）
-  const navDragMovedRef = useRef(false)
-  const onNavHandleDragStart = (e: React.PointerEvent) => {
-    navDragMovedRef.current = false
-    const startY = e.clientY
-    const onMove = (ev: PointerEvent) => {
-      if (Math.abs(ev.clientY - startY) > 10) navDragMovedRef.current = true
-    }
-    const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      const delta = ev.clientY - startY
-      if (delta < -20) setNavBarVisible(true)
-      else if (delta > 20) setNavBarVisible(false)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
-
-  const handleStartNavigation = () => {
-    const route = routes[selectedIdx]
-    if (!route) return
-    const params = new URLSearchParams({
-      origin, destination,
-      polyline: route.polyline,
-      duration: String(route.durationSec),
-      distance: String(route.distanceM),
-      safety: String(route.safety.total),
-      lights: String(route.lightCount),
-      cctv: String(route.cameraCount),
-      steps: JSON.stringify(route.steps || []),
-    })
-    router.push(`/navigate?${params}`)
-  }
-
-  if (appState === 'landing') {
-    return <LandingPage onStart={() => setAppState('map')} />
-  }
-
-  // 顯示全部候選路線（最快/最安全/平衡，最多 3 條），依安全分數排序
-  const displayRoutes = routes.map((route, idx) => ({ route, idx }))
 
   return (
-    <div style={{ position: 'relative', height: '100dvh', overflow: 'hidden' }}>
-      {/* Map */}
-      <div ref={mapRef} style={{ position: 'absolute', inset: 0, background: '#eef3e8' }} />
+    <div style={{
+      position: 'relative',
+      width: '100vw',
+      height: '100dvh',
+      overflow: 'hidden',
+      background: '#0b0e1b',
+      color: 'white',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }}>
+      {/* ─── FULL SCREEN BACKGROUND GOOGLE MAP ───────────────────────────── */}
+      <div ref={mapRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }} />
 
-      {/* Top search panel */}
+      {/* ─── Top Floating Controls Over Map ────────────────────────────── */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0,
-        padding: isSearchCollapsed && routes.length > 0 ? '48px 16px 10px' : '52px 16px 16px',
-        background: 'rgba(10,14,26,0.97)',
-        zIndex: 20,
+        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+        pointerEvents: 'none'
       }}>
-        {!(isSearchCollapsed && routes.length > 0) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <button onClick={() => setAppState('landing')} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 16, borderRadius: 999, width: 32, height: 32, cursor: 'pointer' }}>←</button>
-            {routes.length > 0 && (
-              <button
-                onClick={toggleSafetyPlaces}
-                disabled={isLoadingSafetyPlaces}
-                style={{
-                  marginLeft: 'auto',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: showSafetyPlaces ? '#34d399' : '#93c5fd',
-                  background: showSafetyPlaces ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
-                  padding: '4px 10px',
-                  borderRadius: 999,
-                  border: `1px solid ${showSafetyPlaces ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  opacity: isLoadingSafetyPlaces ? 0.6 : 1,
-                }}
-              >
-                <IconStore size={12} /><IconBadge size={12} />
-                {isLoadingSafetyPlaces ? '搜尋中…' : showSafetyPlaces ? '隱藏超商/警局' : '顯示超商/警局'}
-              </button>
-            )}
-            <button
-              onClick={() => setShowReportModal(true)}
-              style={{
-                marginLeft: 'auto',
-                fontSize: 11,
-                fontWeight: 700,
-                color: '#f59e0b',
-                background: 'rgba(245,158,11,0.15)',
-                padding: '4px 10px',
-                borderRadius: 999,
-                border: '1px solid rgba(245,158,11,0.3)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <Icon icon="mdi:bullhorn-outline" width={13} height={13} /> 不安通報
-            </button>
-          </div>
-        )}
+        {/* Floating Top Header (when search sheet is closed) */}
+        {!showSheet && (
+          <div style={{ padding: '20px 20px 0', pointerEvents: 'auto' }}>
+            {/* Hero Brand Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <h1 style={{ fontSize: 32, fontWeight: 900, margin: 0, lineHeight: 1.1, textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}>
+                  Night<span style={{ background: 'linear-gradient(135deg,#a78bfa,#60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>MaMa</span>
+                </h1>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 600, textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}>
+                  今晚，也陪你回家。 💜
+                </p>
+              </div>
 
-        {isSearchCollapsed && routes.length > 0 ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 14px',
-              background: 'rgba(17,24,39,0.85)',
-              borderRadius: 16,
-              border: '1px solid rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(12px)',
-            }}
-          >
-            <button onClick={() => setAppState('landing')} style={{ background: 'rgba(17,24,39,0.7)', border: '1px solid rgba(255,255,255,0.12)', color: 'white', fontSize: 14, borderRadius: 999, width: 26, height: 26, cursor: 'pointer', flexShrink: 0, marginRight: 8 }}>←</button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, paddingRight: 8 }}>
-              <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#60a5fa', flexShrink: 0 }} />
-              {origin.split('區')[1] || origin.slice(0, 10)} →
-              <IconFlag size={13} />
-              {destination.split('區')[1] || destination.slice(0, 10)}
+              {/* Mascot Art + Anxiety Report Pill Button */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+                <button
+                  onClick={() => setShowAnxietyModal(true)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.6)',
+                    color: '#f87171', borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    backdropFilter: 'blur(8px)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)'
+                  }}
+                >
+                  <IconAlertTriangle size={14} color="#f87171" /> 不安通報
+                </button>
+
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                  <div style={{
+                    background: 'rgba(30, 27, 75, 0.9)', border: '1px solid rgba(167, 139, 250, 0.4)',
+                    borderRadius: '12px 12px 2px 12px', padding: '3px 8px', fontSize: 10, fontWeight: 700,
+                    color: '#e0e7ff', marginBottom: 4, whiteSpace: 'nowrap'
+                  }}>
+                    我在這，陪你走 💜
+                  </div>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: '50%',
+                    background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
+                    boxShadow: '0 0 16px rgba(250, 204, 21, 0.6)',
+                    position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: '50%',
+                      background: 'radial-gradient(circle at 30% 30%, #c084fc, #7e22ce)',
+                      position: 'absolute', right: 2, bottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>
+                      <span style={{ fontSize: 8 }}>🥰</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={toggleSafetyPlaces}
-              disabled={isLoadingSafetyPlaces}
-              title={showSafetyPlaces ? '隱藏超商/警局' : '顯示超商/警局'}
-              style={{ background: 'none', border: 'none', color: showSafetyPlaces ? '#34d399' : '#93c5fd', padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: isLoadingSafetyPlaces ? 0.6 : 1 }}
-            >
-              <IconStore size={16} />
-            </button>
-            <button
-              onClick={() => setShowReportModal(true)}
-              title="不安通報"
-              style={{ background: 'none', border: 'none', color: '#f59e0b', padding: 4, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-            >
-              <Icon icon="mdi:bullhorn-outline" width={16} height={16} />
-            </button>
-            <button
-              onClick={() => {
-                setIsSearchCollapsed(false)
-                drawRoutes(routes, selectedIdx, isSheetCollapsed, false)
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#c4b5fd',
-                padding: 4,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <IconPencil size={16} />
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 8, height: 8, borderRadius: '50%', background: '#60a5fa' }} />
-              <input
-                ref={originInputRef}
-                className="input-field"
-                style={{ paddingLeft: 42 }}
-                placeholder="出發地（例：松山車站）"
-                value={origin}
-                onChange={e => { setOrigin(e.target.value); setOriginLatLng(null) }}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              />
-            </div>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#ef4444', display: 'flex' }}><IconPin size={14} /></span>
-              <input
-                ref={destInputRef}
-                className="input-field"
-                style={{ paddingLeft: 42, paddingRight: 44 }}
-                placeholder="目的地"
-                value={destination}
-                onChange={e => { setDestination(e.target.value); setDestLatLng(null) }}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              />
+
+            {/* ─── Search Card Floating Card ───────────────────────────── */}
+            <div style={{
+              background: 'rgba(26, 27, 54, 0.88)',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              borderRadius: 20, padding: '16px', backdropFilter: 'blur(16px)',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#a78bfa', boxShadow: '0 0 8px #a78bfa' }} />
+                  <div style={{ width: 1, height: 28, borderLeft: '2px dotted rgba(255,255,255,0.2)' }} />
+                  <div style={{
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: 'rgba(244,114,182,0.2)', border: '1px solid rgba(244,114,182,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11
+                  }}>
+                    🏠
+                  </div>
+                </div>
+
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>我的位置</div>
+                    <input
+                      ref={originInputRef}
+                      value={origin}
+                      onChange={e => setOrigin(e.target.value)}
+                      placeholder="請輸入出發地"
+                      style={{
+                        background: 'transparent', border: 'none', outline: 'none',
+                        color: 'white', fontSize: 14, fontWeight: 700, width: '100%'
+                      }}
+                    />
+                  </div>
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                  <div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>回家</div>
+                    <input
+                      ref={destInputRef}
+                      value={destination}
+                      onChange={e => setDestination(e.target.value)}
+                      placeholder="請輸入目的地"
+                      style={{
+                        background: 'transparent', border: 'none', outline: 'none',
+                        color: 'white', fontSize: 14, fontWeight: 700, width: '100%'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={swapOriginDest}
+                  style={{
+                    width: 38, height: 38, borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#a78bfa', fontSize: 16, cursor: 'pointer'
+                  }}
+                  title="對調"
+                >
+                  ⇅
+                </button>
+              </div>
+
+              {error && <p style={{ color: '#ef4444', fontSize: 11, marginBottom: 8, textAlign: 'center' }}>{error}</p>}
+
               <button
                 onClick={handleSearch}
                 disabled={isLoading}
                 style={{
-                  position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-                  width: 32, height: 32, borderRadius: '50%',
-                  background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', border: 'none', color: 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', opacity: isLoading ? 0.6 : 1,
+                  width: '100%', height: 46, borderRadius: 14,
+                  background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                  border: 'none', color: 'white', fontSize: 16, fontWeight: 800,
+                  cursor: 'pointer', boxShadow: '0 6px 20px rgba(124, 58, 237, 0.4)'
                 }}
               >
-                <IconSearch size={15} />
+                {isLoading ? '搜尋安心路線中...' : '帶我回家 ➔'}
               </button>
             </div>
-            {error && <p style={{ color: '#ef4444', fontSize: 13, paddingLeft: 4 }}>{error}</p>}
+          </div>
+        )}
+
+        {/* Floating Top Summary Bar (When candidate routes are being compared!) */}
+        {showSheet && (
+          <div style={{ padding: '8px 16px 0', pointerEvents: 'auto' }}>
+            <div style={{
+              background: 'rgba(17, 24, 39, 0.92)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: 16, padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#8b5cf6' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'white' }}>{origin}</span>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>➔</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#f472b6' }}>{destination}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  onClick={() => setShowAnxietyModal(true)}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.25)', border: '1px solid rgba(239, 68, 68, 0.5)',
+                    color: '#f87171', borderRadius: 999, padding: '4px 10px', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3
+                  }}
+                >
+                  <IconAlertTriangle size={12} color="#f87171" /> 不安通報
+                </button>
+                <button
+                  onClick={() => setShowSheet(false)}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)', border: 'none', color: '#c4b5fd',
+                    padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  <IconPencil size={12} /> 重新搜尋
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Route bottom sheet — 滿版(92dvh)展開顯示所有路線完整詳細資訊 */}
+      {/* Floating Recenter Map Button */}
+      <button
+        onClick={() => {
+          if (mapInstance.current && selectedRoute.points?.length) {
+            const bounds = new google.maps.LatLngBounds()
+            selectedRoute.points.forEach(p => bounds.extend(p))
+            mapInstance.current.fitBounds(bounds, { top: 100, bottom: 280, left: 40, right: 40 })
+          }
+        }}
+        style={{
+          position: 'absolute', right: 16, bottom: showSheet ? 340 : 90, zIndex: 50,
+          width: 44, height: 44, borderRadius: '50%',
+          background: 'rgba(17, 24, 39, 0.9)', border: '1px solid rgba(255, 255, 255, 0.2)',
+          color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,0,0,0.4)', transition: 'all 0.2s ease'
+        }}
+        title="對焦點位"
+      >
+        <IconTarget size={20} color="white" />
+      </button>
+
+      {/* ─── FLOATING BOTTOM SHEET (選取安心路線) ───────────────────────── */}
+      {/* NOTICE: NO pitch black backdrop overlay so the FULL MAP is 100% VISIBLE behind the cards! */}
       {showSheet && routes.length > 0 && (
-        <div
-          className="bottom-sheet"
+        <div style={{
+          position: 'absolute', bottom: 72, left: 12, right: 12, zIndex: 80,
+          background: 'rgba(17, 24, 39, 0.95)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: 24, padding: '16px 16px 18px',
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.7)', backdropFilter: 'blur(20px)',
+          animation: 'slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1)'
+        }}>
+          {/* Header row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'white' }}>
+              選取安心路線 ({routes.length} 條)
+            </div>
+            <button
+              onClick={() => setShowSheet(false)}
+              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'rgba(255,255,255,0.7)', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Segmented Candidate Route Selection Tabs */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            {routes.map((r, i) => (
+              <button
+                key={i}
+                onClick={() => handleSelectRoute(i)}
+                style={{
+                  flex: 1, padding: '8px 4px', borderRadius: 12,
+                  background: i === selectedIdx ? 'rgba(139, 92, 246, 0.3)' : 'rgba(255,255,255,0.05)',
+                  border: i === selectedIdx ? `2px solid ${r.safety.color}` : '1px solid rgba(255,255,255,0.1)',
+                  color: i === selectedIdx ? 'white' : 'rgba(255,255,255,0.6)',
+                  fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {typeIconFor(r.typeLabel, 14)}
+                {r.typeLabel}
+              </button>
+            ))}
+          </div>
+
+          {/* Detailed Card for Selected Candidate Route */}
+          {selectedRoute && (
+            <div style={{
+              background: 'rgba(255,255,255,0.04)', border: `2px solid ${selectedRoute.safety?.color || '#10b981'}`,
+              borderRadius: 16, padding: '12px 14px', marginBottom: 14
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {typeIconFor(selectedRoute.typeLabel, 16)}
+                  <span style={{ fontWeight: 800, fontSize: 15, color: 'white' }}>{selectedRoute.typeLabel}路線</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#34d399' }}>
+                  {formatDuration(selectedRoute.durationSec)}
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 400 }}> ({formatDistance(selectedRoute.distanceM)})</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, textAlign: 'center', marginBottom: 8 }}>
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '6px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>路燈數量</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'white', marginTop: 2 }}>{selectedRoute.lightCount}</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '6px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>監視器</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'white', marginTop: 2 }}>{selectedRoute.cameraCount}</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.04)', padding: '6px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>安全分數</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: selectedRoute.safety?.color, marginTop: 2 }}>{(selectedRoute.score / 10).toFixed(1)}/10</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '2px 8px', borderRadius: 999 }}>
+                  🏪 {selectedRoute.storeCount || 4} 家24h超商
+                </span>
+                <span style={{ background: 'rgba(30,58,138,0.3)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 999 }}>
+                  👮 {selectedRoute.policeCount || 2} 派出所
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Start Navigation Button */}
+          <button
+            onClick={() => {
+              setShowSheet(false)
+              router.push(`/navigate?polyline=${encodeURIComponent(selectedRoute.polyline || '')}&dest=${encodeURIComponent(destination)}&dist=${selectedRoute.distanceM || 1000}&dur=${selectedRoute.durationSec || 600}&safety=${selectedRoute.score || 88}&orig=${encodeURIComponent(origin)}`)
+            }}
+            style={{
+              width: '100%', height: 48, borderRadius: 14,
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              border: 'none', color: 'white', fontSize: 16, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              cursor: 'pointer', boxShadow: '0 6px 20px rgba(16, 185, 129, 0.4)'
+            }}
+          >
+            <IconWalk size={18} /> 開始導航 · {selectedRoute.typeLabel}路線 ({formatDuration(selectedRoute.durationSec)})
+          </button>
+        </div>
+      )}
+
+      {/* ─── Bottom Navigation Bar (導航 | 陪伴 | SOS) ─────────────────── */}
+      <nav style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+        height: 72, background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(20px)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-around'
+      }}>
+        <button
+          onClick={() => {}}
           style={{
-            bottom: '0px',
-            background: '#111827',
-            borderTop: '1px solid rgba(255,255,255,0.15)',
-            borderRadius: '24px 24px 0 0',
-            paddingBottom: isSheetCollapsed ? '12px' : '24px',
-            height: isSheetCollapsed ? '70px' : isFullExpanded ? '92dvh' : 'auto',
-            maxHeight: isSheetCollapsed ? '70px' : isFullExpanded ? '92dvh' : '56dvh',
-            zIndex: 60,
-            overflow: 'hidden',
-            touchAction: 'none',
-            transition: draggingRef.current ? 'none' : 'all 0.35s cubic-bezier(0.32, 0.72, 0, 1)',
-            boxShadow: '0 -10px 50px rgba(0,0,0,0.7)',
+            background: 'none', border: 'none', color: '#a78bfa',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer'
           }}
         >
-          <div
-            onClick={() => {
-              if (dragMovedRef.current) return
-              if (isSheetCollapsed) {
-                setIsSheetCollapsed(false)
-              } else {
-                setIsFullExpanded(!isFullExpanded)
-              }
-            }}
-            onPointerDown={onSheetDragStart}
-            style={{ cursor: 'grab', padding: '6px 0 10px' }}
-          >
-            <div className="bottom-sheet-handle" />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                {isFullExpanded ? `全線指標對比 (${displayRoutes.length} 條)` : `候選路線 (${displayRoutes.length} 條)`}
-              </p>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (isSheetCollapsed) {
-                    setIsSheetCollapsed(false)
-                    setIsFullExpanded(false)
-                  } else {
-                    setIsFullExpanded(!isFullExpanded)
-                  }
-                }}
-                style={{
-                  background: isFullExpanded ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.1)',
-                  border: isFullExpanded ? '1px solid #8b5cf6' : '1px solid rgba(255,255,255,0.2)',
-                  color: 'white',
-                  borderRadius: 999,
-                  padding: '4px 12px',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4
-                }}
-              >
-                {isSheetCollapsed ? '▲ 展開卡片' : isFullExpanded ? '▼ 收合地圖' : '▲ 詳細比較'}
-              </button>
-            </div>
-          </div>
-
-          {!isSheetCollapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100% - 40px)', justifyContent: 'space-between' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                  maxHeight: isFullExpanded ? '72dvh' : '36dvh',
-                  overflowY: 'auto',
-                  paddingRight: 2
-                }}
-                className="scrollable"
-              >
-                {isFullExpanded ? (
-                  // 滿版拉上來時：顯示「所有三條路線」的完整 RouteCard 詳細數據
-                  routes.map((route, idx) => (
-                    <RouteCard
-                      key={idx}
-                      route={route}
-                      isSelected={idx === selectedIdx}
-                      onClick={() => handleSelectRoute(idx)}
-                    />
-                  ))
-                ) : (
-                  // 收下去時：頂部留有 3 條路線的快速切換 Tab 按鈕，下方顯示目前選中的 1 條路線詳細 RouteCard 資訊
-                  <>
-                    {/* Quick Route Selector Segmented Tabs (切換選項按鈕列) */}
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
-                      {routes.map((route, idx) => {
-                        const isSelected = idx === selectedIdx
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => handleSelectRoute(idx)}
-                            style={{
-                              flex: 1,
-                              padding: '8px 6px',
-                              borderRadius: 14,
-                              border: isSelected ? `2px solid ${route.safety.color}` : '1px solid rgba(255,255,255,0.15)',
-                              background: isSelected
-                                ? `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.2)`
-                                : 'rgba(255,255,255,0.06)',
-                              color: 'white',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: 2,
-                              transition: 'all 0.15s ease',
-                              boxShadow: isSelected ? `0 2px 10px ${route.safety.color}44` : 'none',
-                            }}
-                          >
-                            <div style={{ fontSize: 13, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 4, color: isSelected ? 'white' : 'rgba(255,255,255,0.8)' }}>
-                              {typeIconFor(route.typeLabel, 14)} {route.typeLabel}
-                            </div>
-                            <div style={{ fontSize: 11, color: isSelected ? route.safety.color : 'rgba(255,255,255,0.6)', fontWeight: 700 }}>
-                              {formatDuration(route.durationSec)} · {route.safety.total}分
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {routes[selectedIdx] && (
-                      <RouteCard
-                        route={routes[selectedIdx]}
-                        isSelected={true}
-                        onClick={() => {}}
-                      />
-                    )}
-                  </>
-                )}
-              </div>
-
-              <button
-                className="btn-primary"
-                style={{
-                  marginTop: 12,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  fontSize: 16,
-                  fontWeight: 800,
-                  background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
-                  boxShadow: '0 4px 20px rgba(139,92,246,0.4)',
-                  padding: '14px',
-                  borderRadius: 16
-                }}
-                onClick={handleStartNavigation}
-              >
-                <IconWalk size={18} /> 開始導航 · {routes[selectedIdx]?.typeLabel}路線 ({formatDuration(routes[selectedIdx]?.durationSec || 0)})
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Unsafe Dark Spot Report Modal */}
-      {showReportModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
-        }}>
-          <div className="glass" style={{ width: '100%', maxWidth: 360, borderRadius: 24, padding: 24, border: '1px solid rgba(245,158,11,0.3)', background: '#1e293b' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div style={{ fontWeight: 800, fontSize: 16, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Icon icon="mdi:bullhorn-outline" width={18} height={18} /> 匿名回報不安暗區/死角
-              </div>
-              <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', display: 'flex' }}>
-                <Icon icon="mdi:close" width={18} height={18} />
-              </button>
-            </div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
-              您的匿名回報將用於即時在地圖標記暗區，提醒其他夜行民眾，並作為大數據城市暗巷治理參考。
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>1. 選擇問題類型：</label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['💡 路燈故障/昏暗', '🚨 治安死角/可疑人士', '🚧 施工障礙/無人道'].map(type => (
-                  <button
-                    key={type}
-                    onClick={() => setReportType(type)}
-                    style={{
-                      padding: '6px 10px', borderRadius: 12, fontSize: 11, cursor: 'pointer',
-                      border: reportType === type ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.15)',
-                      background: reportType === type ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.05)',
-                      color: reportType === type ? '#fbbf24' : '#d1d5db',
-                      fontWeight: reportType === type ? 700 : 400,
-                    }}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-
-              <label style={{ fontSize: 12, fontWeight: 700, color: 'white', marginTop: 4 }}>2. 補充說明 (選填)：</label>
-              <input
-                className="input-field"
-                placeholder="例如：路燈失修無光源、死角盲區..."
-                value={reportNote}
-                onChange={e => setReportNote(e.target.value)}
-              />
-            </div>
-
-            <button
-              className="btn-primary"
-              onClick={submitReport}
-              style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#000', fontWeight: 800, padding: 14 }}
-            >
-              傳送匿名不安通報
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 導航列預設收起，往上滑或點手把才顯示；路線結果面板顯示時完全讓出空間 */}
-      {!(showSheet && routes.length > 0) && (
-        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 55 }}>
-          {navBarVisible && <NavBar active="home" />}
-          <div
-            onClick={() => { if (!navDragMovedRef.current) setNavBarVisible(v => !v) }}
-            onPointerDown={onNavHandleDragStart}
-            style={{ display: 'flex', justifyContent: 'center', padding: navBarVisible ? '2px 0 6px' : '10px 0 14px', cursor: 'grab', touchAction: 'none' }}
-          >
-            <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.35)' }} />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Landing Page ────────────────────────────────────────────────────────────
-function LandingPage({ onStart }: { onStart: () => void }) {
-  const router = useRouter()
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  // Star field animation
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const resize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-    }
-    resize()
-    window.addEventListener('resize', resize)
-
-    const stars = Array.from({ length: 160 }, () => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      r: Math.random() * 1.4 + 0.2,
-      alpha: Math.random(),
-      speed: Math.random() * 0.004 + 0.001,
-    }))
-
-    let raf: number
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      stars.forEach(s => {
-        s.alpha += s.speed
-        const a = Math.abs(Math.sin(s.alpha))
-        ctx.beginPath()
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(255,255,255,${a * 0.8})`
-        ctx.fill()
-      })
-      raf = requestAnimationFrame(draw)
-    }
-    draw()
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize) }
-  }, [])
-
-  const features = [
-    { icon: 'mdi:lightbulb-on-outline', title: '路燈密度分析', desc: '台北市 145,919 盞路燈即時評分' },
-    { icon: 'mdi:cctv', title: '監視器覆蓋率', desc: '5,036 支 警察局 CCTV 涵蓋全台北' },
-    { icon: 'mdi:microphone-outline', title: 'AI 語音陪聊', desc: 'Gemini 3.6 Flash 全程陪伴，化解夜行焦慮' },
-    { icon: 'mdi:lifebuoy', title: '一鍵緊急通知', desc: 'LINE 即時定位發送給緊急聯絡人' },
-  ]
-
-  return (
-    <div style={{ position: 'relative', height: '100dvh', overflow: 'hidden', background: 'radial-gradient(ellipse at 50% 0%, #1a0a2e 0%, #0a0e1a 60%)' }}>
-      {/* Star canvas */}
-      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} />
-
-      {/* Glow orbs */}
-      <div style={{ position: 'absolute', top: '8%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', top: '15%', right: '10%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(6,182,212,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
-
-      <div className="scrollable" style={{ position: 'relative', zIndex: 10, height: '100%', display: 'flex', flexDirection: 'column', padding: '50px 24px 100px', gap: 0 }}>
-
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 24, animation: 'fadeIn 0.8s ease' }}>
-          <div style={{ marginBottom: 12, filter: 'drop-shadow(0 0 24px rgba(139,92,246,0.6))' }}>
-            <Logo size={72} />
-          </div>
-          <h1 style={{ fontSize: 38, fontWeight: 900, lineHeight: 1.1, marginBottom: 8 }}>
-            <span className="gradient-text">NightMaMa</span>
-          </h1>
-          <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.05em' }}>
-            夜間安全導航 · AI 守護每一步
-          </p>
-        </div>
-
-        {/* Hero stats */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 24, animation: 'fadeIn 0.8s ease 0.1s both' }}>
-          {[
-            { num: '14.5萬', label: '路燈點位' },
-            { num: '5,036', label: '警察局監視器' },
-            { num: 'Gemini', label: '3.6 Flash 陪聊' },
-          ].map(s => (
-            <div key={s.label} className="glass" style={{ flex: 1, padding: '12px 6px', borderRadius: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 17, fontWeight: 900, background: 'linear-gradient(135deg,#8b5cf6,#06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{s.num}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Feature cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 28, animation: 'fadeIn 0.8s ease 0.2s both' }}>
-          {features.map(f => (
-            <div key={f.title} className="glass" style={{ padding: '14px 12px', borderRadius: 18 }}>
-              <div style={{ marginBottom: 6, color: '#a78bfa' }}><Icon icon={f.icon} width={26} height={26} /></div>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>{f.title}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>{f.desc}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, animation: 'fadeIn 0.8s ease 0.3s both' }}>
-          <button
-            className="btn-primary"
-            style={{ padding: '18px', fontSize: 17, letterSpacing: '0.02em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-            onClick={onStart}
-          >
-            <Icon icon="mdi:compass-outline" width={20} height={20} /> 開始安全導航
-          </button>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              className="btn-primary"
-              style={{ flex: 1, background: 'linear-gradient(135deg,#1d4ed8,#7c3aed)', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              onClick={() => router.push('/companion')}
-            >
-              <Icon icon="mdi:microphone-outline" width={18} height={18} /> 語音陪聊
-            </button>
-            <button
-              className="btn-primary btn-danger"
-              style={{ flex: 1, padding: '14px', animation: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              onClick={() => router.push('/sos')}
-            >
-              <Icon icon="mdi:lifebuoy" width={18} height={18} /> 緊急 SOS
-            </button>
-          </div>
-        </div>
-
-      </div>
-
-      <NavBar active="home" />
-    </div>
-  )
-}
-
-// ─── Route Card (展開版，選中的路線) ─────────────────────────────────────────────
-function StatBox({ icon, value, label, color }: { icon: React.ReactNode; value: string | number; label: string; color?: string }) {
-  return (
-    <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: '8px 4px' }}>
-      <div style={{ display: 'flex', justifyContent: 'center', color: color || 'var(--text-secondary)' }}>{icon}</div>
-      <div style={{ fontWeight: 800, fontSize: 14, color: color || 'white', marginTop: 4 }}>{value}</div>
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{label}</div>
-    </div>
-  )
-}
-
-function RouteCard({ route, isSelected = true, onClick }: { route: ScoredRoute; isSelected?: boolean; onClick: () => void }) {
-  return (
-    <div
-      className={`route-card glass-light ${isSelected ? 'selected' : ''}`}
-      onClick={onClick}
-      style={{
-        border: isSelected ? `2px solid ${route.safety.color}` : '1px solid rgba(255,255,255,0.12)',
-        background: isSelected
-          ? `rgba(${route.safety.color === '#10b981' ? '16,185,129' : route.safety.color === '#f59e0b' ? '245,158,11' : '239,68,68'},0.12)`
-          : 'rgba(255,255,255,0.04)',
-        borderRadius: 18,
-        padding: '14px 16px',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        boxShadow: isSelected ? `0 4px 20px ${route.safety.color}33` : 'none',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {typeIconFor(route.typeLabel, 18)}
-          <span style={{ fontWeight: 800, fontSize: 16, color: 'white' }}>{route.typeLabel}路線</span>
-          {isSelected && (
-            <span style={{ background: route.safety.color, color: '#111827', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-              <Icon icon="mdi:check-bold" width={11} height={11} /> 已選擇
-            </span>
-          )}
-        </div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: 'white' }}>
-          {formatDuration(route.durationSec)}
-          <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}> ({formatDistance(route.distanceM)})</span>
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
-        <StatBox icon={<IconBulb size={15} />} value={route.lightCount} label="路燈數量" />
-        <StatBox icon={<IconCamera size={15} />} value={route.cameraCount} label="監視器數量" />
-        <StatBox icon={<IconShield size={15} />} value={`${(route.safety.total / 10).toFixed(1)}/10`} label="安全評分" color={route.safety.color} />
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '3px 9px', borderRadius: 999 }}>
-          <IconStore size={12} /> {route.storeCount || 6} 24h超商
-        </span>
-        <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11, padding: '3px 9px', borderRadius: 999 }}>
-          <IconBadge size={12} /> {route.policeCount} 派出所/警局
-        </span>
-        {route.extraMin === 0 && (
-          <span style={{ fontSize: 11, color: '#10b981', marginLeft: 'auto', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-            <IconBolt size={12} /> 費時最短
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Route Row (收合版，未選中的路線) ─────────────────────────────────────────────
-function RouteRow({ route, onClick }: { route: ScoredRoute; onClick: () => void }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '10px 14px', borderRadius: 14,
-        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-        cursor: 'pointer',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)' }}>
-        {typeIconFor(route.typeLabel, 15)}
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>{route.typeLabel}路線</span>
-      </div>
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-        {formatDuration(route.durationSec)} <span style={{ color: 'var(--text-muted)' }}>({formatDistance(route.distanceM)})</span>
-      </span>
-    </div>
-  )
-}
-
-// ─── Nav Bar ──────────────────────────────────────────────────────────────────
-export function NavBar({ active }: { active: 'home' | 'companion' | 'sos' | 'settings' }) {
-  const router = useRouter()
-  const items = [
-    { id: 'home', icon: 'mdi:compass-outline', label: '導航', path: '/' },
-    { id: 'companion', icon: 'mdi:microphone-outline', label: '陪聊', path: '/companion' },
-    { id: 'sos', icon: 'mdi:lifebuoy', label: 'SOS', path: '/sos' },
-    { id: 'settings', icon: 'mdi:cog-outline', label: '設定', path: '/settings' },
-  ] as const
-
-  return (
-    <nav className="nav-bar glass" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-      {items.map(item => (
-        <button key={item.id} className={`nav-item ${active === item.id ? 'active' : ''}`} onClick={() => router.push(item.path)}>
-          <Icon icon={item.icon} width={item.id === 'sos' ? 20 : 22} height={item.id === 'sos' ? 20 : 22} />
-          <span>{item.label}</span>
+          <IconMap size={22} color="#a78bfa" />
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#a78bfa' }}>導航</span>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#a78bfa' }} />
         </button>
-      ))}
-    </nav>
+
+        <button
+          onClick={() => router.push('/companion')}
+          style={{
+            background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer'
+          }}
+        >
+          <IconMic size={22} color="rgba(255,255,255,0.5)" />
+          <span style={{ fontSize: 11, fontWeight: 500 }}>陪伴</span>
+        </button>
+
+        <button
+          onClick={() => router.push('/sos')}
+          style={{
+            background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer'
+          }}
+        >
+          <IconSos size={22} color="rgba(255,255,255,0.5)" />
+          <span style={{ fontSize: 11, fontWeight: 500 }}>SOS</span>
+        </button>
+      </nav>
+
+      {/* Anxiety Report Modal */}
+      <AnxietyReportModal
+        isOpen={showAnxietyModal}
+        onClose={() => setShowAnxietyModal(false)}
+      />
+    </div>
   )
 }
 
-// ─── Green Map Style (standard, natural colors) ────────────────────────────────
+// ─── Dark Map Style ──────────────────────────────────────────────────────────
 const darkMapStyle: google.maps.MapTypeStyle[] = [
-  { elementType: 'geometry', stylers: [{ color: '#f5f5f2' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e5e7eb' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#fde68a' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#78350f' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a5d8e8' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#d4ecd0' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#a8d5a2' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#2f6b2f' }] },
-  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#eef3e8' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#e5e7eb' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#cbd5e1' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
+  { elementType: 'geometry', stylers: [{ color: '#111827' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#111827' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#111827' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#374151' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
 ]

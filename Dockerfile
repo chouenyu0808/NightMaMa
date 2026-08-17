@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Copy package manifests from frontend directory
 COPY frontend/package*.json ./
-RUN npm ci
+RUN npm i --legacy-peer-deps
 
 # Copy frontend source code
 COPY frontend/ ./

@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
-import { Icon } from '@iconify/react'
+import { IconPhoneOff } from '@/components/Icons'
 
 interface RouteContext {
   origin: string
@@ -691,7 +691,7 @@ RULES:
               boxShadow: '0 2px 6px rgba(220,38,38,0.35)'
             }}
           >
-            <Icon icon="mdi:alert-outline" width={14} height={14} /> 不安通報
+            ⚠️ 不安通報
           </button>
           <button style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 2 }}>
             <IconSearch />
@@ -943,17 +943,17 @@ RULES:
                 />
                 <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
                 <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon icon="mdi:phone-in-talk-outline" width={16} height={16} /> LINE 語音來電…
+                  💬 LINE 語音來電…
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                  <button onClick={endVoiceCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon icon="mdi:phone-hangup" width={32} height={32} /></button>
+                  <button onClick={endVoiceCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}>📵</button>
                   <span style={{ fontSize: 12, opacity: 0.8 }}>拒絕</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                  <button onClick={acceptVoiceCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon icon="mdi:phone" width={32} height={32} /></button>
+                  <button onClick={acceptVoiceCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)' }}>📞</button>
                   <span style={{ fontSize: 12, opacity: 0.8 }}>接聽</span>
                 </div>
               </div>
@@ -976,13 +976,13 @@ RULES:
                     }}
                   />
                   {aiSpeaking && (
-                    <span style={{ position: 'absolute', bottom: 0, right: 0, background: '#06C755', color: 'white', fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <Icon icon="mdi:volume-high" width={12} height={12} /> 講話中
+                    <span style={{ position: 'absolute', bottom: 0, right: 0, background: '#06C755', color: 'white', fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                      🔊 講話中
                     </span>
                   )}
                   {userSpeaking && (
-                    <span style={{ position: 'absolute', bottom: 0, right: 0, background: '#8B5CF6', color: 'white', fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <Icon icon="mdi:microphone-outline" width={12} height={12} /> 聆聽中
+                    <span style={{ position: 'absolute', bottom: 0, right: 0, background: '#8B5CF6', color: 'white', fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                      🎙️ 聆聽中
                     </span>
                   )}
                 </div>
@@ -1041,12 +1041,12 @@ RULES:
                   onClick={endVoiceCall}
                   style={{
                     width: 72, height: 72, borderRadius: '50%', background: '#EF4444',
-                    border: 'none', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                    boxShadow: '0 4px 20px rgba(239,68,68,0.6)', transition: 'transform 0.15s ease',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2
+                    border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    boxShadow: '0 4px 20px rgba(239,68,68,0.6)', transition: 'transform 0.15s ease'
                   }}
+                  title="掛斷通話"
                 >
-                  <Icon icon="mdi:phone-hangup" width={22} height={22} /> 掛斷
+                  <IconPhoneOff size={28} color="white" />
                 </button>
 
                 <button
