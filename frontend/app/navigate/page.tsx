@@ -603,27 +603,6 @@ function NavigateContent() {
               {currentStep.streetName}
             </div>
           </div>
-
-          {/* Sparkle companion button */}
-          <button
-            onClick={() => router.push(`/companion?origin=${origin}&destination=${destination}&safety=${safetyScore}&duration=${remainingSec}`)}
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(139,92,246,0.4)',
-              flexShrink: 0,
-            }}
-          >
-            <IconSparkles size={18} color="white" />
-          </button>
         </div>
 
         {/* Secondary "Next step" Sub-banner */}
