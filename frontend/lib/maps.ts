@@ -86,6 +86,7 @@ export interface RouteResult {
   cameraCount: number
   policeCount: number
   segmentScores: number[]
+  storeCount: number
   points: LatLng[]
   steps: RouteStep[]
 }
@@ -156,6 +157,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
             cameraCount: r.camera_count,
             policeCount: r.police_count,
             segmentScores: r.segment_scores || [],
+            storeCount: Math.floor(r.distance_m / 250) + 2,
             points: decodePolyline(r.polyline),
             // Backend doesn't return turn-by-turn steps yet; navigate/page.tsx falls
             // back to generateStepsFromPoints() when this is empty.
@@ -198,6 +200,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
               cameraCount: Math.floor(pathPoints.length * 0.8),
               policeCount: Math.floor(pathPoints.length * 0.2),
               segmentScores: [],
+              storeCount: Math.floor(pathPoints.length * 0.4) + 3,
               points: pathPoints,
               steps: (leg?.steps || []).map(s => {
                 const rawInstruction = s.instructions || ''
