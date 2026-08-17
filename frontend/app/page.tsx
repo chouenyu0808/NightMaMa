@@ -360,7 +360,7 @@ export default function HomePage() {
       activeRoute.points.forEach(p => bounds.extend(p))
       mapInstance.current.fitBounds(bounds, {
         top: 100,
-        bottom: 280,
+        bottom: 450,
         left: 40,
         right: 40,
       })
@@ -839,25 +839,106 @@ export default function HomePage() {
 
               {selectedRoute.typeLabel === '大眾運輸' && (
                 <div style={{
-                  background: 'rgba(2, 132, 199, 0.15)',
-                  border: '1px solid rgba(2, 132, 199, 0.4)',
-                  borderRadius: 12,
-                  padding: '10px 12px',
-                  marginBottom: 10,
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  borderRadius: 16,
+                  padding: '12px 14px',
+                  marginBottom: 12,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 6,
+                  gap: 10,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>🚌 Real-time Google 大眾運輸搭乘資訊</span>
-                    <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 8px', borderRadius: 8, fontWeight: 800 }}>
-                      {selectedRoute.transitLegs?.find(l => l.mode === 'BUS')?.lineName || '公車 / 捷運 / 幹線'}
+                  {/* Header Row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>🚌 大眾運輸轉乘進度條</span>
+                    </div>
+                    <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 10px', borderRadius: 10, fontWeight: 800 }}>
+                      {selectedRoute.transitLegs?.find(l => l.mode === 'BUS')?.lineName || '公車 / 捷運'}
                     </span>
                   </div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.9)', display: 'flex', flexDirection: 'column', gap: 5 }}>
+
+                  {/* Horizontal Node Progress Bar */}
+                  {(() => {
+                    const busLeg = selectedRoute.transitLegs?.find(l => l.mode === 'BUS')
+                    const depStop = busLeg?.departureStop || '上車站'
+                    const arrStop = busLeg?.arrivalStop || '下車站'
+                    const lineName = busLeg?.lineName || '公車'
+
+                    const origShort = origin.replace(/臺北市|台北市|新北市|市|區|路|街/g, '').slice(0, 4) || '起點'
+                    const destShort = destination.replace(/臺北市|台北市|新北市|市|區|路|街/g, '').slice(0, 4) || '終點'
+
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', position: 'relative', padding: '6px 0 2px' }}>
+                        {/* Node 1: Start */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 55, flexShrink: 0, zIndex: 2 }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#8b5cf6', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 0 8px rgba(139,92,246,0.6)' }}>
+                            起
+                          </div>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 55 }}>
+                            {origShort}
+                          </span>
+                        </div>
+
+                        {/* Bar 1: Green Walk */}
+                        <div style={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #10b981, #34d399)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 9, background: '#065f46', color: '#34d399', padding: '1px 4px', borderRadius: 4, fontWeight: 700, border: '1px solid #10b981', transform: 'translateY(-11px)', whiteSpace: 'nowrap' }}>
+                            🚶 🛡️
+                          </span>
+                        </div>
+
+                        {/* Node 2: Boarding Stop */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 68, flexShrink: 0, zIndex: 2 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#0284c7', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, border: '2px solid #38bdf8', boxShadow: '0 0 10px rgba(2,132,199,0.8)' }}>
+                            🚏
+                          </div>
+                          <span style={{ fontSize: 10, color: '#38bdf8', marginTop: 4, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 68 }} title={depStop}>
+                            {depStop}
+                          </span>
+                        </div>
+
+                        {/* Bar 2: Cyan Bus */}
+                        <div style={{ flex: 1.4, height: 5, background: 'linear-gradient(90deg, #0284c7, #38bdf8)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 9, background: '#0369a1', color: 'white', padding: '1px 6px', borderRadius: 6, fontWeight: 800, border: '1px solid #38bdf8', transform: 'translateY(-12px)', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.4)' }}>
+                            🚌 {lineName}
+                          </span>
+                        </div>
+
+                        {/* Node 3: Alighting Stop */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 68, flexShrink: 0, zIndex: 2 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#0284c7', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, border: '2px solid #38bdf8', boxShadow: '0 0 10px rgba(2,132,199,0.8)' }}>
+                            🚏
+                          </div>
+                          <span style={{ fontSize: 10, color: '#38bdf8', marginTop: 4, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 68 }} title={arrStop}>
+                            {arrStop}
+                          </span>
+                        </div>
+
+                        {/* Bar 3: Green Walk */}
+                        <div style={{ flex: 1, height: 4, background: 'linear-gradient(90deg, #34d399, #10b981)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 9, background: '#065f46', color: '#34d399', padding: '1px 4px', borderRadius: 4, fontWeight: 700, border: '1px solid #10b981', transform: 'translateY(-11px)', whiteSpace: 'nowrap' }}>
+                            🚶 🛡️
+                          </span>
+                        </div>
+
+                        {/* Node 4: Destination */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 55, flexShrink: 0, zIndex: 2 }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#ef4444', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900, boxShadow: '0 0 8px rgba(239,68,68,0.6)' }}>
+                            終
+                          </div>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 4, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 55 }}>
+                            {destShort}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Detailed Step List */}
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', display: 'flex', flexDirection: 'column', gap: 4, background: 'rgba(255,255,255,0.03)', padding: 8, borderRadius: 10 }}>
                     {selectedRoute.steps?.map((step, sIdx) => (
                       <div key={sIdx} style={{ lineHeight: 1.4, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-                        <span style={{ flexShrink: 0 }}>•</span>
+                        <span style={{ flexShrink: 0, color: '#38bdf8' }}>•</span>
                         <span>{step.instruction}</span>
                       </div>
                     ))}
