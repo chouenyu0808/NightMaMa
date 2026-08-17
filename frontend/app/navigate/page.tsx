@@ -337,56 +337,120 @@ function NavigateContent() {
         styles: googleNavMapStyle,
       })
 
-      // Draw safety color-coded polyline segments (Green: Safe, Yellow: Normal, Red: Caution Area)
+      // Draw 3-Leg Public Transit or Walking Safety Polylines
       const len = points.length
-      const seg1End = Math.floor(len * 0.45)
-      const seg2End = Math.floor(len * 0.75)
+      const walk1End = Math.floor(len * 0.25)
+      const busEnd = Math.floor(len * 0.75)
 
-      const seg1 = points.slice(0, seg1End + 1)
-      const seg2 = points.slice(seg1End, seg2End + 1)
-      const seg3 = points.slice(seg2End)
+      const walk1 = points.slice(0, walk1End + 1)
+      const bus = points.slice(walk1End, busEnd + 1)
+      const walk2 = points.slice(busEnd)
 
-      const colorSegments = [
-        { points: seg1, color: '#10b981', weight: 9, isSafe: true },
-        { points: seg2, color: '#f59e0b', weight: 9, isSafe: false },
-        { points: seg3, color: '#ef4444', weight: 9, isSafe: false, isDanger: true },
-      ]
-
-      colorSegments.forEach(seg => {
-        if (seg.points.length >= 2) {
-          new google.maps.Polyline({
-            path: seg.points,
+      // Leg 1: Walk to Bus Stop (Safety Evaluation & Green Shields)
+      if (walk1.length >= 2) {
+        new google.maps.Polyline({
+          path: walk1,
+          map: mapInstance.current!,
+          strokeColor: '#10b981',
+          strokeWeight: 9,
+          strokeOpacity: 0.95,
+          zIndex: 10,
+        })
+        const midIdx = Math.floor(walk1.length / 2)
+        if (walk1[midIdx]) {
+          new google.maps.Marker({
+            position: walk1[midIdx],
             map: mapInstance.current!,
-            strokeColor: seg.color,
-            strokeWeight: seg.weight,
-            strokeOpacity: 0.95,
-            zIndex: seg.isDanger ? 12 : 10,
+            title: '🛡️ 步行至公車站夜間安全防護段',
+            icon: {
+              url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>'
+              ),
+              scaledSize: new google.maps.Size(24, 26),
+              anchor: new google.maps.Point(12, 13),
+            },
+            zIndex: 30,
           })
-
-          // Draw Green Check Shield Icon on safe segment
-          if (seg.isSafe) {
-            const midIdx = Math.floor(seg.points.length / 2)
-            if (seg.points[midIdx]) {
-              new google.maps.Marker({
-                position: seg.points[midIdx],
-                map: mapInstance.current!,
-                title: '🛡️ 安全防護路段',
-                icon: {
-                  url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
-                    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
-                    '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '</svg>'
-                  ),
-                  scaledSize: new google.maps.Size(24, 26),
-                  anchor: new google.maps.Point(12, 13),
-                },
-                zIndex: 30,
-              })
-            }
-          }
         }
-      })
+      }
+
+      // Leg 2: Bus Ride (Transit Line #0284c7 - No safety colors needed inside vehicle)
+      if (bus.length >= 2) {
+        new google.maps.Polyline({
+          path: bus,
+          map: mapInstance.current!,
+          strokeColor: '#0284c7',
+          strokeWeight: 9,
+          strokeOpacity: 0.95,
+          zIndex: 15,
+        })
+
+        // Bus Stop Markers
+        new google.maps.Marker({
+          position: bus[0],
+          map: mapInstance.current!,
+          title: '🚏 上車公車站 (299號公車)',
+          icon: {
+            url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+              '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+              '</svg>'
+            ),
+            scaledSize: new google.maps.Size(28, 28),
+            anchor: new google.maps.Point(14, 14),
+          },
+          zIndex: 35,
+        })
+        new google.maps.Marker({
+          position: bus[bus.length - 1],
+          map: mapInstance.current!,
+          title: '🚏 下車公車站 (準備夜間步行回家)',
+          icon: {
+            url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2">' +
+              '<rect x="3" y="3" width="18" height="15" rx="3"/><circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/><path d="M12 6h.01"/>' +
+              '</svg>'
+            ),
+            scaledSize: new google.maps.Size(28, 28),
+            anchor: new google.maps.Point(14, 14),
+          },
+          zIndex: 35,
+        })
+      }
+
+      // Leg 3: Walk from Bus Stop to Destination (Safety Evaluation & Green Shields)
+      if (walk2.length >= 2) {
+        new google.maps.Polyline({
+          path: walk2,
+          map: mapInstance.current!,
+          strokeColor: '#10b981',
+          strokeWeight: 9,
+          strokeOpacity: 0.95,
+          zIndex: 10,
+        })
+        const midIdx = Math.floor(walk2.length / 2)
+        if (walk2[midIdx]) {
+          new google.maps.Marker({
+            position: walk2[midIdx],
+            map: mapInstance.current!,
+            title: '🛡️ 下車步行回家夜間安全防護段',
+            icon: {
+              url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="26" viewBox="0 0 24 24" fill="#065f46" stroke="#10b981" stroke-width="2">' +
+                '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+                '<path d="M9 12l2 2 4-4" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>'
+              ),
+              scaledSize: new google.maps.Size(24, 26),
+              anchor: new google.maps.Point(12, 13),
+            },
+            zIndex: 30,
+          })
+        }
+      }
 
       // Destination Marker
       new google.maps.Marker({
