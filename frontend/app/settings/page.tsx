@@ -3,14 +3,24 @@
 import { useState, useEffect } from 'react'
 import { NavBar } from '@/app/components/NavBar'
 import { IconSettings, IconSend, IconTrash, IconCheckCircle, IconHeart, IconMoon, IconMap, IconCamera, IconMic, IconRoute } from '@/components/Icons'
+import { getUserId } from '@/lib/user'
 
 const CONTACTS_KEY = 'nightmama_contacts'
-const GEMINI_KEY_STORAGE = 'nightmama_gemini_key'
+const ADDRESSES_KEY = 'nightmama_addresses'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
 
 interface Contact {
   id: string
   name: string
   lineToken: string
+}
+
+function toBackend(contacts: Contact[]) {
+  return contacts.map(c => ({ id: c.id, name: c.name, line_user_id: c.lineToken }))
+}
+
+function fromBackend(contacts: Array<{ id: string; name: string; line_user_id: string }>): Contact[] {
+  return contacts.map(c => ({ id: c.id, name: c.name, lineToken: c.line_user_id }))
 }
 
 export default function SettingsPage() {
@@ -21,6 +31,7 @@ export default function SettingsPage() {
   const [testSent, setTestSent] = useState(false)
   const [isSendingTest, setIsSendingTest] = useState(false)
 
+  // 常用地址
   const [homeAddress, setHomeAddress] = useState('')
   const [workAddress, setWorkAddress] = useState('')
   const [addressSaved, setAddressSaved] = useState(false)
@@ -29,18 +40,72 @@ export default function SettingsPage() {
     const stored = localStorage.getItem(CONTACTS_KEY)
     if (stored) setContacts(JSON.parse(stored))
 
-    const storedHome = localStorage.getItem('nightmama_home_address')
-    if (storedHome) setHomeAddress(storedHome)
+    // Load saved addresses from localStorage
+    const storedAddresses = localStorage.getItem(ADDRESSES_KEY)
+    if (storedAddresses) {
+      const { home, work } = JSON.parse(storedAddresses)
+      setHomeAddress(home || '')
+      setWorkAddress(work || '')
+    }
 
-    const storedWork = localStorage.getItem('nightmama_work_address')
-    if (storedWork) setWorkAddress(storedWork)
+    const userId = getUserId()
+    if (!userId) return
+
+    // Load contacts from Firestore
+    fetch(`${BACKEND_URL}/users/${userId}/contacts`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.contacts?.length) {
+          const mapped = fromBackend(data.contacts)
+          setContacts(mapped)
+          localStorage.setItem(CONTACTS_KEY, JSON.stringify(mapped))
+        }
+      })
+      .catch(() => {})
+
+    // Load addresses from Firestore
+    fetch(`${BACKEND_URL}/users/${userId}/addresses`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data && (data.home || data.work)) {
+          setHomeAddress(data.home || '')
+          setWorkAddress(data.work || '')
+          localStorage.setItem(ADDRESSES_KEY, JSON.stringify({ home: data.home || '', work: data.work || '' }))
+        }
+      })
+      .catch(() => {})
   }, [])
 
-  const saveAddresses = () => {
-    localStorage.setItem('nightmama_home_address', homeAddress.trim())
-    localStorage.setItem('nightmama_work_address', workAddress.trim())
+  const syncContacts = async (updated: Contact[]) => {
+    const userId = getUserId()
+    if (!userId) return
+    try {
+      await fetch(`${BACKEND_URL}/users/${userId}/contacts`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contacts: toBackend(updated) }),
+      })
+    } catch {
+      // backend unreachable, localStorage already updated as fallback
+    }
+  }
+
+  const saveAddresses = async () => {
+    localStorage.setItem(ADDRESSES_KEY, JSON.stringify({ home: homeAddress, work: workAddress }))
     setAddressSaved(true)
     setTimeout(() => setAddressSaved(false), 2000)
+    // Sync to Firestore
+    const userId = getUserId()
+    if (!userId) return
+    try {
+      await fetch(`${BACKEND_URL}/users/${userId}/addresses`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home: homeAddress, work: workAddress }),
+      })
+    } catch {
+      // backend unreachable, localStorage already saved
+    }
   }
 
   const saveContact = () => {
@@ -49,6 +114,7 @@ export default function SettingsPage() {
     const updated = [...contacts, newContact]
     setContacts(updated)
     localStorage.setItem(CONTACTS_KEY, JSON.stringify(updated))
+    syncContacts(updated)
     setName('')
     setLineToken('')
     setSaved(true)
@@ -59,6 +125,7 @@ export default function SettingsPage() {
     const updated = contacts.filter(c => c.id !== id)
     setContacts(updated)
     localStorage.setItem(CONTACTS_KEY, JSON.stringify(updated))
+    syncContacts(updated)
   }
 
   const sendTestNotification = async (token: string) => {
@@ -91,20 +158,16 @@ export default function SettingsPage() {
 
       <div className="scrollable" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 80 }}>
 
-
-
-        {/* 常用地址設定 (Home & Work Shortcut Addresses) */}
+        {/* 常用地址設定 */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>🏠 常用地址設定 (快捷一鍵帶入)</span>
-          </div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>🏠 常用地址設定 (快捷一鍵帶入)</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>
             預先設定您的住家與公司/學校地址，搜尋路線時只需點選「快捷標籤」，即可自動填入目的地進行安心路線規劃！
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', marginBottom: 4, display: 'block' }}>🏠 住家地址</label>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', marginBottom: 6 }}>🏠 住家地址</div>
               <input
                 className="input-field"
                 placeholder="例如：臺北市信義區市府路1號"
@@ -113,7 +176,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8', marginBottom: 4, display: 'block' }}>🏢 公司 / 學校地址</label>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399', marginBottom: 6 }}>🏢 公司 / 學校地址</div>
               <input
                 className="input-field"
                 placeholder="例如：臺北市大安區羅斯福路四段1號"
@@ -123,7 +186,7 @@ export default function SettingsPage() {
             </div>
 
             <button className="btn-primary" onClick={saveAddresses} style={{ marginTop: 4 }}>
-              {addressSaved ? '✅ 已成功儲存常用地址！' : '💾 儲存常用地址'}
+              {addressSaved ? '✅ 常用地址已儲存！' : '💾 儲存常用地址'}
             </button>
           </div>
         </div>

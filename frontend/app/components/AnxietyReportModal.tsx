@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { IconAlertTriangle, IconUser, IconBulb, IconVolume2, IconShield } from '@/components/Icons'
+import { getUserId } from '@/lib/user'
 
 interface AnxietyReportModalProps {
   isOpen: boolean
@@ -62,6 +63,7 @@ export default function AnxietyReportModal({
           lng,
           category: categoryLabel,
           address: addressText,
+          user_id: getUserId(),
         }),
       }).catch(() => {})
 

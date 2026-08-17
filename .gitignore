@@ -25,9 +25,15 @@ public/
 !frontend/public/
 !frontend/public/**
 
+# GCP Service Account keys (never commit)
+*-service-account*.json
+service-account*.json
+*-key.json
+
 # OS
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
+nul 

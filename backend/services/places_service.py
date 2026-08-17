@@ -12,7 +12,9 @@ NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
 _client = httpx.Client(timeout=10)
 
 
-def _search_nearby(point: LatLng, included_type: str, radius_m: float, field_mask: str) -> list[dict]:
+def _search_nearby(
+    point: LatLng, included_type: str, radius_m: float, field_mask: str, rank_by_distance: bool = False
+) -> list[dict]:
     body = {
         "includedTypes": [included_type],
         "maxResultCount": 20,
@@ -23,6 +25,8 @@ def _search_nearby(point: LatLng, included_type: str, radius_m: float, field_mas
             }
         },
     }
+    if rank_by_distance:
+        body["rankPreference"] = "DISTANCE"
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": settings.google_maps_api_key,
@@ -46,3 +50,23 @@ def list_24h_stores(point: LatLng, radius_m: float = 100) -> list[LatLng]:
 def count_police_stations(point: LatLng, radius_m: float = 150) -> int:
     # ponytail: no openNow filter — police stations aren't tagged with hours in Places data
     return len(_search_nearby(point, "police", radius_m, "places.id"))
+
+
+def find_nearest_24h_store(point: LatLng, radius_m: float = 800) -> dict | None:
+    """Nearest currently-open convenience store near `point`, used as a
+    walking waypoint for the 'route me via a store' voice command."""
+    places = _search_nearby(
+        point, "convenience_store", radius_m,
+        "places.displayName,places.location,places.currentOpeningHours.openNow",
+        rank_by_distance=True,
+    )
+    open_places = [p for p in places if p.get("currentOpeningHours", {}).get("openNow")]
+    if not open_places:
+        return None
+    nearest = open_places[0]
+    loc = nearest.get("location", {})
+    return {
+        "name": nearest.get("displayName", {}).get("text", "24小時商店"),
+        "lat": loc.get("latitude"),
+        "lng": loc.get("longitude"),
+    }

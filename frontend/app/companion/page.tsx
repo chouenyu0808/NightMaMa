@@ -11,6 +11,7 @@ import {
   IconPlus, IconCamera, IconImage, IconSmile, IconMic, IconMicOff, IconVolume2,
   IconAlertTriangle, IconMessageCircle,
 } from '@/components/Icons'
+import { getUserId } from '@/lib/user'
 
 interface RouteContext {
   origin: string
@@ -156,6 +157,77 @@ function pcmFloatTo16BitBase64(input: Float32Array, fromRate: number, toRate = 1
   return btoa(binary)
 }
 
+// --- Voice-triggered navigation: geocoding + backend route/store lookups ---
+interface RouteApiOption {
+  type: string
+  duration_min: number
+  distance_m: number
+  score: number
+  polyline: string
+  light_count: number
+  camera_count: number
+  police_count: number
+}
+
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || ''
+  if (!apiKey) return null
+  try {
+    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&region=tw&key=${apiKey}`)
+    const data = await res.json()
+    const loc = data.results?.[0]?.geometry?.location
+    return loc ? { lat: loc.lat, lng: loc.lng } : null
+  } catch {
+    return null
+  }
+}
+
+async function callRoutesApi(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+  weightOverrides?: Record<string, number>,
+  waypoints?: Array<{ lat: number; lng: number }>
+): Promise<RouteApiOption[] | null> {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+  if (!backendUrl) return null
+  try {
+    const res = await fetch(`${backendUrl}/routes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origin, destination, weight_overrides: weightOverrides, waypoints }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.routes || null
+  } catch {
+    return null
+  }
+}
+
+async function callNearestStore(lat: number, lng: number): Promise<{ found: boolean; name?: string; lat?: number; lng?: number } | null> {
+  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+  if (!backendUrl) return null
+  try {
+    const res = await fetch(`${backendUrl}/places/nearest-store?lat=${lat}&lng=${lng}`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+function buildNavigateParams(route: RouteApiOption, originName: string, destinationName: string): URLSearchParams {
+  const params = new URLSearchParams()
+  params.set('polyline', route.polyline)
+  params.set('origin', originName)
+  params.set('destination', destinationName)
+  params.set('duration', String(Math.round(route.duration_min * 60)))
+  params.set('distance', String(Math.round(route.distance_m)))
+  params.set('safety', String(Math.round(route.score)))
+  params.set('lights', String(route.light_count))
+  params.set('cctv', String(route.camera_count))
+  return params
+}
 
 export interface CompanionContentProps {
   embeddedInNav?: boolean
@@ -177,8 +249,9 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
   const pendingReplyRef = useRef<((data: { text: string; audio?: string }) => void) | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const userIdRef = useRef<string>('')
-  if (!userIdRef.current) userIdRef.current = crypto.randomUUID()
+  if (!userIdRef.current) userIdRef.current = getUserId() || crypto.randomUUID()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const userLocationRef = useRef<{ lat: number; lng: number } | null>(null)
 
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE])
   const [input, setInput] = useState('')
@@ -204,6 +277,8 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
   const micStreamRef = useRef<MediaStream | null>(null)
   const micCtxRef = useRef<AudioContext | null>(null)
   const scriptNodeRef = useRef<ScriptProcessorNode | null>(null)
+  // Accumulate full voice call transcript for Firestore persistence
+  const callTranscriptRef = useRef<Array<{ role: string; text: string }>>([])
 
   const context: RouteContext = {
     origin: routeContext?.origin || (searchParams ? searchParams.get('origin') : null) || '我的位置',
@@ -211,6 +286,17 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     safetyScore: routeContext?.safetyScore || parseInt((searchParams ? searchParams.get('safety') : null) || '85'),
     durationMin: routeContext ? Math.round(routeContext.durationSec / 60) : Math.round(parseInt((searchParams ? searchParams.get('duration') : null) || '600') / 60),
   }
+
+  // Fire-and-forget: persist a message to Firestore via backend
+  const saveMessageToFirestore = useCallback((role: string, text: string) => {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+    if (!backendUrl || !userIdRef.current) return
+    fetch(`${backendUrl}/users/${userIdRef.current}/sessions/current/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, text }),
+    }).catch(() => {}) // silent fail — don't block UI
+  }, [])
 
   // Connect to backend chat WebSocket (if available)
   useEffect(() => {
@@ -231,6 +317,17 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
       wsRef.current = ws
       return () => ws.close()
     } catch {}
+  }, [])
+
+  // Track live GPS position for voice-triggered route planning (find_lit_road_now etc.)
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    const watchId = navigator.geolocation.watchPosition(
+      pos => { userLocationRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude } },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    )
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [])
 
   const scrollToBottom = useCallback(() => {
@@ -282,6 +379,8 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
         return
       }
 
+      // Fallback: /api/companion — save both messages to Firestore
+      saveMessageToFirestore('user', text.trim())
       const res = await fetch('/api/companion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -291,13 +390,14 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
       const replyText = data.reply || '寶貝，我有在聽喔！走夜路要多留心四周喔！'
       const aiMsg: Message = { role: 'ai', text: replyText, timestamp: Date.now() }
       setMessages(prev => [...prev, aiMsg])
+      saveMessageToFirestore('assistant', replyText)
     } catch {
       const errMsg: Message = { role: 'ai', text: '寶貝別擔心，媽咪在線上守護你！記得走大馬路喔！', timestamp: Date.now() }
       setMessages(prev => [...prev, errMsg])
     } finally {
       setIsThinking(false)
     }
-  }, [isThinking, context, playAudio, speak])
+  }, [isThinking, context, playAudio, speak, saveMessageToFirestore])
 
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -323,6 +423,8 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
         const data = await res.json()
         const replyText = data.reply || '照片分析完成！周遭看起來正常，請繼續保持警覺走大馬路喔！'
         setMessages(prev => [...prev, { role: 'ai', text: replyText, timestamp: Date.now() }])
+        saveMessageToFirestore('user', '[上傳環境照片]')
+        saveMessageToFirestore('assistant', replyText)
       } catch {
         const replyText = '抱歉，照片分析暫時無法完成，但別擔心，媽咪在線上陪你！'
         setMessages(prev => [...prev, { role: 'ai', text: replyText, timestamp: Date.now() }])
@@ -428,6 +530,7 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     setCallState('ringing')
     setCallDuration(0)
     setCallActive(true)
+    callTranscriptRef.current = []
 
     // Add LINE Voice Call Started Card into chat stream
     setMessages(prev => [
@@ -439,6 +542,111 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
       },
     ])
   }, [])
+
+  // Executes a Gemini Live function call (voice-triggered route planning), sends the
+  // toolResponse back on the WS so the AI can confirm verbally, then navigates to /navigate.
+  const handleToolCall = useCallback(async (
+    fc: { id?: string; name: string; args?: Record<string, unknown> },
+    ws: WebSocket
+  ) => {
+    let resultMessage = ''
+    let navParams: URLSearchParams | null = null
+
+    try {
+      let origin = userLocationRef.current
+      if (!origin) {
+        origin = await new Promise<{ lat: number; lng: number } | null>((resolve) => {
+          if (!navigator.geolocation) return resolve(null)
+          navigator.geolocation.getCurrentPosition(
+            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 5000 }
+          )
+        })
+      }
+
+      if (!origin) {
+        resultMessage = '目前無法取得你的 GPS 位置，請確認已開啟定位權限喔。'
+      } else if (fc.name === 'plan_safe_route') {
+        const destinationName = String(fc.args?.destination || context.destination)
+        const destPoint = await geocodeAddress(destinationName)
+        if (!destPoint) {
+          resultMessage = `找不到「${destinationName}」的位置，可以再說一次地址嗎？`
+        } else {
+          const routes = await callRoutesApi(origin, destPoint, { light: 3, camera: 2, store: 1.5, police: 1.5, time: 0.5 })
+          if (routes?.length) {
+            const best = routes[0]
+            resultMessage = `已經幫你規劃一條最安全、避開小巷的路線到${destinationName}，路上有 ${best.light_count} 盞路燈，大約 ${Math.round(best.duration_min)} 分鐘，馬上帶你去看地圖！`
+            navParams = buildNavigateParams(best, context.origin, destinationName)
+          } else {
+            resultMessage = '抱歉，暫時沒辦法規劃路線，等一下再試一次好嗎？'
+          }
+        }
+      } else if (fc.name === 'plan_route_via_store') {
+        const destinationName = String(fc.args?.destination || context.destination)
+        const destPoint = await geocodeAddress(destinationName)
+        if (!destPoint) {
+          resultMessage = `找不到「${destinationName}」的位置，可以再說一次地址嗎？`
+        } else {
+          const store = await callNearestStore(origin.lat, origin.lng)
+          if (store?.found && store.lat != null && store.lng != null) {
+            const routes = await callRoutesApi(origin, destPoint, undefined, [{ lat: store.lat, lng: store.lng }])
+            if (routes?.length) {
+              resultMessage = `幫你規劃一條會先經過「${store.name}」的路線，再到${destinationName}，大約 ${Math.round(routes[0].duration_min)} 分鐘，馬上帶你去看地圖！`
+              navParams = buildNavigateParams(routes[0], context.origin, destinationName)
+            } else {
+              resultMessage = '抱歉，暫時沒辦法規劃經過超商的路線。'
+            }
+          } else {
+            resultMessage = '附近暫時找不到營業中的 24 小時超商，我直接幫你規劃安全路線。'
+            const routes = await callRoutesApi(origin, destPoint)
+            if (routes?.length) {
+              navParams = buildNavigateParams(routes[0], context.origin, destinationName)
+            }
+          }
+        }
+      } else if (fc.name === 'find_lit_road_now') {
+        const destinationName = context.destination
+        const destPoint = await geocodeAddress(destinationName)
+        if (!destPoint) {
+          resultMessage = '別擔心，深呼吸，媽咪這就在線上陪你，先跟我說你現在附近有什麼標的物好嗎？'
+        } else {
+          const routes = await callRoutesApi(origin, destPoint, { light: 5, camera: 2, store: 1, police: 1.5, time: 0.3 })
+          if (routes?.length) {
+            const best = routes[0]
+            resultMessage = `別怕，媽咪馬上帶你走最亮的大馬路，這條路有 ${best.light_count} 盞路燈，馬上幫你導航！`
+            navParams = buildNavigateParams(best, context.origin, destinationName)
+          } else {
+            resultMessage = '媽咪在線上陪你，深呼吸，先待在原地明亮的地方，我馬上幫你想辦法。'
+          }
+        }
+      } else {
+        resultMessage = '好的。'
+      }
+    } catch (err) {
+      console.warn('Tool call handling error:', err)
+      resultMessage = '抱歉，剛剛規劃路線時出了點問題，請再說一次好嗎？'
+    }
+
+    try {
+      ws.send(JSON.stringify({
+        toolResponse: {
+          functionResponses: [
+            { id: fc.id, name: fc.name, response: { result: resultMessage } },
+          ],
+        },
+      }))
+    } catch (err) {
+      console.warn('Failed to send toolResponse:', err)
+    }
+
+    if (navParams) {
+      const params = navParams
+      setTimeout(() => {
+        router.push(`/navigate?${params.toString()}`)
+      }, 1500)
+    }
+  }, [context, router])
 
   const acceptVoiceCall = async () => {
     if (ringtoneAudioRef.current) {
@@ -468,6 +676,7 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
       liveWsRef.current = ws
 
       ws.onopen = () => {
+        console.log('[DEBUG] Gemini Live WS opened')
         const setupMsg = {
           setup: {
             model: 'models/gemini-2.5-flash-native-audio-latest',
@@ -487,9 +696,46 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
 RULES:
 1. You MUST speak ONLY in Traditional Chinese (cmn-Hant-TW).
 2. DO NOT output any English words, thinking process, reasoning steps, or markdown formatting under any circumstances.
-3. Speak directly as the mother in short, warm, caring Taiwanese conversational sentences (e.g. 「寶貝走到哪啦？」「附近路燈亮不亮？」「快點回來，幫你留了熱湯喔！」).`,
+3. Speak directly as the mother in short, warm, caring Taiwanese conversational sentences (e.g. 「寶貝走到哪啦？」「附近路燈亮不亮？」「快點回來，幫你留了熱湯喔！」).
+4. You can plan real walking routes for your child. When they ask for the safest route, a route that passes a 24-hour convenience store, or urgently want to reach a bright main road, call the matching function (plan_safe_route / plan_route_via_store / find_lit_road_now) instead of just talking about it. After calling a function, briefly and warmly tell them what you just arranged in Traditional Chinese.`,
               }],
             },
+            tools: [
+              {
+                functionDeclarations: [
+                  {
+                    name: 'plan_safe_route',
+                    description: '規劃一條最安全、避開暗巷小巷子的步行路線到達目的地。當使用者要求「最安全的路線」、「不要走小巷子」時呼叫。',
+                    parameters: {
+                      type: 'OBJECT',
+                      properties: {
+                        destination: { type: 'STRING', description: '使用者想去的目的地名稱或地址，例如「家」、「捷運松山站」' },
+                      },
+                      required: ['destination'],
+                    },
+                  },
+                  {
+                    name: 'plan_route_via_store',
+                    description: '規劃一條會先經過附近營業中的 24 小時超商，再前往目的地的步行路線。當使用者說路上想先買個東西、想找一條經過超商的路時呼叫。',
+                    parameters: {
+                      type: 'OBJECT',
+                      properties: {
+                        destination: { type: 'STRING', description: '使用者最終想去的目的地名稱或地址' },
+                      },
+                      required: ['destination'],
+                    },
+                  },
+                  {
+                    name: 'find_lit_road_now',
+                    description: '緊急情況：立刻從使用者目前位置規劃一條路燈最多、最明亮的大馬路路線。當使用者表達害怕、附近很暗、緊張焦慮、要求快點帶他走到大馬路時呼叫。',
+                    parameters: {
+                      type: 'OBJECT',
+                      properties: {},
+                    },
+                  },
+                ],
+              },
+            ],
           },
         }
         ws.send(JSON.stringify(setupMsg))
@@ -510,9 +756,20 @@ RULES:
 
           if (!rawText) return
           const data = JSON.parse(rawText)
+          console.log('[DEBUG] WS message received:', data)
 
           if (data.setupComplete) {
+            console.log('[DEBUG] setupComplete received, starting mic stream')
             startMicAudioStream(ws)
+            return
+          }
+
+          if (data.toolCall) {
+            console.log('[DEBUG] toolCall received:', data.toolCall)
+            const calls = data.toolCall.functionCalls || []
+            for (const fc of calls) {
+              handleToolCall(fc, ws)
+            }
             return
           }
 
@@ -537,6 +794,9 @@ RULES:
               }
             }
             if (data.serverContent.turnComplete) {
+              if (currentTextBuffer.trim()) {
+                callTranscriptRef.current.push({ role: 'assistant', text: currentTextBuffer.trim() })
+              }
               currentTextBuffer = ''
             }
             if (data.serverContent.interrupted) {
@@ -551,6 +811,10 @@ RULES:
 
       ws.onerror = (e) => {
         console.warn('Gemini Live WS notice:', e)
+      }
+
+      ws.onclose = (e) => {
+        console.warn('[DEBUG] Gemini Live WS closed. code=', e.code, 'reason=', e.reason, 'wasClean=', e.wasClean)
       }
     } catch (e) {
       console.warn('Failed to start Live Audio WS:', e)
@@ -584,6 +848,10 @@ RULES:
         }
         const rms = Math.sqrt(sum / inputBuffer.length)
 
+        if (Math.random() < 0.02) {
+          console.log('[DEBUG] mic rms level:', rms.toFixed(4))
+        }
+
         if (rms > 0.04) {
           setUserSpeaking(true)
           if (momVoiceAudioRef.current) {
@@ -599,7 +867,7 @@ RULES:
         const realtimeMsg = {
           realtimeInput: {
             mediaChunks: [{
-              mimeType: 'audio/pcm',
+              mimeType: 'audio/pcm;rate=16000',
               data: base64PCM,
             }],
           },
@@ -621,6 +889,18 @@ RULES:
       ringtoneAudioRef.current.currentTime = 0
     }
     setCallActive(false)
+
+    // Save voice call transcript to Firestore
+    const transcript = callTranscriptRef.current
+    if (transcript.length > 0) {
+      // Save a summary record of the call
+      saveMessageToFirestore('user', `[語音通話 ${Math.floor(callDuration / 60)}:${String(callDuration % 60).padStart(2, '0')}]`)
+      // Save each AI turn from the call
+      for (const entry of transcript) {
+        saveMessageToFirestore(entry.role, entry.text)
+      }
+    }
+    callTranscriptRef.current = []
 
     // Add LINE Voice Call Ended Capsule to chat stream
     setMessages(prev => [
@@ -822,7 +1102,7 @@ RULES:
 
       {/* Input Bar — Exact 1:1 LINE Bottom Bar */}
       <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
+        position: 'fixed', bottom: 72, left: 0, right: 0,
         padding: '8px 10px 12px', background: '#FFFFFF',
         display: 'flex', alignItems: 'center', gap: 10,
         zIndex: 20, borderTop: '1px solid rgba(0,0,0,0.05)'

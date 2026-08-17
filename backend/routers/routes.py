@@ -2,10 +2,10 @@
 import concurrent.futures
 
 from fastapi import APIRouter, Depends
-from google.cloud import bigquery
+from google.cloud import bigquery, firestore
 
-from clients import maps_client
-from deps import get_bigquery
+from clients import firestore_client, maps_client
+from deps import get_bigquery, get_firestore
 from models.schemas import LatLng, RouteOption, RouteRequest, RoutesResponse
 from services import bigquery_service, places_service
 from services.safety_scorer import Segment, score_route, score_segment
@@ -18,9 +18,24 @@ SEGMENT_SPACING_M = 75  # ponytail: middle of the 50-100m range the safety model
 MAX_WORKERS = 32
 
 
+def _weights_from(overrides: dict[str, float] | None) -> dict[str, float]:
+    """Convert user weight overrides to a dict; returns defaults if empty."""
+    defaults = {"lighting": 0.40, "cctv": 0.25, "safe_haven": 0.35}
+    if not overrides:
+        return defaults
+    merged = {**defaults, **overrides}
+    return merged
+
+
 @router.post("/routes", response_model=RoutesResponse)
-def get_routes(req: RouteRequest, bq: bigquery.Client = Depends(get_bigquery)) -> RoutesResponse:
-    raw_routes = maps_client.compute_routes(req.origin, req.destination)
+def get_routes(
+    req: RouteRequest,
+    bq: bigquery.Client = Depends(get_bigquery),
+    db: firestore.Client = Depends(get_firestore),
+) -> RoutesResponse:
+    weights = _weights_from(req.weight_overrides or firestore_client.get_weight_overrides(db, user_id=None))
+
+    raw_routes = maps_client.compute_routes(req.origin, req.destination, waypoints=req.waypoints)
     if not raw_routes:
         return RoutesResponse(routes=[])
 
