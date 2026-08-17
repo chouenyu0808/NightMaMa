@@ -16,9 +16,17 @@ function SOSContent() {
   const [sending, setSending] = useState(false)
   const [countdown, setCountdown] = useState(5)
   const [fakeCallActive, setFakeCallActive] = useState(isFakeCall)
-  const [fakeCallTimer, setFakeCallTimer] = useState(3)
+  const [fakeCallState, setFakeCallState] = useState<'ringing' | 'connected'>(isFakeCall ? 'ringing' : 'ringing')
+  const [callDuration, setCallDuration] = useState(0)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Call duration counter when connected
+  useEffect(() => {
+    if (!fakeCallActive || fakeCallState !== 'connected') return
+    const timer = setInterval(() => setCallDuration(d => d + 1), 1000)
+    return () => clearInterval(timer)
+  }, [fakeCallActive, fakeCallState])
 
   // Get location
   useEffect(() => {
@@ -27,14 +35,6 @@ function SOSContent() {
       () => setCurrentLocation({ lat: 25.0478, lng: 121.5319 }) // fallback: Taipei
     )
   }, [])
-
-  // Fake call countdown
-  useEffect(() => {
-    if (!fakeCallActive) return
-    if (fakeCallTimer <= 0) return
-    const t = setTimeout(() => setFakeCallTimer(v => v - 1), 1000)
-    return () => clearTimeout(t)
-  }, [fakeCallActive, fakeCallTimer])
 
   const handleSOS = () => {
     if (sosSent || sending) return
@@ -88,20 +88,20 @@ function SOSContent() {
 
   const triggerAudioPlay = () => {
     setAudioUnlocked(true)
-    if (audioRef.current) {
+    if (audioRef.current && fakeCallState === 'ringing') {
       audioRef.current.play().catch(console.warn)
-    } else {
-      audioRef.current = new Audio('/line_ringtone.wav')
+    } else if (fakeCallState === 'ringing') {
+      audioRef.current = new Audio('/line_ringtone.mp3')
       audioRef.current.loop = true
       audioRef.current.play().catch(console.warn)
     }
   }
 
-  // Play authentic LINE Ringtone WAV when fake call ringing
+  // Play authentic 320k LINE Ringtone MP3 continuously while ringing
   useEffect(() => {
-    if (fakeCallActive && fakeCallTimer > 0) {
+    if (fakeCallActive && fakeCallState === 'ringing') {
       if (!audioRef.current) {
-        audioRef.current = new Audio('/line_ringtone.wav')
+        audioRef.current = new Audio('/line_ringtone.mp3')
         audioRef.current.loop = true
       }
       audioRef.current.play().then(() => setAudioUnlocked(true)).catch(err => {
@@ -120,23 +120,66 @@ function SOSContent() {
         audioRef.current.currentTime = 0
       }
     }
-  }, [fakeCallActive, fakeCallTimer])
+  }, [fakeCallActive, fakeCallState])
 
-  // Speak voice when fake call answered
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Play Google Cloud TTS Voice MP3 when fake call is answered
   useEffect(() => {
-    if (fakeCallActive && fakeCallTimer === 0) {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel()
-        const utt = new SpeechSynthesisUtterance('喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！')
-        utt.lang = 'zh-TW'
-        utt.rate = 1.0
-        utt.pitch = 1.05
-        window.speechSynthesis.speak(utt)
+    if (fakeCallActive && fakeCallState === 'connected') {
+      if (!voiceAudioRef.current) {
+        voiceAudioRef.current = new Audio('/mom_voice.mp3')
+      }
+      voiceAudioRef.current.play().catch(err => {
+        console.warn('Google TTS MP3 play notice, falling back to WebSpeech:', err)
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          window.speechSynthesis.cancel()
+          const script = '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
+          const utt = new SpeechSynthesisUtterance(script)
+          utt.lang = 'zh-TW'
+          utt.rate = 0.95
+          utt.pitch = 1.05
+          window.speechSynthesis.speak(utt)
+        }
+      })
+    } else {
+      if (voiceAudioRef.current) {
+        voiceAudioRef.current.pause()
+        voiceAudioRef.current.currentTime = 0
       }
     }
-  }, [fakeCallActive, fakeCallTimer])
+    return () => {
+      if (voiceAudioRef.current) {
+        voiceAudioRef.current.pause()
+        voiceAudioRef.current.currentTime = 0
+      }
+    }
+  }, [fakeCallActive, fakeCallState])
 
-  if (fakeCallActive && fakeCallTimer > 0) {
+  const acceptCall = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+    setFakeCallState('connected')
+  }
+
+  const endCall = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+    if (voiceAudioRef.current) {
+      voiceAudioRef.current.pause()
+      voiceAudioRef.current.currentTime = 0
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+    }
+    setFakeCallActive(false)
+  }
+
+  if (fakeCallActive && fakeCallState === 'ringing') {
     return (
       <div
         onClick={triggerAudioPlay}
@@ -151,22 +194,22 @@ function SOSContent() {
           />
           <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8 }}>媽咪</div>
           <div style={{ color: '#06C755', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-            💬 LINE 語音來電 ({fakeCallTimer}s)
+            💬 LINE 語音來電…
           </div>
           {!audioUnlocked && (
             <div style={{ fontSize: 11, background: 'rgba(6,199,85,0.2)', color: '#06C755', padding: '4px 12px', borderRadius: 999, border: '1px solid rgba(6,199,85,0.3)', marginTop: 4 }}>
-              🔔 點擊螢幕任意處即刻響起 LINE 鈴聲
+              🔔 點擊螢幕解鎖鈴聲
             </div>
           )}
         </div>
 
         <div style={{ display: 'flex', gap: 60, alignItems: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setFakeCallActive(false)} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}>📵</button>
+            <button onClick={endCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}>📵</button>
             <span style={{ fontSize: 12, opacity: 0.8 }}>拒絕</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => setFakeCallTimer(0)} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)' }}>📞</button>
+            <button onClick={acceptCall} style={{ width: 72, height: 72, borderRadius: '50%', background: '#06C755', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(6,199,85,0.5)' }}>📞</button>
             <span style={{ fontSize: 12, opacity: 0.8 }}>接聽</span>
           </div>
         </div>
@@ -174,7 +217,10 @@ function SOSContent() {
     )
   }
 
-  if (fakeCallActive && fakeCallTimer === 0) {
+  if (fakeCallActive && fakeCallState === 'connected') {
+    const mins = String(Math.floor(callDuration / 60)).padStart(2, '0')
+    const secs = String(callDuration % 60).padStart(2, '0')
+
     return (
       <div style={{ height: '100dvh', background: '#111827', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '60px 24px 80px', color: 'white' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
@@ -185,16 +231,15 @@ function SOSContent() {
             style={{ width: 100, height: 100, borderRadius: '50%', objectFit: 'cover', border: '4px solid #06C755', boxShadow: '0 0 20px rgba(6,199,85,0.4)' }}
           />
           <div style={{ fontSize: 24, fontWeight: 800, marginTop: 8 }}>媽咪</div>
-          <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600 }}>LINE 通話中 00:08</div>
+          <div style={{ color: '#06C755', fontSize: 14, fontWeight: 600 }}>LINE 通話中 {mins}:{secs}</div>
           <div className="glass-light" style={{ color: '#F3F4F6', textAlign: 'center', fontSize: 15, marginTop: 14, padding: '14px 20px', borderRadius: 18, lineHeight: 1.6, maxWidth: 300, background: 'rgba(255,255,255,0.08)' }}>
-            「喂？孩子你走到哪裡啦？媽媽在門口等你喔，附近明亮嗎？快點回來喔！」
+            「喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！」
           </div>
         </div>
 
         <button
           onClick={() => {
-            if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
-            setFakeCallActive(false)
+            endCall()
             router.back()
           }}
           style={{ width: 72, height: 72, borderRadius: '50%', background: '#EF4444', border: 'none', color: 'white', fontSize: 32, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.5)' }}
@@ -281,7 +326,7 @@ function SOSContent() {
           <button
             className="btn-primary"
             style={{ background: 'linear-gradient(135deg, #10b981, #047857)' }}
-            onClick={() => { setFakeCallActive(true); setFakeCallTimer(3) }}
+            onClick={() => { setFakeCallActive(true); setFakeCallState('ringing'); setCallDuration(0); }}
           >
             📞 開始假裝來電
           </button>
