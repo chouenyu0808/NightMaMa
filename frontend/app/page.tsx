@@ -673,6 +673,50 @@ export default function HomePage() {
                 </button>
               </div>
 
+              {/* Quick Address Shortcut Pills */}
+              <div style={{ display: 'flex', gap: 8, margin: '8px 0 10px' }}>
+                <button
+                  onClick={() => {
+                    const home = localStorage.getItem('nightmama_home_address')
+                    if (home && home.trim()) {
+                      setDestination(home.trim())
+                      setDestLatLng(null)
+                    } else {
+                      alert('請先至右下角「設定」頁面填寫住家地址喔！')
+                    }
+                  }}
+                  style={{
+                    flex: 1, padding: '6px 10px', borderRadius: 10,
+                    background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.45)',
+                    color: '#c4b5fd', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  🏠 一鍵回家
+                </button>
+                <button
+                  onClick={() => {
+                    const work = localStorage.getItem('nightmama_work_address')
+                    if (work && work.trim()) {
+                      setDestination(work.trim())
+                      setDestLatLng(null)
+                    } else {
+                      alert('請先至右下角「設定」頁面填寫公司地址喔！')
+                    }
+                  }}
+                  style={{
+                    flex: 1, padding: '6px 10px', borderRadius: 10,
+                    background: 'rgba(56, 189, 248, 0.2)', border: '1px solid rgba(56, 189, 248, 0.45)',
+                    color: '#7dd3fc', fontSize: 11, fontWeight: 700,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  🏢 一鍵去公司
+                </button>
+              </div>
+
               {error && <p style={{ color: '#ef4444', fontSize: 11, marginBottom: 8, textAlign: 'center' }}>{error}</p>}
 
               <button

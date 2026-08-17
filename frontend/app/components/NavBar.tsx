@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { IconMap, IconMic, IconSos } from '@/components/Icons'
+import { IconMap, IconMic, IconSos, IconSettings } from '@/components/Icons'
 
 export function NavBar({ active }: { active: 'home' | 'companion' | 'sos' | 'settings' }) {
   const router = useRouter()
@@ -53,6 +53,20 @@ export function NavBar({ active }: { active: 'home' | 'companion' | 'sos' | 'set
         <IconSos size={22} color={active === 'sos' ? '#ef4444' : 'rgba(255,255,255,0.5)'} />
         <span style={{ fontSize: 11, fontWeight: active === 'sos' ? 800 : 500 }}>SOS</span>
         {active === 'sos' && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#ef4444' }} />}
+      </button>
+
+      {/* 設定 (Settings) */}
+      <button
+        onClick={() => router.push('/settings')}
+        style={{
+          background: 'none', border: 'none',
+          color: active === 'settings' ? '#a78bfa' : 'rgba(255,255,255,0.5)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer'
+        }}
+      >
+        <IconSettings size={22} color={active === 'settings' ? '#a78bfa' : 'rgba(255,255,255,0.5)'} />
+        <span style={{ fontSize: 11, fontWeight: active === 'settings' ? 800 : 500 }}>設定</span>
+        {active === 'settings' && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#a78bfa' }} />}
       </button>
     </nav>
   )

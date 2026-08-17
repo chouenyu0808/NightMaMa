@@ -21,10 +21,27 @@ export default function SettingsPage() {
   const [testSent, setTestSent] = useState(false)
   const [isSendingTest, setIsSendingTest] = useState(false)
 
+  const [homeAddress, setHomeAddress] = useState('')
+  const [workAddress, setWorkAddress] = useState('')
+  const [addressSaved, setAddressSaved] = useState(false)
+
   useEffect(() => {
     const stored = localStorage.getItem(CONTACTS_KEY)
     if (stored) setContacts(JSON.parse(stored))
+
+    const storedHome = localStorage.getItem('nightmama_home_address')
+    if (storedHome) setHomeAddress(storedHome)
+
+    const storedWork = localStorage.getItem('nightmama_work_address')
+    if (storedWork) setWorkAddress(storedWork)
   }, [])
+
+  const saveAddresses = () => {
+    localStorage.setItem('nightmama_home_address', homeAddress.trim())
+    localStorage.setItem('nightmama_work_address', workAddress.trim())
+    setAddressSaved(true)
+    setTimeout(() => setAddressSaved(false), 2000)
+  }
 
   const saveContact = () => {
     if (!name.trim() || !lineToken.trim()) return
@@ -75,6 +92,41 @@ export default function SettingsPage() {
       <div className="scrollable" style={{ flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20, paddingBottom: 80 }}>
 
 
+
+        {/* 常用地址設定 (Home & Work Shortcut Addresses) */}
+        <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>🏠 常用地址設定 (快捷一鍵帶入)</span>
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.5 }}>
+            預先設定您的住家與公司/學校地址，搜尋路線時只需點選「快捷標籤」，即可自動填入目的地進行安心路線規劃！
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#a78bfa', marginBottom: 4, display: 'block' }}>🏠 住家地址</label>
+              <input
+                className="input-field"
+                placeholder="例如：臺北市信義區市府路1號"
+                value={homeAddress}
+                onChange={e => setHomeAddress(e.target.value)}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8', marginBottom: 4, display: 'block' }}>🏢 公司 / 學校地址</label>
+              <input
+                className="input-field"
+                placeholder="例如：臺北市大安區羅斯福路四段1號"
+                value={workAddress}
+                onChange={e => setWorkAddress(e.target.value)}
+              />
+            </div>
+
+            <button className="btn-primary" onClick={saveAddresses} style={{ marginTop: 4 }}>
+              {addressSaved ? '✅ 已成功儲存常用地址！' : '💾 儲存常用地址'}
+            </button>
+          </div>
+        </div>
 
         {/* LINE Official Account Contact Setup */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
