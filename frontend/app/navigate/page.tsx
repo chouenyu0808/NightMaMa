@@ -267,9 +267,10 @@ function NavigateContent() {
       })
 
       // Draw nearby 24h convenience stores & police stations on navigation map
+      const infoWindow = new google.maps.InfoWindow()
       searchNearbySafetyPlaces(mapInstance.current!, points).then(places => {
         if (mapInstance.current) {
-          drawSafetyPlaceMarkers(mapInstance.current, places)
+          drawSafetyPlaceMarkers(mapInstance.current, places, infoWindow)
         }
       }).catch(console.error)
 
