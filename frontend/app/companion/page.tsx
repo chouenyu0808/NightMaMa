@@ -103,18 +103,24 @@ function CompanionContent() {
     durationMin: Math.round(parseInt(searchParams.get('duration') || '600') / 60),
   }
 
-  // Connect to backend chat WebSocket
+  // Connect to backend chat WebSocket (gracefully skip if backend unavailable)
   useEffect(() => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-    const ws = new WebSocket(`${backendUrl.replace(/^http/, 'ws')}/stream/${userIdRef.current}`)
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data)
-      const text = data.type === 'urgent' ? data.message : data.text
-      pendingReplyRef.current?.({ text, audio: data.audio })
-      pendingReplyRef.current = null
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+    if (!backendUrl) return // Skip WebSocket when no backend URL is configured
+    try {
+      const ws = new WebSocket(`${backendUrl.replace(/^http/, 'ws')}/stream/${userIdRef.current}`)
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data)
+        const text = data.type === 'urgent' ? data.message : data.text
+        pendingReplyRef.current?.({ text, audio: data.audio })
+        pendingReplyRef.current = null
+      }
+      ws.onerror = () => {} // Silently handle connection errors
+      wsRef.current = ws
+      return () => ws.close()
+    } catch {
+      // Backend not available — chat will use Gemini API fallback
     }
-    wsRef.current = ws
-    return () => ws.close()
   }, [])
 
   const scrollToBottom = useCallback(() => {
@@ -138,8 +144,9 @@ function CompanionContent() {
   // Fetch + play speech for text that didn't come through the /stream reply
   // (e.g. the hardcoded initial greeting, or a fallback error message).
   const speak = useCallback(async (text: string, urgent = false) => {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+    if (!backendUrl) return // No backend configured — skip TTS
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
       const res = await fetch(`${backendUrl}/speak`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -289,11 +296,11 @@ function CompanionContent() {
   const triggerAudioPlay = () => {
     setAudioUnlocked(true)
     if (ringtoneAudioRef.current && callState === 'ringing') {
-      ringtoneAudioRef.current.play().catch(console.warn)
+      ringtoneAudioRef.current.play().catch(() => {})
     } else if (callState === 'ringing') {
       ringtoneAudioRef.current = new Audio('/line_ringtone.mp3')
       ringtoneAudioRef.current.loop = true
-      ringtoneAudioRef.current.play().catch(console.warn)
+      ringtoneAudioRef.current.play().catch(() => {})
     }
   }
 
@@ -348,14 +355,14 @@ function CompanionContent() {
     if (ringtoneAudioRef.current) {
       ringtoneAudioRef.current.pause()
       ringtoneAudioRef.current.currentTime = 0
+      ringtoneAudioRef.current = null // Release to avoid play/pause race
     }
-    // Play MP3 voice directly inside user click handler to satisfy browser autoplay policy
-    if (!momVoiceAudioRef.current) {
-      momVoiceAudioRef.current = new Audio('/api/tts')
-    }
-    momVoiceAudioRef.current.currentTime = 0
-    momVoiceAudioRef.current.play().catch(console.warn)
     setCallState('connected')
+    // Play MP3 voice directly inside user click handler to satisfy browser autoplay policy
+    // Create a fresh Audio instance each time to avoid stale state
+    const voice = new Audio('/api/tts')
+    momVoiceAudioRef.current = voice
+    voice.play().catch(() => {})
   }
 
   const endVoiceCall = () => {
