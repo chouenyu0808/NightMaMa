@@ -419,30 +419,26 @@ export default function HomePage() {
     setIsLoading(true)
 
     try {
-      // 1. Resolve Origin (Safe fallback for '我的位置')
-      let origLatLng: LatLng | null = null
+      // 1. Resolve Origin Query Parameter
+      let origQuery: string | LatLng = origin.trim()
       if (origin === '我的位置' || !origin.trim()) {
-        origLatLng = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
-      } else {
-        origLatLng = originLatLng || await geocodeAddress(origin)
+        origQuery = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
       }
 
-      // 2. Resolve Destination (Safe fallback for '我的位置')
-      let destLatLngResolved: LatLng | null = null
+      // 2. Resolve Destination Query Parameter
+      let destQuery: string | LatLng = targetDest.trim()
       if (targetDest === '我的位置') {
-        destLatLngResolved = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
-      } else {
-        destLatLngResolved = await geocodeAddress(targetDest)
+        destQuery = userGpsRef.current || originLatLng || { lat: 25.0478, lng: 121.5170 }
       }
 
-      if (!origLatLng || !destLatLngResolved) {
-        throw new Error('找不到地址，請確認出發地與目的地名稱')
-      }
-      setOriginLatLng(origLatLng)
-      setDestLatLng(destLatLngResolved)
+      const rawRoutes = await fetchRoutes(origQuery, destQuery)
+      if (!rawRoutes.length) throw new Error('找不到路線，請確認地點名稱')
 
-      const rawRoutes = await fetchRoutes(origLatLng, destLatLngResolved)
-      if (!rawRoutes.length) throw new Error('找不到路線')
+      if (rawRoutes[0]?.points?.length) {
+        setOriginLatLng(rawRoutes[0].points[0])
+        const lastPts = rawRoutes[0].points
+        setDestLatLng(lastPts[lastPts.length - 1])
+      }
 
       const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
 

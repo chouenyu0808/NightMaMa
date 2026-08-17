@@ -127,67 +127,30 @@ export async function geocodeAddress(address: string): Promise<LatLng | null> {
   }
 }
 
-/** 呼叫後端 /routes 取得依安全評分排序的候選路線 */
-export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<RouteResult[]> {
-  // 1. Try Cloud Run backend if NEXT_PUBLIC_BACKEND_URL is explicitly configured
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
-  if (backendUrl) {
-    try {
-      const res = await fetch(`${backendUrl}/routes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ origin, destination }),
-      })
-
-      if (res.ok) {
-        const data = await res.json()
-        if (data.routes?.length) {
-          return (data.routes as Array<{
-            type: string
-            polyline: string
-            duration_min: number
-            distance_m: number
-            score: number
-            reason: string | null
-            light_count: number
-            camera_count: number
-            police_count: number
-            store_count: number
-            segment_scores: number[]
-          }>).map((r) => ({
-            type: r.type,
-            polyline: r.polyline,
-            durationSec: Math.round(r.duration_min * 60),
-            distanceM: r.distance_m,
-            score: r.score,
-            reason: r.reason,
-            lightCount: r.light_count,
-            cameraCount: r.camera_count,
-            policeCount: r.police_count,
-            segmentScores: r.segment_scores || [],
-            storeCount: r.store_count,
-            points: decodePolyline(r.polyline),
-            // Backend doesn't return turn-by-turn steps yet; navigate/page.tsx falls
-            // back to generateStepsFromPoints() when this is empty.
-            steps: [],
-          }))
-        }
-      }
-    } catch {
-      // Silently fall back to Google Maps JS SDK DirectionsService
-    }
-  }
-
-  // 2. Client Google Maps JS SDK DirectionsService
+/** 呼叫 Google Directions API 取得依安全評分與大眾運輸排序的候選路線 */
+export async function fetchRoutes(
+  originInput: string | LatLng,
+  destInput: string | LatLng
+): Promise<RouteResult[]> {
+  // 1. Client Google Maps JS SDK DirectionsService
   return new Promise((resolve, reject) => {
     if (typeof google === 'undefined' || !google.maps) {
       return reject(new Error('Google Maps JS SDK 未載入'))
     }
     const dirService = new google.maps.DirectionsService()
+
+    const originParam = typeof originInput === 'string'
+      ? originInput
+      : new google.maps.LatLng(originInput.lat, originInput.lng)
+
+    const destParam = typeof destInput === 'string'
+      ? destInput
+      : new google.maps.LatLng(destInput.lat, destInput.lng)
+
     dirService.route(
       {
-        origin: new google.maps.LatLng(origin.lat, origin.lng),
-        destination: new google.maps.LatLng(destination.lat, destination.lng),
+        origin: originParam,
+        destination: destParam,
         travelMode: google.maps.TravelMode.WALKING,
         provideRouteAlternatives: true,
       },
@@ -231,8 +194,8 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
           // Query Real Google Maps Directions TRANSIT Mode for true bus / MRT lines and stop names!
           dirService.route(
             {
-              origin: new google.maps.LatLng(origin.lat, origin.lng),
-              destination: new google.maps.LatLng(destination.lat, destination.lng),
+              origin: originParam,
+              destination: destParam,
               travelMode: google.maps.TravelMode.TRANSIT,
             },
             (transitRes, transitStatus) => {
@@ -305,11 +268,12 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
                   if (hasTransitVehicle) {
                     const lastBus = busLegs[busLegs.length - 1]
                     const lastStopPt = lastBus.points[lastBus.points.length - 1]
+                    const destPt = { lat: tLeg.end_location.lat(), lng: tLeg.end_location.lng() }
                     const R = 6371000
-                    const dLat = (destination.lat - lastStopPt.lat) * Math.PI / 180
-                    const dLon = (destination.lng - lastStopPt.lng) * Math.PI / 180
+                    const dLat = (destPt.lat - lastStopPt.lat) * Math.PI / 180
+                    const dLon = (destPt.lng - lastStopPt.lng) * Math.PI / 180
                     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                      Math.cos(lastStopPt.lat * Math.PI / 180) * Math.cos(destination.lat * Math.PI / 180) *
+                      Math.cos(lastStopPt.lat * Math.PI / 180) * Math.cos(destPt.lat * Math.PI / 180) *
                       Math.sin(dLon / 2) * Math.sin(dLon / 2)
                     const distFromLastStopToDest = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
