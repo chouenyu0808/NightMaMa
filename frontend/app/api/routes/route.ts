@@ -17,9 +17,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '伺服器未設定 MAPS_KEY' }, { status: 500 })
     }
 
+    function parseWaypoint(locationStr: string) {
+      const coordMatch = locationStr.match(/^([-+]?\d+(?:\.\d+)?)\s*,\s*([-+]?\d+(?:\.\d+)?)$/)
+      if (coordMatch) {
+        return {
+          location: {
+            latLng: {
+              latitude: parseFloat(coordMatch[1]),
+              longitude: parseFloat(coordMatch[2]),
+            },
+          },
+        }
+      }
+      return {
+        address: locationStr,
+      }
+    }
+
     const body = {
-      origin: { address: origin },
-      destination: { address: destination },
+      origin: parseWaypoint(origin),
+      destination: parseWaypoint(destination),
       travelMode: 'WALK',
       computeAlternativeRoutes: alternatives,
       languageCode: 'zh-TW',
@@ -31,7 +48,7 @@ export async function POST(req: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline',
+        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps',
       },
       body: JSON.stringify(body),
     })

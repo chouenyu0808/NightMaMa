@@ -56,11 +56,20 @@ export function decodePolyline(encoded: string): LatLng[] {
   return points
 }
 
+export interface RouteStep {
+  instruction: string
+  maneuver: string
+  distanceM: number
+  startLocation: LatLng
+  endLocation: LatLng
+}
+
 export interface RouteResult {
   polyline: string
   durationSec: number
   distanceM: number
   points: LatLng[]
+  steps: RouteStep[]
 }
 
 /** 使用 API Route Proxy 取得路線 */
@@ -89,12 +98,38 @@ export async function fetchRoutes(
     polyline: { encodedPolyline: string }
     duration: string
     distanceMeters: number
-  }>).map((r) => ({
-    polyline: r.polyline.encodedPolyline,
-    durationSec: parseInt(r.duration.replace('s', '') || '0'),
-    distanceM: r.distanceMeters,
-    points: decodePolyline(r.polyline.encodedPolyline),
-  }))
+    legs?: Array<{
+      steps?: Array<{
+        navigationInstruction?: { instructions?: string; maneuver?: string }
+        distanceMeters?: number
+        startLocation?: { latLng?: { latitude?: number; longitude?: number } }
+        endLocation?: { latLng?: { latitude?: number; longitude?: number } }
+      }>
+    }>
+  }>).map((r) => {
+    const rawSteps = r.legs?.[0]?.steps || []
+    const parsedSteps: RouteStep[] = rawSteps.map((s) => ({
+      instruction: s.navigationInstruction?.instructions || '繼續前進',
+      maneuver: s.navigationInstruction?.maneuver || 'STRAIGHT',
+      distanceM: s.distanceMeters || 0,
+      startLocation: {
+        lat: s.startLocation?.latLng?.latitude || 0,
+        lng: s.startLocation?.latLng?.longitude || 0,
+      },
+      endLocation: {
+        lat: s.endLocation?.latLng?.latitude || 0,
+        lng: s.endLocation?.latLng?.longitude || 0,
+      },
+    }))
+
+    return {
+      polyline: r.polyline.encodedPolyline,
+      durationSec: parseInt(r.duration.replace('s', '') || '0'),
+      distanceM: r.distanceMeters,
+      points: decodePolyline(r.polyline.encodedPolyline),
+      steps: parsedSteps,
+    }
+  })
 }
 
 /** 格式化時間 */

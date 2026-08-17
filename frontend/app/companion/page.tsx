@@ -50,14 +50,25 @@ function CompanionContent() {
 
   useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
 
-  // Text-to-Speech
+  // Text-to-Speech with warm female voice selection
   const speak = useCallback((text: string) => {
     if (!window.speechSynthesis) return
     window.speechSynthesis.cancel()
+
     const utt = new SpeechSynthesisUtterance(text)
     utt.lang = 'zh-TW'
-    utt.rate = 1.05
-    utt.pitch = 1.1
+    utt.rate = 0.95 // slightly slower for gentle pacing
+    utt.pitch = 1.25 // warm pitch for cozy tone
+
+    // Try finding warm female Chinese voice
+    const voices = window.speechSynthesis.getVoices()
+    const warmVoice = voices.find(v =>
+      v.lang.includes('zh') &&
+      (v.name.includes('HsiaoChen') || v.name.includes('Yating') || v.name.includes('MeiJia') || v.name.includes('HanHan') || v.name.includes('Female') || v.name.includes('Google 國語') || v.name.includes('臺灣'))
+    ) || voices.find(v => v.lang.includes('zh-TW') || v.lang.includes('zh'))
+
+    if (warmVoice) utt.voice = warmVoice
+
     utt.onstart = () => setIsSpeaking(true)
     utt.onend = () => setIsSpeaking(false)
     window.speechSynthesis.speak(utt)
@@ -218,7 +229,7 @@ function CompanionContent() {
       {/* Input area */}
       <div className="glass" style={{
         padding: '12px 20px',
-        paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+        paddingBottom: 'calc(76px + env(safe-area-inset-bottom))',
         borderTop: '1px solid rgba(255,255,255,0.06)',
         display: 'flex',
         gap: 10,

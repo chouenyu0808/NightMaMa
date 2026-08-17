@@ -170,6 +170,26 @@ export default function HomePage() {
     })
   }, [])
 
+  // Auto-detect GPS location as default origin
+  useEffect(() => {
+    if (appState === 'map' && !origin) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            const { latitude, longitude } = pos.coords
+            setOrigin('我的位置')
+            if (mapInstance.current) {
+              mapInstance.current.setCenter({ lat: latitude, lng: longitude })
+            }
+          },
+          () => setOrigin('我的位置')
+        )
+      } else {
+        setOrigin('我的位置')
+      }
+    }
+  }, [appState, origin])
+
   const handleSearch = async () => {
     if (!origin.trim() || !destination.trim()) {
       setError('請輸入出發地與目的地')
@@ -180,7 +200,19 @@ export default function HomePage() {
     setShowSheet(false)
 
     try {
-      const rawRoutes = await fetchRoutes(origin, destination, true)
+      let originQuery = origin
+      if (origin === '我的位置') {
+        const pos = await new Promise<GeolocationPosition | null>(res => {
+          navigator.geolocation?.getCurrentPosition(res, () => res(null), { timeout: 3000 })
+        })
+        if (pos) {
+          originQuery = `${pos.coords.latitude},${pos.coords.longitude}`
+        } else {
+          originQuery = '25.0478,121.5319' // Taipei Station fallback
+        }
+      }
+
+      const rawRoutes = await fetchRoutes(originQuery, destination, true)
       if (!rawRoutes.length) throw new Error('找不到路線')
       const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
 
@@ -240,6 +272,7 @@ export default function HomePage() {
       safety: String(route.safety.total),
       lights: String(route.safety.lightCount),
       cctv: String(route.safety.cctvCount),
+      steps: JSON.stringify(route.steps || []),
     })
     router.push(`/navigate?${params}`)
   }
