@@ -61,28 +61,26 @@ function SOSContent() {
 
   const sendSOSNotification = async () => {
     const contacts = JSON.parse(localStorage.getItem(EMERGENCY_CONTACTS_KEY) || '[]') as Array<{ name: string; lineToken: string }>
-    const token = process.env.NEXT_PUBLIC_LINE_NOTIFY_TOKEN || contacts[0]?.lineToken
+    const contactName = contacts[0]?.name || '使用者'
+    const targetId = contacts[0]?.lineToken || ''
 
     const mapsUrl = currentLocation
       ? `https://maps.google.com/?q=${currentLocation.lat},${currentLocation.lng}`
-      : 'https://maps.google.com/?q=台北市'
+      : 'https://maps.google.com/?q=25.0478,121.5170'
 
-    const message = `\n🆘 NightMaMa 緊急通知\n\n你的聯絡人正在夜間步行，已觸發 SOS 警報！\n\n📍 目前位置：${mapsUrl}\n⏰ 時間：${new Date().toLocaleTimeString('zh-TW')}\n\n請立即確認是否平安。`
+    const message = `🚨 【NightMaMa 緊急求救警報】\n您的聯絡人 (${contactName}) 在夜間步行時觸發了 SOS 緊急求救！\n\n📍 即時 GPS 定位：${mapsUrl}\n⏰ 觸發時間：${new Date().toLocaleString('zh-TW')}\n\n請立即嘗試聯繫確認對方是否平安！`
 
-    if (token) {
-      try {
-        await fetch('/api/line-notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token, message }),
-        })
-      } catch {
-        // silent fail — still show sent state
-      }
+    try {
+      await fetch('/api/line-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId, message }),
+      })
+    } catch {
+      // silent fail — still show sent state
     }
-
-    setSosSent(true)
     setSending(false)
+    setSosSent(true)
   }
 
   if (fakeCallActive && fakeCallTimer > 0) {

@@ -2,16 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, targetId = '', message } = await req.json()
+    const { token = '', targetId = '', message = '' } = await req.json()
 
-    if (!token || !message) {
-      return NextResponse.json({ error: 'Token and message required' }, { status: 400 })
+    if (!message) {
+      return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
 
-    const cleanToken = (token || process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim()
+    const systemToken = 'TZ/d442Cywnnmeqs7ESSat2bq5URAytEdTSTtsBvHVxo9XypO6vg9n3q3z76hbThZ2Bf7QUPeR/lPbUukBrzne/Q+P+3SbThY3fRzVs5+wsb3O5n38ao6mmsywkxoFwF8fHkNv0tb0ERgOVEy8uHYQdB04t89/1O/w1cDnyilFU='
+    const cleanToken = (token.trim() || process.env.LINE_CHANNEL_ACCESS_TOKEN || systemToken).trim()
 
-    // 1. Try LINE Messaging API Push Message (https://api.line.me/v2/bot/message/push)
-    if (targetId && targetId.trim()) {
+    // 1. Try LINE Messaging API Push Message if targetId starts with 'U' (valid User ID)
+    if (targetId && targetId.trim().startsWith('U')) {
       try {
         const res = await fetch('https://api.line.me/v2/bot/message/push', {
           method: 'POST',
@@ -29,11 +30,11 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true, mode: 'MessagingAPI-Push' })
         }
       } catch (err) {
-        console.warn('LINE Messaging API Push failed, trying Broadcast:', err)
+        console.warn('LINE Messaging API Push failed, falling back to Broadcast:', err)
       }
     }
 
-    // 2. Try LINE Messaging API Broadcast Message (https://api.line.me/v2/bot/message/broadcast)
+    // 2. Default: Broadcast via NightMama Official Account (https://api.line.me/v2/bot/message/broadcast)
     try {
       const res = await fetch('https://api.line.me/v2/bot/message/broadcast', {
         method: 'POST',
