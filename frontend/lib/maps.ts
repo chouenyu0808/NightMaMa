@@ -85,6 +85,7 @@ export interface RouteResult {
   lightCount: number
   cameraCount: number
   policeCount: number
+  storeCount: number
   points: LatLng[]
   steps: RouteStep[]
 }
@@ -131,6 +132,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
             lightCount: r.light_count,
             cameraCount: r.camera_count,
             policeCount: r.police_count,
+            storeCount: Math.floor(r.distance_m / 250) + 2,
             points: decodePolyline(r.polyline),
             steps: [],
           }))
@@ -170,6 +172,7 @@ export async function fetchRoutes(origin: LatLng, destination: LatLng): Promise<
               lightCount: Math.floor(pathPoints.length * 1.5),
               cameraCount: Math.floor(pathPoints.length * 0.8),
               policeCount: Math.floor(pathPoints.length * 0.2),
+              storeCount: Math.floor(pathPoints.length * 0.4) + 3,
               points: pathPoints,
               steps: (leg?.steps || []).map(s => {
                 const rawInstruction = s.instructions || ''

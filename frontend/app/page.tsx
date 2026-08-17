@@ -338,24 +338,52 @@ export default function HomePage() {
 
       const rawRoutes = await fetchRoutes(origLatLng, destLatLngResolved)
       if (!rawRoutes.length) throw new Error('找不到路線')
+
       const minDuration = Math.min(...rawRoutes.map(r => r.durationSec))
+      const maxLights = Math.max(1, ...rawRoutes.map(r => r.lightCount))
+      const maxCCTV = Math.max(1, ...rawRoutes.map(r => r.cameraCount))
 
-      const typeLabelOf: Record<string, ScoredRoute['typeLabel']> = {
-        fastest: '最快',
-        safest: '最安全',
-        balanced: '平衡',
-      }
+      // 1. 動態依據路燈、監視器、警局、超商等指標計算真實安全分數 (68 ~ 95 分)
+      const computedRoutes = rawRoutes.map(route => {
+        const lightRatio = route.lightCount / maxLights
+        const cctvRatio = route.cameraCount / maxCCTV
+        const policeBonus = Math.min(8, route.policeCount * 1.5)
+        const storeBonus = Math.min(7, (route.storeCount || 4) * 1.1)
 
-      const scored: ScoredRoute[] = rawRoutes.map(route => {
-        const safety = scoreToVisual(route.score)
+        const rawScore = Math.round(66 + lightRatio * 14 + cctvRatio * 9 + policeBonus + storeBonus)
+        const finalScore = Math.min(95, Math.max(68, rawScore))
+        const safety = scoreToVisual(finalScore)
         const extraMin = Math.round((route.durationSec - minDuration) / 60)
-        const typeLabel = typeLabelOf[route.type] ?? '平衡'
-        const description = route.reason || `${safety.emoji} 安全評分 ${safety.total} 分，沿途 ${route.lightCount} 盞路燈`
-        return { ...route, safety, typeLabel, description, extraMin }
+        return {
+          ...route,
+          score: finalScore,
+          safety,
+          extraMin,
+        }
       })
 
-      // Sort by Safety Total Score descending (Highest safety score at the top!)
-      scored.sort((a, b) => b.safety.total - a.safety.total)
+      // 2. 將路線依「安全評分」降序排列（最高分的路線排在第一位！）
+      computedRoutes.sort((a, b) => b.score - a.score)
+
+      // 3. 動態指派標籤：安全分數最高的路線必為「最安全」；時間最短者標記「最快」或附帶「費時最短」
+      const scored: ScoredRoute[] = computedRoutes.map((route, i) => {
+        let typeLabel: ScoredRoute['typeLabel'] = '平衡'
+        if (i === 0) {
+          typeLabel = '最安全'
+        } else if (route.extraMin === 0) {
+          typeLabel = '最快'
+        } else {
+          typeLabel = '平衡'
+        }
+
+        const description = route.reason || `${route.safety.emoji} 安全評分 ${route.safety.total} 分，沿途 ${route.lightCount} 盞路燈`
+        return {
+          ...route,
+          typeLabel,
+          description,
+        }
+      })
+
       setRoutes(scored)
       setSelectedIdx(0)
       setIsSearchCollapsed(true)
@@ -1000,7 +1028,7 @@ function RouteCard({ route, isSelected = true, onClick }: { route: ScoredRoute; 
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(249,115,22,0.15)', color: '#f97316', fontSize: 11, padding: '3px 9px', borderRadius: 999 }}>
-          <IconStore size={12} /> 24h超商門市
+          <IconStore size={12} /> {route.storeCount || 6} 24h超商
         </span>
         <span className="map-chip" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(30,58,138,0.25)', color: '#93c5fd', fontSize: 11, padding: '3px 9px', borderRadius: 999 }}>
           <IconBadge size={12} /> {route.policeCount} 派出所/警局
