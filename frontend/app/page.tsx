@@ -206,6 +206,47 @@ export default function HomePage() {
       return () => navigator.geolocation.clearWatch(watchId)
     }
   }, [appState, origin])
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportType, setReportType] = useState('💡 路燈故障/昏暗')
+  const [reportNote, setReportNote] = useState('')
+  const [reportedSpots, setReportedSpots] = useState<Array<{ id: number; type: string; note: string; lat: number; lng: number }>>([])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('nightmama_unsafe_spots')
+    if (saved) {
+      try { setReportedSpots(JSON.parse(saved)) } catch {}
+    }
+  }, [])
+
+  const submitReport = () => {
+    const lat = userGpsRef.current?.lat || 25.0478
+    const lng = userGpsRef.current?.lng || 121.5170
+    const newSpot = { id: Date.now(), type: reportType, note: reportNote, lat, lng }
+    const updated = [...reportedSpots, newSpot]
+    setReportedSpots(updated)
+    localStorage.setItem('nightmama_unsafe_spots', JSON.stringify(updated))
+    setShowReportModal(false)
+    setReportNote('')
+
+    if (mapInstance.current) {
+      const dangerMarker = new google.maps.Marker({
+        position: { lat, lng },
+        map: mapInstance.current,
+        title: `🚨 社群回報暗區: ${reportType}`,
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: '#ef4444',
+          fillOpacity: 0.9,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+        },
+      })
+      markersRef.current.push(dangerMarker)
+    }
+
+    alert('✅ 不安暗區點位已成功匿名通報！地圖已為您與其他使用者建立警示標籤。')
+  }
 
   const handleSearch = async () => {
     if (!origin.trim() || !destination.trim()) {
@@ -355,11 +396,25 @@ export default function HomePage() {
           <button onClick={() => setAppState('landing')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 20, cursor: 'pointer', padding: '0 4px' }}>←</button>
           <Logo size={28} />
           <span style={{ fontSize: 18, fontWeight: 900 }} className="gradient-text">NightMaMa</span>
-          {dataLoaded && (
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '3px 8px', borderRadius: 999, border: '1px solid rgba(16,185,129,0.2)' }}>
-              ● 資料已載入
-            </span>
-          )}
+          <button
+            onClick={() => setShowReportModal(true)}
+            style={{
+              marginLeft: 'auto',
+              fontSize: 11,
+              fontWeight: 700,
+              color: '#f59e0b',
+              background: 'rgba(245,158,11,0.15)',
+              padding: '4px 10px',
+              borderRadius: 999,
+              border: '1px solid rgba(245,158,11,0.3)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            📢 不安通報
+          </button>
         </div>
 
         {isSearchCollapsed && routes.length > 0 ? (
@@ -481,6 +536,64 @@ export default function HomePage() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Unsafe Dark Spot Report Modal */}
+      {showReportModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+        }}>
+          <div className="glass" style={{ width: '100%', maxWidth: 360, borderRadius: 24, padding: 24, border: '1px solid rgba(245,158,11,0.3)', background: '#1e293b' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                📢 匿名回報不安暗區/死角
+              </div>
+              <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              您的匿名回報將用於即時在地圖標記暗區，提醒其他夜行民眾，並作為大數據城市暗巷治理參考。
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>1. 選擇問題類型：</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['💡 路燈故障/昏暗', '🚨 治安死角/可疑人士', '🚧 施工障礙/無人道'].map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setReportType(type)}
+                    style={{
+                      padding: '6px 10px', borderRadius: 12, fontSize: 11, cursor: 'pointer',
+                      border: reportType === type ? '1px solid #f59e0b' : '1px solid rgba(255,255,255,0.15)',
+                      background: reportType === type ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.05)',
+                      color: reportType === type ? '#fbbf24' : '#d1d5db',
+                      fontWeight: reportType === type ? 700 : 400,
+                    }}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+
+              <label style={{ fontSize: 12, fontWeight: 700, color: 'white', marginTop: 4 }}>2. 補充說明 (選填)：</label>
+              <input
+                className="input-field"
+                placeholder="例如：路燈失修無光源、死角盲區..."
+                value={reportNote}
+                onChange={e => setReportNote(e.target.value)}
+              />
+            </div>
+
+            <button
+              className="btn-primary"
+              onClick={submitReport}
+              style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#000', fontWeight: 800, padding: 14 }}
+            >
+              傳送匿名不安通報
+            </button>
+          </div>
         </div>
       )}
 

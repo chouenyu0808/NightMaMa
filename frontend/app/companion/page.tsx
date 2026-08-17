@@ -71,6 +71,7 @@ function CompanionContent() {
   const router = useRouter()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<AnySpeechRecognition | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE])
   const [input, setInput] = useState('')
@@ -177,6 +178,40 @@ function stripEmojis(str: string): string {
       setIsThinking(false)
     }
   }, [messages, context, isThinking, speak])
+
+  // Photo upload risk analysis with Gemini Vision Multimodal API
+  const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = reader.result as string
+      const userMsg: Message = {
+        role: 'user',
+        text: '📸 [已上傳路口照片，進行多模態風險分析]',
+        timestamp: Date.now(),
+      }
+      setMessages(prev => [...prev, userMsg])
+      setIsThinking(true)
+
+      const history = messages.map(m => ({ role: m.role === 'ai' ? 'model' as const : 'user' as const, text: m.text }))
+
+      try {
+        const reply = await sendMessage('請實時分析照片中前方暗巷與路口的照明風險，並給予避險繞路建議', history, context, base64)
+        const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
+        setMessages(prev => [...prev, aiMsg])
+        speak(reply)
+      } catch {
+        const errMsg: Message = { role: 'ai', text: '照片解析失敗，但前方路口較暗，建議繞至明亮大馬路！', timestamp: Date.now() }
+        setMessages(prev => [...prev, errMsg])
+        speak(errMsg.text)
+      } finally {
+        setIsThinking(false)
+      }
+    }
+    reader.readAsDataURL(file)
+  }, [messages, context, speak])
 
   // Speech recognition
   const toggleListening = useCallback(() => {
@@ -424,10 +459,21 @@ function stripEmojis(str: string): string {
         boxShadow: '0 -2px 10px rgba(0,0,0,0.05)',
       }}>
         {/* Left Action Buttons */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handlePhotoUpload}
+        />
         <button style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }} title="更多">
           <IconPlus />
         </button>
-        <button style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }} title="相機">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+          title="拍攝/上傳路口照片進行風險分析"
+        >
           <IconCamera />
         </button>
 

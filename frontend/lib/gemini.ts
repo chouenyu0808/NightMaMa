@@ -11,18 +11,19 @@ export interface CompanionContext {
   currentStep?: string
 }
 
-/** 發送訊息給 Gemini 3.6 Flash API */
+/** 發送訊息或照片給 Gemini Flash API */
 export async function sendMessage(
   userMessage: string,
   history: Array<{ role: 'user' | 'model'; text: string }>,
-  context: CompanionContext
+  context: CompanionContext,
+  imageData?: string
 ): Promise<string> {
   try {
     const customApiKey = typeof window !== 'undefined' ? localStorage.getItem('nightmama_gemini_key') || '' : ''
     const res = await fetch('/api/companion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userMessage, history, context, customApiKey }),
+      body: JSON.stringify({ userMessage, history, context, customApiKey, imageData }),
     })
 
     const data = await res.json()
