@@ -122,17 +122,36 @@ function SOSContent() {
     }
   }, [fakeCallActive, fakeCallState])
 
-  // Speak voice when fake call is answered
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Play Google Cloud TTS Voice MP3 when fake call is answered
   useEffect(() => {
     if (fakeCallActive && fakeCallState === 'connected') {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel()
-        const script = '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
-        const utt = new SpeechSynthesisUtterance(script)
-        utt.lang = 'zh-TW'
-        utt.rate = 0.95
-        utt.pitch = 1.05
-        window.speechSynthesis.speak(utt)
+      if (!voiceAudioRef.current) {
+        voiceAudioRef.current = new Audio('/mom_voice.mp3')
+      }
+      voiceAudioRef.current.play().catch(err => {
+        console.warn('Google TTS MP3 play notice, falling back to WebSpeech:', err)
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          window.speechSynthesis.cancel()
+          const script = '喂～寶貝你走到哪裡啦？媽媽在客廳看電視等你喔！附近路燈有亮嗎？幫你留了熱湯，記得走大馬路快點回來喔！'
+          const utt = new SpeechSynthesisUtterance(script)
+          utt.lang = 'zh-TW'
+          utt.rate = 0.95
+          utt.pitch = 1.05
+          window.speechSynthesis.speak(utt)
+        }
+      })
+    } else {
+      if (voiceAudioRef.current) {
+        voiceAudioRef.current.pause()
+        voiceAudioRef.current.currentTime = 0
+      }
+    }
+    return () => {
+      if (voiceAudioRef.current) {
+        voiceAudioRef.current.pause()
+        voiceAudioRef.current.currentTime = 0
       }
     }
   }, [fakeCallActive, fakeCallState])
@@ -149,6 +168,10 @@ function SOSContent() {
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
+    }
+    if (voiceAudioRef.current) {
+      voiceAudioRef.current.pause()
+      voiceAudioRef.current.currentTime = 0
     }
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel()
