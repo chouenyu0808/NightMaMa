@@ -416,13 +416,36 @@ export default function HomePage() {
         const finalScore = Math.min(95, Math.max(68, rawScore))
         const safety = scoreToVisual(finalScore)
         const extraMin = Math.round((route.durationSec - minDuration) / 60)
-        const typeLabel = typeLabelOf[route.type] ?? '平衡'
-        const description = route.reason || `${safety.emoji} 安全評分 ${safety.total} 分，沿途 ${route.lightCount} 盞路燈`
-        return { ...route, safety, typeLabel, description, extraMin }
+        return {
+          ...route,
+          score: finalScore,
+          safety,
+          extraMin,
+        }
       })
 
-      // Sort by Safety Total Score descending (Highest safety score at the top!)
-      scored.sort((a, b) => b.safety.total - a.safety.total)
+      // 2. 將路線依「安全評分」降序排列（最高分的路線排在第一位！）
+      computedRoutes.sort((a, b) => b.score - a.score)
+
+      // 3. 動態指派標籤：安全分數最高的路線必為「最安全」；時間最短者標記「最快」或附帶「費時最短」
+      const scored: ScoredRoute[] = computedRoutes.map((route, i) => {
+        let typeLabel: ScoredRoute['typeLabel'] = '平衡'
+        if (i === 0) {
+          typeLabel = '最安全'
+        } else if (route.extraMin === 0) {
+          typeLabel = '最快'
+        } else {
+          typeLabel = '平衡'
+        }
+
+        const description = route.reason || `${route.safety.emoji} 安全評分 ${route.safety.total} 分，沿途 ${route.lightCount} 盞路燈`
+        return {
+          ...route,
+          typeLabel,
+          description,
+        }
+      })
+
       setRoutes(scored)
       setSelectedIdx(0)
       setIsSearchCollapsed(true)
