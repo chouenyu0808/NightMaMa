@@ -28,6 +28,8 @@ export const IconWalk = makeIcon('lucide:footprints')
 export const IconMic = makeIcon('lucide:mic')
 export const IconAlertTriangle = makeIcon('lucide:triangle-alert')
 export const IconSos = makeIcon('lucide:siren')
+/** 搖晃求救開關用；lucide 的 vibrate 就是手機左右震動的圖示 */
+export const IconVibrate = makeIcon('lucide:vibrate')
 export const IconCompass = makeIcon('lucide:compass')
 export const IconVolume2 = makeIcon('lucide:volume-2')
 export const IconVolumeX = makeIcon('lucide:volume-x')

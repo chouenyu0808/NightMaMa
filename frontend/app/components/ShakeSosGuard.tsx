@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { IconAlertTriangle, IconX } from '@/components/Icons'
+import { createPortal } from 'react-dom'
+import { IconAlertTriangle, IconVibrate, IconX } from '@/components/Icons'
 import { triggerSos } from '@/lib/emergencyContacts'
 import { useShakeDetection } from '@/lib/useShakeDetection'
 
@@ -13,6 +14,9 @@ interface ShakeSosGuardProps {
 
 /** 誤觸的代價很高，但真的遇險時又沒空按確認。倒數＋可取消是兩者間的折衷。 */
 const COUNTDOWN_SEC = 5
+
+/** 記住使用者關掉過，下次就不要又自動開 */
+const PREF_KEY = 'nightmama_shake_sos'
 
 /**
  * 猛烈搖晃手機 → 倒數 5 秒 → 自動發出求救。
@@ -26,6 +30,8 @@ export default function ShakeSosGuard({ currentPos, destination }: ShakeSosGuard
   const [pending, setPending] = useState(false)
   const [countdown, setCountdown] = useState(COUNTDOWN_SEC)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+  // Portal 需要 document，SSR 期間不存在
+  const [mounted, setMounted] = useState(false)
 
   const onShake = useCallback(() => {
     // 已經在倒數中就不要重複觸發
@@ -34,11 +40,36 @@ export default function ShakeSosGuard({ currentPos, destination }: ShakeSosGuard
 
   const { permission, requestPermission } = useShakeDetection(enabled && !pending, onShake)
 
+  useEffect(() => { queueMicrotask(() => setMounted(true)) }, [])
+
+  /**
+   * 預設開啟。
+   *
+   * Android 與桌面版不需要授權，requestPermission() 會直接回 granted，
+   * 所以可以在掛載時自動啟用。iOS 13+ 規定必須在使用者手勢裡呼叫，
+   * 這裡會拿到 denied 或直接拋錯 —— 那種情況就維持關閉，由使用者
+   * 自己點開關（點擊本身就是手勢，那時才要得到授權）。
+   *
+   * 使用者手動關掉過就尊重他的選擇，不要每次進導航又自動打開。
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (localStorage.getItem(PREF_KEY) === 'off') return
+
+    let cancelled = false
+    requestPermission().then(p => {
+      if (!cancelled && p === 'granted') setEnabled(true)
+    })
+    return () => { cancelled = true }
+  }, [requestPermission])
+
   const toggle = async () => {
     if (enabled) {
       setEnabled(false)
+      localStorage.setItem(PREF_KEY, 'off')
       return
     }
+    localStorage.removeItem(PREF_KEY)
     // iOS 13+ 必須在使用者手勢裡要授權，所以綁在這個 onClick
     const p = await requestPermission()
     if (p === 'granted') setEnabled(true)
@@ -84,45 +115,70 @@ export default function ShakeSosGuard({ currentPos, destination }: ShakeSosGuard
 
   return (
     <>
-      {/* 開關。放在導航畫面上，使用者要能一眼看出現在有沒有在偵測。 */}
+      {/*
+        整列可點的開關。做成一整條而不是一顆孤立的小藥丸：上方三顆動作鈕
+        是等寬並排的，一顆靠左的小標籤會顯得斷開；整列對齊才收得乾淨，
+        點擊區域也大得多（單手、匆忙時比較好按）。
+      */}
       <button
         onClick={toggle}
         disabled={permission === 'unsupported'}
         style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 12px', borderRadius: 999, cursor:
-            permission === 'unsupported' ? 'not-allowed' : 'pointer',
-          background: enabled ? 'rgba(239,68,68,0.22)' : 'rgba(255,255,255,0.08)',
-          border: `1px solid ${enabled ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.15)'}`,
-          color: enabled ? '#fca5a5' : 'rgba(255,255,255,0.7)',
-          fontSize: 11, fontWeight: 800,
-          opacity: permission === 'unsupported' ? 0.4 : 1,
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '9px 12px', borderRadius: 12, textAlign: 'left',
+          cursor: permission === 'unsupported' ? 'not-allowed' : 'pointer',
+          background: enabled ? 'rgba(239,68,68,0.14)' : 'rgba(255,255,255,0.06)',
+          border: `1px solid ${enabled ? 'rgba(239,68,68,0.45)' : 'rgba(255,255,255,0.12)'}`,
+          opacity: permission === 'unsupported' ? 0.45 : 1,
         }}
       >
-        📳 {permission === 'unsupported'
-          ? '此裝置不支援搖晃'
-          : enabled ? '搖晃求救 已開啟' : '搖晃求救'}
+        <IconVibrate size={15} color={enabled ? '#fca5a5' : 'rgba(255,255,255,0.6)'} />
+
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{
+            display: 'block', fontSize: 12, fontWeight: 800,
+            color: enabled ? '#fca5a5' : 'rgba(255,255,255,0.8)',
+          }}>
+            搖晃求救
+          </span>
+          <span style={{
+            display: 'block', fontSize: 10, marginTop: 1,
+            color: 'rgba(255,255,255,0.45)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {permission === 'unsupported'
+              ? '此裝置不支援動作感測'
+              : permission === 'denied'
+                ? '權限被拒絕，請於瀏覽器開啟動作權限'
+                : enabled
+                  ? '用力搖三秒發出求救 · 螢幕需亮著'
+                  : '點此開啟'}
+          </span>
+        </span>
+
+        {/* 狀態徽章：一眼看出現在到底有沒有在偵測 */}
+        {permission !== 'unsupported' && (
+          <span style={{
+            flexShrink: 0, fontSize: 10, fontWeight: 900, padding: '3px 9px', borderRadius: 999,
+            background: enabled ? '#ef4444' : 'rgba(255,255,255,0.12)',
+            color: enabled ? '#fff' : 'rgba(255,255,255,0.6)',
+          }}>
+            {enabled ? '已開啟' : '關閉'}
+          </span>
+        )}
       </button>
 
-      {enabled && (
-        <div style={{
-          fontSize: 10, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5, marginTop: 4,
-        }}>
-          用力搖晃手機三秒即發出求救。螢幕需保持亮著 —— 熄屏或切換到其他 App 時
-          瀏覽器會暫停偵測。
-        </div>
-      )}
+      {/*
+        倒數視窗與結果提示都用 portal 掛到 document.body。
 
-      {permission === 'denied' && (
-        <div style={{ fontSize: 10, color: '#fbbf24', marginTop: 4, lineHeight: 1.5 }}>
-          動作感測器權限被拒絕。請到瀏覽器設定允許「動作與方向」後重新整理。
-        </div>
-      )}
-
-      {/* 倒數確認 */}
-      {pending && (
+        這個元件掛在導航頁的底部面板裡，而那個面板有 overflow:hidden 與
+        backdrop-filter —— 兩者都會建立 containing block，讓子層的
+        position:fixed 改以面板為基準定位並被裁切。實測畫面下半部
+        （含「我沒事，取消」按鈕）會被切掉。Portal 讓它脫離那個容器。
+      */}
+      {mounted && pending && createPortal(
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 600,
+          position: 'fixed', inset: 0, zIndex: 9000,
           background: 'rgba(8,11,20,0.94)', backdropFilter: 'blur(10px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
         }}>
@@ -159,15 +215,16 @@ export default function ShakeSosGuard({ currentPos, destination }: ShakeSosGuard
               我沒事，取消
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 送出結果 */}
-      {result && (
+      {mounted && result && createPortal(
         <div
           onClick={() => setResult(null)}
           style={{
-            position: 'fixed', left: 16, right: 16, bottom: 90, zIndex: 600,
+            position: 'fixed', left: 16, right: 16, bottom: 90, zIndex: 9000,
             borderRadius: 14, padding: '12px 16px', fontSize: 13, lineHeight: 1.6,
             fontWeight: 700, cursor: 'pointer', color: '#fff',
             background: result.ok ? 'rgba(16,185,129,0.95)' : 'rgba(245,158,11,0.95)',
@@ -176,7 +233,8 @@ export default function ShakeSosGuard({ currentPos, destination }: ShakeSosGuard
         >
           {result.ok ? '✅ ' : '⚠️ '}{result.text}
           <IconX size={12} color="#fff" />
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
