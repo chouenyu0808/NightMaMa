@@ -259,8 +259,6 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
   const router = useRouter()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<AnySpeechRecognition | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
-  const pendingReplyRef = useRef<((data: { text: string; audio?: string }) => void) | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const userIdRef = useRef<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -330,26 +328,13 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     }).catch(() => {}) // silent fail — don't block UI
   }, [])
 
-  // Connect to backend chat WebSocket (if available)
-  useEffect(() => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
-    if (!backendUrl) return
-    try {
-      const ws = new WebSocket(`${backendUrl.replace(/^http/, 'ws')}/stream/${userIdRef.current}`)
-      ws.onmessage = (e) => {
-        try {
-          if (typeof e.data !== 'string') return
-          const data = JSON.parse(e.data)
-          const text = data.type === 'urgent' ? data.message : data.text
-          pendingReplyRef.current?.({ text, audio: data.audio })
-          pendingReplyRef.current = null
-        } catch {}
-      }
-      ws.onerror = () => {}
-      wsRef.current = ws
-      return () => ws.close()
-    } catch {}
-  }, [])
+  // 後端 /stream WebSocket 的連線已移除。
+  //
+  // 文字聊天改為一律走 /api/companion（那裡才有 tools、即時位置與情緒判讀），
+  // 因此這條連線不再有任何接收端 —— 留著只會讓每個開啟陪伴頁的使用者
+  // 平白建立一條到後端的 WebSocket。
+  //
+  // 後端的 /stream 端點本身仍然保留，之後若要做即時位置回傳可以再接上。
 
   // Track live GPS position for voice-triggered route planning (find_lit_road_now etc.)
   useEffect(() => {
@@ -495,7 +480,9 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
           }
         }
       } else if (fc.name === 'find_lit_road_now') {
-        const destinationName = context.destination
+        // 使用者在害怕時可能同時說出目的地（「快帶我去市政府捷運站」）。
+        // 沒說才沿用目前導航的目的地，否則會把人導去別的地方。
+        const destinationName = String(fc.args?.destination || context.destination)
         const destPoint = await geocodeAddress(destinationName)
         if (!destPoint) {
           resultMessage = '別擔心，深呼吸，媽咪這就在線上陪你，先跟我說你現在附近有什麼標的物好嗎？'
@@ -562,20 +549,17 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     setIsThinking(true)
 
     try {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        const { text: reply, audio } = await new Promise<{ text: string; audio?: string }>((resolve, reject) => {
-          pendingReplyRef.current = resolve
-          wsRef.current?.send(JSON.stringify({ type: 'speech', text }))
-          setTimeout(() => reject(new Error('timeout')), 4000)
-        })
-        const aiMsg: Message = { role: 'ai', text: reply, timestamp: Date.now() }
-        setMessages(prev => [...prev, aiMsg])
-        if (audio) playAudio(audio)
-        else speak(reply)
-        return
-      }
-
-      // Fallback: /api/companion — save both messages to Firestore
+      // 文字聊天一律走 /api/companion。
+      //
+      // 先前這裡會優先使用後端的 /stream WebSocket，但那條路徑：
+      //   1. 後端每則回覆都要跑一次 TTS 合成，遠超過這裡設的 4 秒逾時，
+      //      逾時就 reject 進 catch，吐出寫死的罐頭訊息；
+      //   2. 後端的 chat_reply 是另一套簡化提示詞，沒有任何 tools，
+      //      因此規劃路線、緊急求救等能力全部被繞過。
+      // 只要 NEXT_PUBLIC_BACKEND_URL 一設好，這條分支就會把整個
+      // 文字聊天劫走 —— 使用者看到的永遠是罐頭回覆。
+      //
+      // /api/companion — save both messages to Firestore
       saveMessageToFirestore('user', text.trim())
       const res = await fetch('/api/companion', {
         method: 'POST',
@@ -604,17 +588,33 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
         return
       }
 
-      const replyText = data.reply || '寶貝，我有在聽喔！走夜路要多留心四周喔！'
+      const replyText = (data.reply || '').trim()
+      if (!replyText) {
+        // 沒有 action 又沒有文字，代表這次呼叫其實失敗了
+        setMessages(prev => [...prev, {
+          role: 'system',
+          text: '⚠️ AI 這次沒有回應，請再說一次。',
+          timestamp: Date.now(),
+        }])
+        return
+      }
       const aiMsg: Message = { role: 'ai', text: replyText, timestamp: Date.now() }
       setMessages(prev => [...prev, aiMsg])
       saveMessageToFirestore('assistant', replyText)
-    } catch {
-      const errMsg: Message = { role: 'ai', text: '寶貝別擔心，媽咪在線上守護你！記得走大馬路喔！', timestamp: Date.now() }
-      setMessages(prev => [...prev, errMsg])
+    } catch (err) {
+      // 據實顯示錯誤，不要包裝成溫暖的罐頭語句 —— 那會讓使用者以為
+      // AI 有在聽，實際上訊息根本沒送出去。對陪伴功能來說，
+      // 「現在連不上」是使用者必須知道的資訊。
+      console.error('[companion] 送出訊息失敗', err)
+      setMessages(prev => [...prev, {
+        role: 'system',
+        text: '⚠️ 目前連不上 AI 陪伴服務，訊息沒有送出。請檢查網路後再試一次。',
+        timestamp: Date.now(),
+      }])
     } finally {
       setIsThinking(false)
     }
-  }, [isThinking, context, messages, playAudio, speak, saveMessageToFirestore, runToolCall])
+  }, [isThinking, context, messages, saveMessageToFirestore, runToolCall])
 
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

@@ -22,7 +22,9 @@ export const COMPANION_TOOLS: FunctionDeclaration[] = [
   {
     name: 'plan_safe_route',
     description:
-      '規劃一條最安全、避開暗巷小巷子的步行路線到達目的地。當使用者要求「最安全的路線」、「不要走小巷子」時呼叫。',
+      '規劃一條最安全、避開暗巷小巷子的步行路線到達指定目的地。' +
+      '**只要使用者說出了想去的地點就用這個**，包含他同時表達害怕的情況'
+      + '（例如「我好怕，快帶我去市政府捷運站」也要用這個，並把地點填進 destination）。',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -55,7 +57,9 @@ export const COMPANION_TOOLS: FunctionDeclaration[] = [
   {
     name: 'find_lit_road_now',
     description:
-      '緊急情況：立刻從使用者目前位置規劃一條路燈最多、最明亮的大馬路路線。當使用者表達害怕、附近很暗、緊張焦慮、要求快點帶他走到大馬路時呼叫。',
+      '緊急情況：立刻從使用者目前位置規劃一條路燈最多、最明亮的大馬路路線，前往目前導航中的目的地。' +
+      '**只有在使用者沒有說出任何具體地點時才用這個**，例如「好暗好可怕」「快帶我走大馬路」。' +
+      '若他有講出地點（捷運站、某條路、某個店名），改用 plan_safe_route。',
     parameters: { type: 'OBJECT', properties: {} },
   },
   {
