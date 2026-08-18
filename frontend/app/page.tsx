@@ -173,6 +173,11 @@ export default function HomePage() {
           updateUserGpsMarker(userGpsRef.current)
         }
 
+        // 社區通報熱點在地圖一載入就畫出來。
+        // 先前只在 drawRoutes 裡呼叫，等於要先搜尋過路線才看得到 ——
+        // 但「這附近有人回報過不安」正是使用者還沒決定路線時最需要的資訊。
+        drawAnxietyReportMarkers(mapInstance.current).catch(() => {})
+
         setTimeout(() => {
           if (mapInstance.current) {
             google.maps.event.trigger(mapInstance.current, 'resize')

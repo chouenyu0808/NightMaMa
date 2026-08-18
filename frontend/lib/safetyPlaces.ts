@@ -240,12 +240,21 @@ export function drawSafetyPlaceMarkers(
 }
 
 /** /api/report 回傳的通報項目。內容為使用者提交，一律視為不可信字串。 */
+/**
+ * /api/report 回傳的通報項目。內容為使用者提交，一律視為不可信字串。
+ *
+ * 欄位名同時支援兩組：Next.js 的記憶體儲存用 reason/reported_at，
+ * Python 後端的 Firestore 記錄用 category/timestamp。後端網址一設好，
+ * 回傳就會從前者換成後者 —— 只認一組會讓標題與時間變成空白。
+ */
 interface AnxietyReportPin {
   id?: string
   lat: number | string
   lng: number | string
   reason?: string
   reported_at?: string
+  category?: string
+  timestamp?: number
 }
 
 /** 在地圖上繪製「社區不安通報治安熱點」標記 */
@@ -272,7 +281,7 @@ export async function drawAnxietyReportMarkers(
         position: { lat, lng },
         map,
         // Marker title 是純文字屬性，不會被當成 HTML 解析
-        title: `⚠️ 不安通報：${rep.reason ?? ''}`,
+        title: `⚠️ 不安通報：${rep.reason ?? rep.category ?? ''}`,
         icon: {
           url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="%23DC2626" stroke="%23FFFFFF" stroke-width="2.5"/><text x="17" y="22" font-size="16" text-anchor="middle">⚠️</text></svg>',
           scaledSize: new google.maps.Size(30, 30),
@@ -282,7 +291,7 @@ export async function drawAnxietyReportMarkers(
       })
 
       marker.addListener('click', () => {
-        const reportedAt = new Date(rep.reported_at ?? '')
+        const reportedAt = new Date(rep.reported_at ?? rep.timestamp ?? '')
         const timeStr = Number.isNaN(reportedAt.getTime())
           ? '時間不明'
           : reportedAt.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit', month: 'numeric', day: 'numeric' })
@@ -291,7 +300,7 @@ export async function drawAnxietyReportMarkers(
             <div style="font-weight: 800; font-size: 13px; color: #DC2626; margin-bottom: 3px;">
               ⚠️ 夜間治安不安通報熱點
             </div>
-            <div style="font-size: 15px; font-weight: 800; color: #111827;">${escapeHtml(rep.reason)}</div>
+            <div style="font-size: 15px; font-weight: 800; color: #111827;">${escapeHtml(rep.reason ?? rep.category ?? '未分類')}</div>
             <div style="font-size: 12px; color: #4B5563; margin-top: 4px;">通報時間：${escapeHtml(timeStr)}</div>
             <div style="font-size: 11px; color: #DC2626; margin-top: 6px; font-weight: 700; background: #FEE2E2; padding: 3px 8px; border-radius: 6px; display: inline-block;">
               ● 社區通報紀錄點（僅供參考，未納入路線計算）
