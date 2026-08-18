@@ -55,10 +55,16 @@ class ScoreResponse(BaseModel):
 
 
 class SOSRequest(BaseModel):
+    """SOS 觸發。
+
+    lat/lng 可以是 None：室內或高樓間常常在倒數結束前拿不到 GPS，而
+    「拿不到位置」不該讓求救整個送不出去 —— 沒有座標的警報仍然有價值，
+    通知裡會明講未取得位置，也不會附上一張指錯地方的地圖卡片。
+    """
     user_id: str
     session_id: str = "current"
-    lat: float
-    lng: float
+    lat: float | None = None
+    lng: float | None = None
     safety_score: float | None = None
 
 

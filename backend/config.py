@@ -17,7 +17,20 @@ class Settings(BaseSettings):
     bq_table_lights: str = "StreetLight"
     bq_dataset_cameras: str = "cctv"
     bq_table_cameras: str = "cctv"
+    # OSM 路網取樣點與路口，供 Prospect / Escape 評分使用
+    bq_dataset_roads: str = "osm_taipei"
+    bq_table_roads: str = "roads"
+    bq_table_junctions: str = "junctions"
     pubsub_topic_sos: str = "sos-triggered"
+
+    # ─── SOS 通知（Pub/Sub push → /internal/pubsub/sos）────────────────
+    # LINE Messaging API 的 Channel Access Token。推播緊急聯絡人用。
+    line_channel_access_token: str = ""
+    # Pub/Sub push subscription 帶來的 OIDC token 必須符合這兩個值才受理。
+    # 兩者任一為空時，/internal/pubsub/sos 一律回 503 並記錄錯誤 —— 這支端點
+    # 會發出 LINE 訊息，設定不全就開放等於送人一個免費簡訊閘道。
+    pubsub_push_audience: str = ""      # 通常就是後端 Cloud Run 服務網址
+    pubsub_push_sa_email: str = ""      # 建立 subscription 時指定的服務帳號
 
     # 預設只允許本機開發來源。/score 與 /routes 每次呼叫都會產生 BigQuery 與
     # Places API 費用，開放 "*" 等於讓任何網站都能從訪客瀏覽器燒你的額度。
