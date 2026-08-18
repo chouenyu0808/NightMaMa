@@ -8,7 +8,7 @@ import { loadAddresses } from '@/lib/addresses'
 import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMarkers, haversineM, type SafetyPlace } from '@/lib/safetyPlaces'
 import { NavBar } from '@/app/components/NavBar'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
-import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget, IconHome, IconArrowUpDown, IconArrowRight, IconX, IconUser } from '@/components/Icons'
+import { IconMap, IconMic, IconSos, IconShield, IconZap, IconScale, IconBulb, IconCamera, IconStore, IconBadge, IconWalk, IconAlertTriangle, IconPin, IconPencil, IconSearch, IconTarget, IconHome, IconArrowUpDown, IconArrowRight, IconX, IconUser, IconBus, IconBriefcase } from '@/components/Icons'
 
 /** 定位取得前的預設中心點：台北車站 */
 const TAIPEI_STATION = { lat: 25.0478, lng: 121.5170 }
@@ -48,7 +48,7 @@ export interface ScoredRoute extends RouteResult {
 function typeIconFor(label: '最安全' | '最快' | '平衡' | '大眾運輸', size?: number) {
   if (label === '最安全') return <IconShield size={size} />
   if (label === '最快') return <IconZap size={size} />
-  if (label === '大眾運輸') return <span style={{ fontSize: size || 14 }}>🚌</span>
+  if (label === '大眾運輸') return <IconBus size={size} />
   return <IconScale size={size} />
 }
 
@@ -696,30 +696,6 @@ export default function HomePage() {
                 >
                   <IconAlertTriangle size={14} color="#f87171" /> 不安通報
                 </button>
-
-                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <div style={{
-                    background: 'rgba(30, 27, 75, 0.9)', border: '1px solid rgba(167, 139, 250, 0.4)',
-                    borderRadius: '12px 12px 2px 12px', padding: '3px 8px', fontSize: 10, fontWeight: 700,
-                    color: '#e0e7ff', marginBottom: 4, whiteSpace: 'nowrap'
-                  }}>
-                    我在這，陪你走 💜
-                  </div>
-                  <div style={{
-                    width: 44, height: 44, borderRadius: '50%',
-                    background: 'radial-gradient(circle at 35% 35%, #fde047 0%, #eab308 70%)',
-                    boxShadow: '0 0 16px rgba(250, 204, 21, 0.6)',
-                    position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <div style={{
-                      width: 22, height: 22, borderRadius: '50%',
-                      background: 'radial-gradient(circle at 30% 30%, #c084fc, #7e22ce)',
-                      position: 'absolute', right: 2, bottom: 2, display: 'flex', alignItems: 'center', justifyContent: 'center'
-                    }}>
-                      <span style={{ fontSize: 8 }}>🥰</span>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -811,7 +787,7 @@ export default function HomePage() {
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  🏠 一鍵回家
+                  <IconHome size={12} /> 一鍵回家
                 </button>
                 <button
                   onClick={() => {
@@ -830,7 +806,7 @@ export default function HomePage() {
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  🏢 一鍵去公司
+                  <IconBriefcase size={12} /> 一鍵去公司
                 </button>
               </div>
 
@@ -875,7 +851,9 @@ export default function HomePage() {
                   background: 'rgba(139, 92, 246, 0.25)', padding: '2px 8px', borderRadius: 8,
                   border: '1px solid rgba(139, 92, 246, 0.4)'
                 }}>
-                  {origin === '我的位置' ? '📍 我的位置' : origin.replace(/^\d{3,5}/, '').replace(/^臺北市|^台北市|^新北市/, '').slice(0, 6)}
+                  {origin === '我的位置'
+                    ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><IconPin size={10} />我的位置</span>
+                    : origin.replace(/^\d{3,5}/, '').replace(/^臺北市|^台北市|^新北市/, '').slice(0, 6)}
                 </span>
 
                 <IconArrowRight size={12} color="rgba(255,255,255,0.4)" style={{ flexShrink: 0 }} />
@@ -1011,17 +989,17 @@ export default function HomePage() {
               {/* Compact Unified Safety Stats Row */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    💡 {fmtCount(selectedRoute.lightCount)} 路燈
+                  <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <IconBulb size={11} /> {fmtCount(selectedRoute.lightCount)} 路燈
                   </span>
-                  <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    📹 {fmtCount(selectedRoute.cameraCount)} 監視器
+                  <span style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <IconCamera size={11} /> {fmtCount(selectedRoute.cameraCount)} 監視器
                   </span>
-                  <span style={{ background: 'rgba(249,115,22,0.18)', color: '#f97316', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    🏪 {fmtCount(selectedRoute.storeCount)} 家超商
+                  <span style={{ background: 'rgba(249,115,22,0.18)', color: '#f97316', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <IconStore size={11} /> {fmtCount(selectedRoute.storeCount)} 家超商
                   </span>
-                  <span style={{ background: 'rgba(30,58,138,0.35)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
-                    👮 {fmtCount(selectedRoute.policeCount)} 派出所
+                  <span style={{ background: 'rgba(30,58,138,0.35)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <IconBadge size={11} /> {fmtCount(selectedRoute.policeCount)} 派出所
                   </span>
                 </div>
                 <div style={{
@@ -1042,8 +1020,9 @@ export default function HomePage() {
                   border: '1px solid rgba(245, 158, 11, 0.45)',
                   color: '#fbbf24', borderRadius: 12, padding: '8px 10px',
                   fontSize: 11, lineHeight: 1.5, marginBottom: 10, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                  ⚠️ {scoreWarning}。路線仍可正常導航，但夜間安全評分（路燈／監視器密度）此次未能計算。
+                  <IconAlertTriangle size={12} /> {scoreWarning}。路線仍可正常導航，但夜間安全評分（路燈／監視器密度）此次未能計算。
                 </div>
               )}
 
@@ -1061,7 +1040,7 @@ export default function HomePage() {
                   {/* Header Row */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ fontSize: 12, fontWeight: 800, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>🚌 大眾運輸轉乘進度</span>
+                      <IconBus size={13} /><span>大眾運輸轉乘進度</span>
                     </div>
                     <span style={{ fontSize: 11, background: '#0284c7', color: 'white', padding: '2px 9px', borderRadius: 8, fontWeight: 800 }}>
                       {selectedRoute.transitLegs?.find(l => l.mode === 'BUS')?.lineName || '公車 / 捷運'}

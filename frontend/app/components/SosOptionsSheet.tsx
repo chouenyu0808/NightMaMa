@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import {
-  IconPhoneCall, IconAlertTriangle, IconPin, IconShield, IconX, IconUser,
+  IconPhoneCall, IconAlertTriangle, IconPin, IconShield, IconX, IconUser, IconVideo,
 } from '@/components/Icons'
 import { primaryContact, sendLineNotification } from '@/lib/emergencyContacts'
 
@@ -82,7 +82,7 @@ export default function SosOptionsSheet({
     </button>
   )
 
-  const actionBtn = (label: string, sub: string, color: string, onClick: () => void, disabled = false) => (
+  const actionBtn = (icon: React.ReactNode, label: string, sub: string, color: string, onClick: () => void, disabled = false) => (
     <button
       onClick={onClick}
       disabled={disabled}
@@ -93,7 +93,7 @@ export default function SosOptionsSheet({
         display: 'flex', flexDirection: 'column', gap: 3,
       }}
     >
-      <span style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{label}</span>
+      <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>{icon}{label}</span>
       <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', lineHeight: 1.4 }}>{sub}</span>
     </button>
   )
@@ -163,7 +163,8 @@ export default function SosOptionsSheet({
             )}
 
             {actionBtn(
-              contact?.phone ? `📞 撥打給 ${contact.name}` : '📞 撥打給緊急聯絡人',
+              <IconPhoneCall size={14} color="currentColor" />,
+              contact?.phone ? `撥打給 ${contact.name}` : '撥打給緊急聯絡人',
               contact?.phone ? contact.phone : '尚未設定電話號碼，請先到「設定」頁填寫',
               'linear-gradient(135deg,#10b981,#047857)',
               () => { if (contact?.phone) window.location.assign(`tel:${contact.phone}`) },
@@ -171,7 +172,8 @@ export default function SosOptionsSheet({
             )}
 
             {actionBtn(
-              isSending ? '傳送中…' : '📍 用 LINE 傳送我的即時位置',
+              <IconPin size={14} color="currentColor" />,
+              isSending ? '傳送中…' : '用 LINE 傳送我的即時位置',
               contact?.lineUserId ? `自動推播給 ${contact.name}` : '開啟 LINE 並選擇收件人送出',
               'linear-gradient(135deg,#06C755,#04a344)',
               shareLocation,
@@ -193,21 +195,24 @@ export default function SosOptionsSheet({
         {tab === 'police' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {actionBtn(
-              '📞 撥打 110 報警',
+              <IconPhoneCall size={14} color="currentColor" />,
+              '撥打 110 報警',
               '直接接通警察局勤務指揮中心',
               'linear-gradient(135deg,#ef4444,#b91c1c)',
               () => { window.location.assign('tel:110') }
             )}
 
             {actionBtn(
-              '📹 110 視訊報案',
+              <IconVideo size={14} color="currentColor" />,
+              '110 視訊報案',
               '開啟警政署官方視訊報案服務',
               'linear-gradient(135deg,#3b82f6,#1d4ed8)',
               () => window.open('https://www.npa.gov.tw/', '_blank', 'noopener,noreferrer')
             )}
 
             {actionBtn(
-              '📞 撥打 113 保護專線',
+              <IconPhoneCall size={14} color="currentColor" />,
+              '撥打 113 保護專線',
               '家暴、性侵、兒少保護專線',
               'linear-gradient(135deg,#8b5cf6,#6d28d9)',
               () => { window.location.assign('tel:113') }

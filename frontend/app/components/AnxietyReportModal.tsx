@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { IconAlertTriangle, IconUser, IconBulb, IconVolume2, IconShield } from '@/components/Icons'
+import { IconAlertTriangle, IconUser, IconBulb, IconVolume2, IconShield, IconX } from '@/components/Icons'
 import { sendLineNotification } from '@/lib/emergencyContacts'
 import { getUserId } from '@/lib/user'
 
@@ -123,9 +123,9 @@ export default function AnxietyReportModal({
           </div>
           <button
             onClick={onClose}
-            style={{ background: '#F3F4F6', border: 'none', borderRadius: '50%', width: 32, height: 32, fontSize: 16, cursor: 'pointer', color: '#6B7280' }}
+            style={{ background: '#F3F4F6', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', color: '#6B7280', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            ✕
+            <IconX size={16} />
           </button>
         </div>
 

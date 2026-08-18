@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { NavBar } from '@/app/components/NavBar'
-import { IconSettings, IconHeart } from '@/components/Icons'
+import {
+  IconSettings, IconHeart, IconHome, IconBriefcase, IconCheckCircle, IconSave, IconLink,
+  IconSend, IconTrash, IconMoon, IconBulb, IconCamera, IconBot, IconMap, IconClipboard,
+} from '@/components/Icons'
 import {
   loadContacts,
   saveContacts,
@@ -182,14 +185,14 @@ export default function SettingsPage() {
 
         {/* 常用地址設定 */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>🏠 常用地址設定 (快捷一鍵帶入)</div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}><IconHome size={16} /> 常用地址設定 (快捷一鍵帶入)</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 14, lineHeight: 1.6 }}>
             預先設定您的住家與公司/學校地址，搜尋路線時只需點選「快捷標籤」，即可自動填入目的地進行安心路線規劃！
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', marginBottom: 6 }}>🏠 住家地址</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}><IconHome size={13} /> 住家地址</div>
               <input
                 className="input-field"
                 placeholder="例如：臺北市信義區市府路1號"
@@ -198,7 +201,7 @@ export default function SettingsPage() {
               />
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399', marginBottom: 6 }}>🏢 公司 / 學校地址</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#34d399', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}><IconBriefcase size={13} /> 公司 / 學校地址</div>
               <input
                 className="input-field"
                 placeholder="例如：臺北市大安區羅斯福路四段1號"
@@ -207,8 +210,8 @@ export default function SettingsPage() {
               />
             </div>
 
-            <button className="btn-primary" onClick={saveAddresses} style={{ marginTop: 4 }}>
-              {addressSaved ? '✅ 常用地址已儲存！' : '💾 儲存常用地址'}
+            <button className="btn-primary" onClick={saveAddresses} style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              {addressSaved ? <><IconCheckCircle size={15} /> 常用地址已儲存！</> : <><IconSave size={15} /> 儲存常用地址</>}
             </button>
           </div>
         </div>
@@ -226,8 +229,8 @@ export default function SettingsPage() {
             background: 'rgba(6,199,85,0.08)', border: '1px solid rgba(6,199,85,0.3)',
             borderRadius: 16, padding: 14, marginBottom: 14,
           }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#4ade80', marginBottom: 6 }}>
-              🔗 邀請聯絡人綁定 LINE（可自動推播）
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#4ade80', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <IconLink size={14} /> 邀請聯絡人綁定 LINE（可自動推播）
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 10 }}>
               產生邀請連結傳給對方，他點開後用 LINE 登入即可完成綁定。
@@ -324,8 +327,8 @@ export default function SettingsPage() {
               <div style={{ fontSize: 12, color: '#f87171', fontWeight: 600 }}>{inputError}</div>
             )}
 
-            <button className="btn-primary" onClick={saveContact} style={{ marginTop: 4 }}>
-              {saved ? '✅ 已成功綁定緊急聯絡人！' : '+ 儲存緊急聯絡人'}
+            <button className="btn-primary" onClick={saveContact} style={{ marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              {saved ? <><IconCheckCircle size={15} /> 已成功綁定緊急聯絡人！</> : '+ 儲存緊急聯絡人'}
             </button>
           </div>
         </div>
@@ -333,7 +336,7 @@ export default function SettingsPage() {
         {/* Contacts list */}
         {contacts.length > 0 && (
           <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-            <div style={{ fontWeight: 700, marginBottom: 14 }}>📋 緊急聯絡人</div>
+            <div style={{ fontWeight: 700, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}><IconClipboard size={16} /> 緊急聯絡人</div>
 
             {testResult && (
               <div style={{
@@ -365,14 +368,14 @@ export default function SettingsPage() {
                       onClick={() => sendTestNotification(contact.lineUserId)}
                       disabled={isSendingTest}
                     >
-                      📤
+                      <IconSend size={14} />
                     </button>
                     <button
                       className="btn-icon"
                       style={{ width: 36, height: 36, fontSize: 14, background: 'rgba(239,68,68,0.2)' }}
                       onClick={() => removeContact(contact.id)}
                     >
-                      🗑️
+                      <IconTrash size={14} />
                     </button>
                   </div>
                 </div>
@@ -383,12 +386,12 @@ export default function SettingsPage() {
 
         {/* About */}
         <div className="glass" style={{ padding: 20, borderRadius: 20 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>🌙 關於 NightMaMa</div>
+          <div style={{ fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><IconMoon size={16} /> 關於 NightMaMa</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
-            <div>🗺️ 路燈資料：台北市 145,919 盞路燈（data.taipei）</div>
-            <div>📹 CCTV 資料：台北市 5,036 支警察局監視器</div>
-            <div>🤖 AI 陪聊：Google Gemini 2.5 Flash</div>
-            <div>🗺️ 地圖路線：Google Maps Directions API</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconBulb size={13} /> 路燈資料：台北市 145,919 盞路燈（data.taipei）</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconCamera size={13} /> CCTV 資料：台北市 5,036 支警察局監視器</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconBot size={13} /> AI 陪聊：Google Gemini 2.5 Flash</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><IconMap size={13} /> 地圖路線：Google Maps Directions API</div>
           </div>
         </div>
       </div>

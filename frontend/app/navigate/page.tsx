@@ -237,6 +237,25 @@ function NavigateContent() {
   const [showArrival, setShowArrival] = useState(false)
   const hasArrivedRef = useRef(false)
 
+  // ponytail: demo-only shortcut to snap to destination without walking there; remove if this becomes a real debug menu
+  const simulateArrival = useCallback(() => {
+    const destPoint = routePointsRef.current[routePointsRef.current.length - 1]
+    if (!destPoint) return
+    setUserPos(destPoint)
+    setRealtimeDistanceM(0)
+    setRemainingSec(0)
+    if (mapInstance.current) {
+      mapInstance.current.panTo(destPoint)
+      mapInstance.current.setZoom(18.3)
+    }
+    if (userMarkerRef.current) userMarkerRef.current.setPosition(destPoint)
+    polylineRef.current?.setPath([destPoint])
+    if (!hasArrivedRef.current) {
+      hasArrivedRef.current = true
+      setShowArrival(true)
+    }
+  }, [])
+
   // ─── Split Screen AI Companion (body is the shared CompanionContent component) ─
   const [showCompanionSplit, setShowCompanionSplit] = useState(false)
 
@@ -905,11 +924,30 @@ function NavigateContent() {
           }}>
             {/* Left: Live Pulsing Green Dot + Navigation Status + Time/Dist */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: '#10b981', boxShadow: '0 0 8px #10b981',
-                flexShrink: 0,
-              }} />
+              <div
+                onClick={() => {
+                  // ponytail: demo-only shortcut to snap to destination without walking there; remove if this becomes a real debug menu
+                  const destPoint = routePointsRef.current[routePointsRef.current.length - 1]
+                  if (!destPoint) return
+                  setUserPos(destPoint)
+                  setRealtimeDistanceM(0)
+                  setRemainingSec(0)
+                  if (mapInstance.current) {
+                    mapInstance.current.panTo(destPoint)
+                    mapInstance.current.setZoom(18.3)
+                  }
+                  if (userMarkerRef.current) userMarkerRef.current.setPosition(destPoint)
+                  polylineRef.current?.setPath([destPoint])
+                  if (!hasArrivedRef.current) {
+                    hasArrivedRef.current = true
+                    setShowArrival(true)
+                  }
+                }}
+                style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: '#10b981', boxShadow: '0 0 8px #10b981',
+                  flexShrink: 0,
+                }} />
               <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399', whiteSpace: 'nowrap' }}>導航中</span>
               <span style={{ fontSize: 13, fontWeight: 900, color: 'white', whiteSpace: 'nowrap' }}>{formatDuration(remainingSec)}</span>
               <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>({formatDistance(realtimeDistanceM)})</span>

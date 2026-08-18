@@ -11,7 +11,7 @@ import { primaryContact, sendLineNotification } from '@/lib/emergencyContacts'
 import {
   IconPhoneOff, IconChevronLeft, IconSearch, IconPhoneCall, IconCalendar, IconMenu,
   IconPlus, IconCamera, IconImage, IconSmile, IconMic, IconMicOff, IconVolume2,
-  IconAlertTriangle, IconMessageCircle,
+  IconAlertTriangle, IconMessageCircle, IconCheckCircle,
 } from '@/components/Icons'
 import { getUserId } from '@/lib/user'
 
@@ -1448,7 +1448,7 @@ CURRENT CONTEXT
             padding: '26px 22px', textAlign: 'center',
             border: '1px solid rgba(239,68,68,0.5)', color: '#fff',
           }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>🚨</div>
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: '#ef4444' }}><IconAlertTriangle size={40} /></div>
             <div style={{ fontSize: 19, fontWeight: 900, color: '#ef4444', marginBottom: 8 }}>
               即將通知緊急聯絡人
             </div>
@@ -1490,7 +1490,9 @@ CURRENT CONTEXT
           background: alertResult.ok ? 'rgba(16,185,129,0.95)' : 'rgba(245,158,11,0.95)',
           color: '#fff', boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
         }} onClick={() => setAlertResult(null)}>
-          {alertResult.ok ? '✅ ' : '⚠️ '}{alertResult.text}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {alertResult.ok ? <IconCheckCircle size={14} /> : <IconAlertTriangle size={14} />}{alertResult.text}
+          </span>
         </div>
       )}
 

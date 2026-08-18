@@ -1,5 +1,6 @@
 import { verifyInviteToken } from '@/lib/inviteToken'
 import Link from 'next/link'
+import { IconAlertTriangle, IconMoon } from '@/components/Icons'
 
 /**
  * 緊急聯絡人收到邀請連結後看到的頁面。
@@ -85,7 +86,9 @@ function Shell({
         padding: '30px 24px 28px',
         border: `1px solid ${tone === 'error' ? 'rgba(239,68,68,0.35)' : 'rgba(6,199,85,0.3)'}`,
       }}>
-        <div style={{ fontSize: 30, marginBottom: 10 }}>{tone === 'error' ? '⚠️' : '🌙'}</div>
+        <div style={{ marginBottom: 10, color: tone === 'error' ? '#f87171' : '#fbbf24' }}>
+          {tone === 'error' ? <IconAlertTriangle size={30} /> : <IconMoon size={30} />}
+        </div>
         <h1 style={{
           fontSize: 21, fontWeight: 900, margin: '0 0 14px',
           color: tone === 'error' ? '#f87171' : '#fff',

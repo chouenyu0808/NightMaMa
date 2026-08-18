@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { IconCheckCircle, IconX } from '@/components/Icons'
+import { IconCheckCircle, IconX, IconHeart, IconStar, IconStarOutline } from '@/components/Icons'
 import { primaryContact, sendLineNotification } from '@/lib/emergencyContacts'
 import { getUserId } from '@/lib/user'
 
@@ -150,9 +150,10 @@ export default function ArrivalRatingModal({
             cursor: isNotifying ? 'wait' : 'pointer', opacity: isNotifying ? 0.6 : 1,
           }}
         >
-          {isNotifying ? '傳送中…' : contact
-            ? `💚 回報平安給 ${contact.name}`
-            : '💚 用 LINE 回報平安'}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {!isNotifying && <IconHeart size={15} />}
+            {isNotifying ? '傳送中…' : contact ? `回報平安給 ${contact.name}` : '用 LINE 回報平安'}
+          </span>
         </button>
 
         {notifyMsg && (
@@ -185,13 +186,14 @@ export default function ArrivalRatingModal({
                 aria-label={`${v} 分：${RATING_LABELS[v]}`}
                 style={{
                   width: 52, height: 52, borderRadius: 14, cursor: isSaving ? 'wait' : 'pointer',
-                  fontSize: 26, lineHeight: 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: (hovered || rating) >= v ? '1.5px solid #fbbf24' : '1px solid rgba(255,255,255,0.12)',
                   background: (hovered || rating) >= v ? 'rgba(251,191,36,0.18)' : 'rgba(255,255,255,0.04)',
+                  color: '#fbbf24',
                   transition: 'all 0.12s ease',
                 }}
               >
-                {(hovered || rating) >= v ? '⭐' : '☆'}
+                {(hovered || rating) >= v ? <IconStar size={24} /> : <IconStarOutline size={24} />}
               </button>
             ))}
           </div>
