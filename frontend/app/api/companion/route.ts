@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { COMPANION_TOOLS_PAYLOAD } from '@/lib/companionTools'
 
 // 依序嘗試，第一個成功回應的就採用。
 //
@@ -34,6 +35,14 @@ export async function POST(req: NextRequest) {
 
     let lastError = ''
 
+    // 即時座標讓 AI 知道使用者「現在在哪」，而不只是起訖點名稱。
+    // 先前完全沒傳，AI 對位置一無所知。
+    const loc = context.location
+    const locationLine =
+      loc && typeof loc.lat === 'number' && typeof loc.lng === 'number'
+        ? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`
+        : '尚未取得定位'
+
     // Build prompt for Gemini
     const systemInstruction = `你是「媽咪」，一個夜間步行陪伴好媽媽、好朋友。
 【重要回應格式與長度規則】
@@ -42,11 +51,23 @@ export async function POST(req: NextRequest) {
 3. 針對使用者的問題或上傳的照片直接簡短回答（如問晚餐吃什麼、照片風險分析等）。
 4. 如使用者表達害怕，給予簡短溫暖關懷，並提醒可隨時點擊 SOS。
 
+【判讀使用者情緒】
+從對話語氣判斷對方的狀態（放鬆／有點緊張／害怕／恐慌），並據此調整回應與行動：
+- 放鬆：正常閒聊即可。
+- 有點緊張：溫暖安撫，必要時主動提議帶他走亮一點的路。
+- 害怕：先安撫，並呼叫 find_lit_road_now 立刻帶他走大馬路。
+- 明確描述人身威脅（有人跟蹤、有人抓我、快報警）：立刻呼叫 trigger_emergency_alert。
+不要問「你要不要我幫你？」就停住 —— 該行動時直接呼叫對應的工具，再用一句話告訴他你做了什麼。
+
+【可用工具】
+你可以實際規劃路線與發出求救，不是只能用講的。需要時直接呼叫對應函式。
+
 【目前路線上下文】
 - 出發地：${context.origin || '我的位置'}
 - 目的地：${context.destination || '目的地'}
 - 安全評分：${typeof context.safetyScore === 'number' ? `${context.safetyScore}/100` : '尚未取得（請勿自行編造分數）'}
-- 剩餘時間：約 ${context.durationMin || 5} 分鐘`
+- 剩餘時間：約 ${context.durationMin || 5} 分鐘
+- 目前位置：${locationLine}`
 
     // Multimodal Photo Inspection Branch
     if (imageData && imageData.startsWith('data:image')) {
@@ -111,14 +132,28 @@ export async function POST(req: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+            tools: COMPANION_TOOLS_PAYLOAD,
           }),
         })
 
         if (res.ok) {
           const data = await res.json()
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-          if (text && text.trim()) {
-            return NextResponse.json({ reply: text.trim() })
+          const parts = data.candidates?.[0]?.content?.parts ?? []
+
+          // 模型決定要行動時會回 functionCall。實際執行需要瀏覽器端的
+          // GPS、地理編碼與導航，所以這裡把它原樣交還給前端執行。
+          const call = parts.find((p: { functionCall?: unknown }) => p.functionCall)?.functionCall
+          if (call?.name) {
+            const spoken = parts.map((p: { text?: string }) => p.text ?? '').join('').trim()
+            return NextResponse.json({
+              reply: spoken,
+              action: { name: call.name, args: call.args ?? {} },
+            })
+          }
+
+          const text = parts.map((p: { text?: string }) => p.text ?? '').join('').trim()
+          if (text) {
+            return NextResponse.json({ reply: text })
           }
         } else {
           const errData = await res.json().catch(() => ({}))

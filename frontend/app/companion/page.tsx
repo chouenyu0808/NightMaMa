@@ -6,6 +6,8 @@ import { Suspense } from 'react'
 
 import { NavBar } from '@/app/components/NavBar'
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
+import { COMPANION_TOOLS } from '@/lib/companionTools'
+import { primaryContact, sendLineNotification } from '@/lib/emergencyContacts'
 import {
   IconPhoneOff, IconChevronLeft, IconSearch, IconPhoneCall, IconCalendar, IconMenu,
   IconPlus, IconCamera, IconImage, IconSmile, IconMic, IconMicOff, IconVolume2,
@@ -264,6 +266,18 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
   const fileInputRef = useRef<HTMLInputElement>(null)
   const userLocationRef = useRef<{ lat: number; lng: number } | null>(null)
 
+  /**
+   * AI 判斷需要求救時，先進入待送出狀態跑倒數，而不是立刻發出。
+   * 模型有機會誤判，讓一段對話就無條件驚動聯絡人不可接受；
+   * 但要求使用者按確認，在真的遇到危險時又太慢。倒數＋可取消是折衷。
+   */
+  const [pendingAlert, setPendingAlert] = useState<{
+    reason: string
+    location: { lat: number; lng: number } | null
+  } | null>(null)
+  const [alertCountdown, setAlertCountdown] = useState(5)
+  const [alertResult, setAlertResult] = useState<{ ok: boolean; text: string } | null>(null)
+
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE])
   const [input, setInput] = useState('')
   const [isListening, setIsListening] = useState(false)
@@ -376,6 +390,170 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     } catch {}
   }, [playAudio])
 
+  /** 實際把求救訊息送給緊急聯絡人。 */
+  const dispatchEmergencyAlert = useCallback(async (
+    reason: string,
+    location: { lat: number; lng: number } | null
+  ) => {
+    const contact = primaryContact()
+    const mapsUrl = location ? `https://maps.google.com/?q=${location.lat},${location.lng}` : ''
+    const message =
+      `🚨【NightMaMa 緊急求救】\n${reason}\n\n` +
+      (location ? `📍 我的即時位置：${mapsUrl}\n` : `📍 定位失敗，未能取得位置\n`) +
+      `⏰ ${new Date().toLocaleString('zh-TW')}\n\n這則訊息由 AI 陪伴助理在偵測到危險時發出，請立即與我聯繫確認。`
+
+    const outcome = await sendLineNotification(message, contact?.lineUserId)
+    if (outcome.sent) {
+      setAlertResult({ ok: true, text: outcome.message })
+      return
+    }
+    setAlertResult({ ok: false, text: outcome.message })
+    if (outcome.shareUrl) window.location.assign(outcome.shareUrl)
+  }, [])
+
+  // 待送出的求救倒數。倒數歸零就送出；使用者可在這 5 秒內取消。
+  useEffect(() => {
+    if (!pendingAlert) return
+    // 起始值包在 microtask 裡設定，避開 effect body 內同步 setState
+    queueMicrotask(() => setAlertCountdown(5))
+    let n = 5
+    const t = setInterval(() => {
+      n -= 1
+      setAlertCountdown(n)
+      if (n <= 0) {
+        clearInterval(t)
+        setPendingAlert(null)
+        dispatchEmergencyAlert(pendingAlert.reason, pendingAlert.location)
+      }
+    }, 1000)
+    return () => clearInterval(t)
+  }, [pendingAlert, dispatchEmergencyAlert])
+
+  /**
+   * 執行 AI 要求的工具，回傳給使用者看的訊息。
+   *
+   * 刻意回傳結果而不是直接寫進 WebSocket：文字聊天沒有 ws，
+   * 但需要完全相同的執行邏輯。呼叫端自行決定要不要把結果回送給模型。
+   */
+  const runToolCall = useCallback(async (
+    fc: { id?: string; name: string; args?: Record<string, unknown> }
+  ): Promise<{ resultMessage: string; navParams: URLSearchParams | null }> => {
+    let resultMessage = ''
+    let navParams: URLSearchParams | null = null
+
+    try {
+      let origin = userLocationRef.current
+      if (!origin) {
+        origin = await new Promise<{ lat: number; lng: number } | null>((resolve) => {
+          if (!navigator.geolocation) return resolve(null)
+          navigator.geolocation.getCurrentPosition(
+            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 5000 }
+          )
+        })
+      }
+
+      if (!origin) {
+        resultMessage = '目前無法取得你的 GPS 位置，請確認已開啟定位權限喔。'
+      } else if (fc.name === 'plan_safe_route') {
+        const destinationName = String(fc.args?.destination || context.destination)
+        const destPoint = await geocodeAddress(destinationName)
+        if (!destPoint) {
+          resultMessage = `找不到「${destinationName}」的位置，可以再說一次地址嗎？`
+        } else {
+          const routes = await callRoutesApi(origin, destPoint, { light: 3, camera: 2, store: 1.5, police: 1.5, time: 0.5 })
+          if (routes?.length) {
+            const best = routes[0]
+            resultMessage = `已經幫你規劃一條最安全、避開小巷的路線到${destinationName}，路上有 ${best.light_count} 盞路燈，大約 ${Math.round(best.duration_min)} 分鐘，馬上帶你去看地圖！`
+            navParams = buildNavigateParams(best, context.origin, destinationName)
+          } else {
+            resultMessage = '抱歉，暫時沒辦法規劃路線，等一下再試一次好嗎？'
+          }
+        }
+      } else if (fc.name === 'plan_route_via_store') {
+        const destinationName = String(fc.args?.destination || context.destination)
+        const destPoint = await geocodeAddress(destinationName)
+        if (!destPoint) {
+          resultMessage = `找不到「${destinationName}」的位置，可以再說一次地址嗎？`
+        } else {
+          const store = await callNearestStore(origin.lat, origin.lng)
+          if (store?.found && store.lat != null && store.lng != null) {
+            const routes = await callRoutesApi(origin, destPoint, undefined, [{ lat: store.lat, lng: store.lng }])
+            if (routes?.length) {
+              resultMessage = `幫你規劃一條會先經過「${store.name}」的路線，再到${destinationName}，大約 ${Math.round(routes[0].duration_min)} 分鐘，馬上帶你去看地圖！`
+              navParams = buildNavigateParams(routes[0], context.origin, destinationName)
+            } else {
+              resultMessage = '抱歉，暫時沒辦法規劃經過超商的路線。'
+            }
+          } else {
+            resultMessage = '附近暫時找不到營業中的 24 小時超商，我直接幫你規劃安全路線。'
+            const routes = await callRoutesApi(origin, destPoint)
+            if (routes?.length) {
+              navParams = buildNavigateParams(routes[0], context.origin, destinationName)
+            }
+          }
+        }
+      } else if (fc.name === 'find_lit_road_now') {
+        const destinationName = context.destination
+        const destPoint = await geocodeAddress(destinationName)
+        if (!destPoint) {
+          resultMessage = '別擔心，深呼吸，媽咪這就在線上陪你，先跟我說你現在附近有什麼標的物好嗎？'
+        } else {
+          const routes = await callRoutesApi(origin, destPoint, { light: 5, camera: 2, store: 1, police: 1.5, time: 0.3 })
+          if (routes?.length) {
+            const best = routes[0]
+            resultMessage = `別怕，媽咪馬上帶你走最亮的大馬路，這條路有 ${best.light_count} 盞路燈，馬上幫你導航！`
+            navParams = buildNavigateParams(best, context.origin, destinationName)
+          } else {
+            resultMessage = '媽咪在線上陪你，深呼吸，先待在原地明亮的地方，我馬上幫你想辦法。'
+          }
+        }
+      } else if (fc.name === 'trigger_emergency_alert') {
+        // AI 不直接送出求救 —— 交給 UI 跑 5 秒倒數，使用者可以取消。
+        // 模型有可能誤判，讓一段對話就無條件驚動聯絡人是不可接受的；
+        // 但反過來要求使用者按確認，在真的遇到危險時又太慢。
+        // 倒數＋可取消是兩者之間唯一說得過去的折衷。
+        const reason = String(fc.args?.reason || '使用者透過 AI 陪伴功能求救')
+        setPendingAlert({ reason, location: origin })
+        resultMessage = `我已經準備好把你的位置傳給緊急聯絡人了，5 秒後自動送出，如果是誤會可以按取消。`
+      } else {
+        resultMessage = '好的。'
+      }
+    } catch (err) {
+      console.warn('Tool call handling error:', err)
+      resultMessage = '抱歉，剛剛處理的時候出了點問題，請再說一次好嗎？'
+    }
+
+    if (navParams) {
+      const params = navParams
+      setTimeout(() => {
+        router.push(`/navigate?${params.toString()}`)
+      }, 1500)
+    }
+
+    return { resultMessage, navParams }
+  }, [context, router])
+
+  /** 語音通話用的包裝：執行工具後把結果回送給 Gemini Live。 */
+  const handleToolCall = useCallback(async (
+    fc: { id?: string; name: string; args?: Record<string, unknown> },
+    ws: WebSocket
+  ) => {
+    const { resultMessage } = await runToolCall(fc)
+    try {
+      ws.send(JSON.stringify({
+        toolResponse: {
+          functionResponses: [
+            { id: fc.id, name: fc.name, response: { result: resultMessage } },
+          ],
+        },
+      }))
+    } catch (err) {
+      console.warn('Failed to send toolResponse:', err)
+    }
+  }, [runToolCall])
+
   const sendMsg = useCallback(async (text: string) => {
     if (!text.trim() || isThinking) return
     const userMsg: Message = { role: 'user', text: text.trim(), timestamp: Date.now() }
@@ -402,9 +580,30 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
       const res = await fetch('/api/companion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userMessage: text, context }),
+        body: JSON.stringify({
+          userMessage: text,
+          // 帶最近幾則對話，AI 才判讀得出情緒變化而不是只看單句
+          history: messages.slice(-6).map(m => ({ role: m.role, text: m.text })),
+          // 即時座標：先前完全沒傳，AI 對使用者在哪一無所知
+          context: { ...context, location: userLocationRef.current },
+        }),
       })
       const data = await res.json()
+
+      // 模型決定要行動時會回 action。執行需要瀏覽器端的 GPS 與導航，
+      // 所以由這裡呼叫與語音通話完全相同的那套執行邏輯。
+      if (data.action?.name) {
+        if (data.reply?.trim()) {
+          setMessages(prev => [...prev, { role: 'ai', text: data.reply.trim(), timestamp: Date.now() }])
+        }
+        const { resultMessage } = await runToolCall(data.action)
+        if (resultMessage) {
+          setMessages(prev => [...prev, { role: 'ai', text: resultMessage, timestamp: Date.now() }])
+          saveMessageToFirestore('assistant', resultMessage)
+        }
+        return
+      }
+
       const replyText = data.reply || '寶貝，我有在聽喔！走夜路要多留心四周喔！'
       const aiMsg: Message = { role: 'ai', text: replyText, timestamp: Date.now() }
       setMessages(prev => [...prev, aiMsg])
@@ -415,7 +614,7 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
     } finally {
       setIsThinking(false)
     }
-  }, [isThinking, context, playAudio, speak, saveMessageToFirestore])
+  }, [isThinking, context, messages, playAudio, speak, saveMessageToFirestore, runToolCall])
 
   const handlePhotoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -563,108 +762,6 @@ export function CompanionContent({ embeddedInNav = false, onCloseNav, routeConte
 
   // Executes a Gemini Live function call (voice-triggered route planning), sends the
   // toolResponse back on the WS so the AI can confirm verbally, then navigates to /navigate.
-  const handleToolCall = useCallback(async (
-    fc: { id?: string; name: string; args?: Record<string, unknown> },
-    ws: WebSocket
-  ) => {
-    let resultMessage = ''
-    let navParams: URLSearchParams | null = null
-
-    try {
-      let origin = userLocationRef.current
-      if (!origin) {
-        origin = await new Promise<{ lat: number; lng: number } | null>((resolve) => {
-          if (!navigator.geolocation) return resolve(null)
-          navigator.geolocation.getCurrentPosition(
-            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            () => resolve(null),
-            { enableHighAccuracy: true, timeout: 5000 }
-          )
-        })
-      }
-
-      if (!origin) {
-        resultMessage = '目前無法取得你的 GPS 位置，請確認已開啟定位權限喔。'
-      } else if (fc.name === 'plan_safe_route') {
-        const destinationName = String(fc.args?.destination || context.destination)
-        const destPoint = await geocodeAddress(destinationName)
-        if (!destPoint) {
-          resultMessage = `找不到「${destinationName}」的位置，可以再說一次地址嗎？`
-        } else {
-          const routes = await callRoutesApi(origin, destPoint, { light: 3, camera: 2, store: 1.5, police: 1.5, time: 0.5 })
-          if (routes?.length) {
-            const best = routes[0]
-            resultMessage = `已經幫你規劃一條最安全、避開小巷的路線到${destinationName}，路上有 ${best.light_count} 盞路燈，大約 ${Math.round(best.duration_min)} 分鐘，馬上帶你去看地圖！`
-            navParams = buildNavigateParams(best, context.origin, destinationName)
-          } else {
-            resultMessage = '抱歉，暫時沒辦法規劃路線，等一下再試一次好嗎？'
-          }
-        }
-      } else if (fc.name === 'plan_route_via_store') {
-        const destinationName = String(fc.args?.destination || context.destination)
-        const destPoint = await geocodeAddress(destinationName)
-        if (!destPoint) {
-          resultMessage = `找不到「${destinationName}」的位置，可以再說一次地址嗎？`
-        } else {
-          const store = await callNearestStore(origin.lat, origin.lng)
-          if (store?.found && store.lat != null && store.lng != null) {
-            const routes = await callRoutesApi(origin, destPoint, undefined, [{ lat: store.lat, lng: store.lng }])
-            if (routes?.length) {
-              resultMessage = `幫你規劃一條會先經過「${store.name}」的路線，再到${destinationName}，大約 ${Math.round(routes[0].duration_min)} 分鐘，馬上帶你去看地圖！`
-              navParams = buildNavigateParams(routes[0], context.origin, destinationName)
-            } else {
-              resultMessage = '抱歉，暫時沒辦法規劃經過超商的路線。'
-            }
-          } else {
-            resultMessage = '附近暫時找不到營業中的 24 小時超商，我直接幫你規劃安全路線。'
-            const routes = await callRoutesApi(origin, destPoint)
-            if (routes?.length) {
-              navParams = buildNavigateParams(routes[0], context.origin, destinationName)
-            }
-          }
-        }
-      } else if (fc.name === 'find_lit_road_now') {
-        const destinationName = context.destination
-        const destPoint = await geocodeAddress(destinationName)
-        if (!destPoint) {
-          resultMessage = '別擔心，深呼吸，媽咪這就在線上陪你，先跟我說你現在附近有什麼標的物好嗎？'
-        } else {
-          const routes = await callRoutesApi(origin, destPoint, { light: 5, camera: 2, store: 1, police: 1.5, time: 0.3 })
-          if (routes?.length) {
-            const best = routes[0]
-            resultMessage = `別怕，媽咪馬上帶你走最亮的大馬路，這條路有 ${best.light_count} 盞路燈，馬上幫你導航！`
-            navParams = buildNavigateParams(best, context.origin, destinationName)
-          } else {
-            resultMessage = '媽咪在線上陪你，深呼吸，先待在原地明亮的地方，我馬上幫你想辦法。'
-          }
-        }
-      } else {
-        resultMessage = '好的。'
-      }
-    } catch (err) {
-      console.warn('Tool call handling error:', err)
-      resultMessage = '抱歉，剛剛規劃路線時出了點問題，請再說一次好嗎？'
-    }
-
-    try {
-      ws.send(JSON.stringify({
-        toolResponse: {
-          functionResponses: [
-            { id: fc.id, name: fc.name, response: { result: resultMessage } },
-          ],
-        },
-      }))
-    } catch (err) {
-      console.warn('Failed to send toolResponse:', err)
-    }
-
-    if (navParams) {
-      const params = navParams
-      setTimeout(() => {
-        router.push(`/navigate?${params.toString()}`)
-      }, 1500)
-    }
-  }, [context, router])
 
   const acceptVoiceCall = async () => {
     if (ringtoneAudioRef.current) {
@@ -735,45 +832,17 @@ RULES:
 1. You MUST speak ONLY in Traditional Chinese (cmn-Hant-TW).
 2. DO NOT output any English words, thinking process, reasoning steps, or markdown formatting under any circumstances.
 3. Speak directly as the mother in short, warm, caring Taiwanese conversational sentences (e.g. 「寶貝走到哪啦？」「附近路燈亮不亮？」「快點回來，幫你留了熱湯喔！」).
-4. You can plan real walking routes for your child. When they ask for the safest route, a route that passes a 24-hour convenience store, or urgently want to reach a bright main road, call the matching function (plan_safe_route / plan_route_via_store / find_lit_road_now) instead of just talking about it. After calling a function, briefly and warmly tell them what you just arranged in Traditional Chinese.`,
+4. You can plan real walking routes for your child. When they ask for the safest route, a route that passes a 24-hour convenience store, or urgently want to reach a bright main road, call the matching function (plan_safe_route / plan_route_via_store / find_lit_road_now) instead of just talking about it. After calling a function, briefly and warmly tell them what you just arranged in Traditional Chinese.
+5. Read their emotional state from tone and wording (relaxed / uneasy / afraid / panicking) and act on it. If they are afraid, call find_lit_road_now. If they describe an actual physical threat (someone is following me, someone grabbed me, call the police), call trigger_emergency_alert immediately. Do not stop at asking "do you want me to help?" — take the action, then say what you did in one short sentence.
+
+CURRENT CONTEXT
+- Destination: ${context.destination}
+- Safety score: ${typeof context.safetyScore === 'number' ? `${context.safetyScore}/100` : 'not available — do not invent one'}
+- Minutes remaining: about ${context.durationMin}`,
               }],
             },
-            tools: [
-              {
-                functionDeclarations: [
-                  {
-                    name: 'plan_safe_route',
-                    description: '規劃一條最安全、避開暗巷小巷子的步行路線到達目的地。當使用者要求「最安全的路線」、「不要走小巷子」時呼叫。',
-                    parameters: {
-                      type: 'OBJECT',
-                      properties: {
-                        destination: { type: 'STRING', description: '使用者想去的目的地名稱或地址，例如「家」、「捷運松山站」' },
-                      },
-                      required: ['destination'],
-                    },
-                  },
-                  {
-                    name: 'plan_route_via_store',
-                    description: '規劃一條會先經過附近營業中的 24 小時超商，再前往目的地的步行路線。當使用者說路上想先買個東西、想找一條經過超商的路時呼叫。',
-                    parameters: {
-                      type: 'OBJECT',
-                      properties: {
-                        destination: { type: 'STRING', description: '使用者最終想去的目的地名稱或地址' },
-                      },
-                      required: ['destination'],
-                    },
-                  },
-                  {
-                    name: 'find_lit_road_now',
-                    description: '緊急情況：立刻從使用者目前位置規劃一條路燈最多、最明亮的大馬路路線。當使用者表達害怕、附近很暗、緊張焦慮、要求快點帶他走到大馬路時呼叫。',
-                    parameters: {
-                      type: 'OBJECT',
-                      properties: {},
-                    },
-                  },
-                ],
-              },
-            ],
+            // 與文字聊天共用同一份宣告，避免兩條路徑能力不一致
+            tools: [{ functionDeclarations: COMPANION_TOOLS }],
           },
         }
         ws.send(JSON.stringify(setupMsg))
@@ -1366,6 +1435,65 @@ RULES:
       )}
 
       {/* Anxiety Report Modal */}
+      {/* AI 判斷需要求救時的倒數確認。不直接送出：模型可能誤判；
+          也不要求按確認：真的遇到危險時太慢。倒數＋可取消是折衷。 */}
+      {pendingAlert && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(8,11,20,0.92)', backdropFilter: 'blur(10px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div style={{
+            width: '100%', maxWidth: 380, background: '#111827', borderRadius: 22,
+            padding: '26px 22px', textAlign: 'center',
+            border: '1px solid rgba(239,68,68,0.5)', color: '#fff',
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>🚨</div>
+            <div style={{ fontSize: 19, fontWeight: 900, color: '#ef4444', marginBottom: 8 }}>
+              即將通知緊急聯絡人
+            </div>
+            <div style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.75)', marginBottom: 4 }}>
+              {pendingAlert.reason}
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 18 }}>
+              {pendingAlert.location ? '將附上你的即時位置' : '定位失敗，訊息不會附上位置'}
+            </div>
+
+            <div style={{
+              width: 92, height: 92, borderRadius: '50%', margin: '0 auto 18px',
+              background: 'rgba(239,68,68,0.15)', border: '3px solid #ef4444',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 38, fontWeight: 900, color: '#ef4444',
+            }}>
+              {alertCountdown}
+            </div>
+
+            <button
+              onClick={() => { setPendingAlert(null); setAlertResult(null) }}
+              style={{
+                width: '100%', padding: '13px', borderRadius: 14, cursor: 'pointer',
+                background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
+                color: '#fff', fontSize: 15, fontWeight: 800,
+              }}
+            >
+              我沒事，取消發送
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 求救送出結果 */}
+      {alertResult && (
+        <div style={{
+          position: 'fixed', left: 16, right: 16, bottom: 90, zIndex: 500,
+          borderRadius: 14, padding: '12px 16px', fontSize: 13, lineHeight: 1.6, fontWeight: 700,
+          background: alertResult.ok ? 'rgba(16,185,129,0.95)' : 'rgba(245,158,11,0.95)',
+          color: '#fff', boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
+        }} onClick={() => setAlertResult(null)}>
+          {alertResult.ok ? '✅ ' : '⚠️ '}{alertResult.text}
+        </div>
+      )}
+
       <AnxietyReportModal
         isOpen={showAnxietyModal}
         onClose={() => setShowAnxietyModal(false)}
