@@ -679,7 +679,7 @@ export default function HomePage() {
                   Night<span style={{ background: 'linear-gradient(135deg,#a78bfa,#60a5fa)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>MaMa</span>
                 </h1>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 600, textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}>
-                  今晚，也陪你回家。 💜
+                  你的夜間守護使者
                 </p>
               </div>
 

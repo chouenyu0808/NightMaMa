@@ -11,7 +11,7 @@ import ArrivalRatingModal from '@/app/components/ArrivalRatingModal'
 import ShakeSosGuard from '@/app/components/ShakeSosGuard'
 import { refreshContactsFromBackend } from '@/lib/emergencyContacts'
 import {
-  IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle,
+  IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconBell,
   IconCornerUpRight, IconCornerUpLeft, IconArrowUp, IconFlag, IconSparkles, IconX,
   IconSos, IconLoader, IconStore, IconRoute,
 } from '@/components/Icons'
@@ -884,7 +884,7 @@ function NavigateContent() {
               style={{ flex: 1, padding: '12px 6px', background: '#dc2626', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={() => setShowAnxietyModal(true)}
             >
-              <IconAlertTriangle size={15} color="white" /> 不安通報
+              <IconBell size={17} color="white" />
             </button>
             <button
               className="btn-primary btn-danger"
@@ -997,6 +997,7 @@ function NavigateContent() {
       <ArrivalRatingModal
         isOpen={showArrival}
         onClose={() => setShowArrival(false)}
+        onFinish={() => { setShowArrival(false); router.push('/') }}
         origin={origin}
         destination={destination}
         routeType={searchParams.get('type') || '步行'}

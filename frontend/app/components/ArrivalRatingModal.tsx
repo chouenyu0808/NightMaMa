@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import { IconCheckCircle, IconX, IconHeart, IconStar, IconStarOutline } from '@/components/Icons'
 import { primaryContact, sendLineNotification } from '@/lib/emergencyContacts'
+import { addFavoriteRoute } from '@/lib/favoriteRoutes'
 
 interface ArrivalRatingModalProps {
   isOpen: boolean
   onClose: () => void
+  onFinish: () => void
   origin: string
   destination: string
   routeType: string
@@ -31,6 +33,7 @@ const RATING_LABELS: Record<number, string> = {
 export default function ArrivalRatingModal({
   isOpen,
   onClose,
+  onFinish,
   origin,
   destination,
   routeType,
@@ -40,31 +43,25 @@ export default function ArrivalRatingModal({
   const [rating, setRating] = useState(0)
   const [hovered, setHovered] = useState(0)
   const [savedMsg, setSavedMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [notifyMsg, setNotifyMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [isNotifying, setIsNotifying] = useState(false)
+  const [notifySent, setNotifySent] = useState(false)
+  const [showFavoritePrompt, setShowFavoritePrompt] = useState(false)
 
   if (!isOpen) return null
 
+  const decideFavorite = (save: boolean) => {
+    if (save) addFavoriteRoute(origin, destination)
+    setShowFavoritePrompt(false)
+    onFinish()
+  }
+
   const contact = primaryContact()
 
-  const notifyArrival = async () => {
-    setIsNotifying(true)
-    setNotifyMsg(null)
+  // 按下就顯示勾勾，不等網路來回；LINE 通知在背景照送，失敗也不影響已顯示的勾勾
+  const notifyArrival = () => {
+    setNotifySent(true)
     const msg =
       `✅【NightMaMa 平安回報】\n我已平安抵達「${destination}」。\n⏰ ${new Date().toLocaleString('zh-TW')}\n\n謝謝你的關心！`
-    const outcome = await sendLineNotification(msg, contact?.lineUserId)
-    setIsNotifying(false)
-
-    if (outcome.sent) {
-      setNotifyMsg({ ok: true, text: outcome.message })
-      return
-    }
-    if (outcome.shareUrl) {
-      setNotifyMsg({ ok: false, text: outcome.message })
-      window.location.assign(outcome.shareUrl)
-      return
-    }
-    setNotifyMsg({ ok: false, text: outcome.message })
+    sendLineNotification(msg, contact?.lineUserId).catch(() => {})
   }
 
   const submitRating = (value: number) => {
@@ -83,6 +80,37 @@ export default function ArrivalRatingModal({
         borderRadius: '22px 22px 0 0', padding: '22px 18px 30px',
         border: '1px solid rgba(16,185,129,0.35)', color: '#fff',
       }}>
+        {showFavoritePrompt ? (
+          <>
+            <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>要把這條路線設為常用路徑嗎？</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 18 }}>
+              {origin} → {destination}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => decideFavorite(false)}
+                style={{
+                  flex: 1, padding: '13px', borderRadius: 14,
+                  background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.75)', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                不用了
+              </button>
+              <button
+                onClick={() => decideFavorite(true)}
+                style={{
+                  flex: 1, padding: '13px', borderRadius: 14,
+                  background: 'linear-gradient(135deg,#8b5cf6,#7c3aed)', border: 'none',
+                  color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer',
+                }}
+              >
+                設為常用路徑
+              </button>
+            </div>
+          </>
+        ) : (
+        <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <IconCheckCircle size={26} color="#10b981" />
@@ -106,30 +134,19 @@ export default function ArrivalRatingModal({
         {/* 平安回報 */}
         <button
           onClick={notifyArrival}
-          disabled={isNotifying}
+          disabled={notifySent}
           style={{
             width: '100%', marginTop: 16, padding: '13px', borderRadius: 14,
             background: 'linear-gradient(135deg,#06C755,#04a344)', border: 'none',
             color: '#fff', fontSize: 15, fontWeight: 800,
-            cursor: isNotifying ? 'wait' : 'pointer', opacity: isNotifying ? 0.6 : 1,
+            cursor: notifySent ? 'default' : 'pointer', opacity: notifySent ? 0.75 : 1,
           }}
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {!isNotifying && <IconHeart size={15} />}
-            {isNotifying ? '傳送中…' : contact ? `回報平安給 ${contact.name}` : '用 LINE 回報平安'}
+            {notifySent ? <IconCheckCircle size={15} /> : <IconHeart size={15} />}
+            {notifySent ? '已回報平安' : contact ? `回報平安給 ${contact.name}` : '用 LINE 回報平安'}
           </span>
         </button>
-
-        {notifyMsg && (
-          <div style={{
-            marginTop: 8, borderRadius: 10, padding: '9px 12px', fontSize: 12,
-            lineHeight: 1.5, fontWeight: 600,
-            background: notifyMsg.ok ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-            color: notifyMsg.ok ? '#34d399' : '#fbbf24',
-          }}>
-            {notifyMsg.text}
-          </div>
-        )}
 
         {/* 路線評分 */}
         <div style={{ marginTop: 22, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 18 }}>
@@ -181,7 +198,7 @@ export default function ArrivalRatingModal({
         </div>
 
         <button
-          onClick={onClose}
+          onClick={() => setShowFavoritePrompt(true)}
           style={{
             width: '100%', marginTop: 16, padding: '11px', borderRadius: 12,
             background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
@@ -190,6 +207,8 @@ export default function ArrivalRatingModal({
         >
           完成
         </button>
+        </>
+        )}
       </div>
     </div>
   )
