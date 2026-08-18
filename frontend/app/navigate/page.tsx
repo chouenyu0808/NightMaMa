@@ -8,6 +8,7 @@ import { searchNearbySafetyPlaces, drawSafetyPlaceMarkers, drawAnxietyReportMark
 import AnxietyReportModal from '@/app/components/AnxietyReportModal'
 import SosOptionsSheet from '@/app/components/SosOptionsSheet'
 import ArrivalRatingModal from '@/app/components/ArrivalRatingModal'
+import ShakeSosGuard from '@/app/components/ShakeSosGuard'
 import { refreshContactsFromBackend } from '@/lib/emergencyContacts'
 import {
   IconCompass, IconVolume2, IconVolumeX, IconTarget, IconMap, IconMic, IconAlertTriangle,
@@ -872,6 +873,12 @@ function NavigateContent() {
             >
               <IconSos size={15} color="white" /> SOS
             </button>
+          </div>
+
+          {/* 免看螢幕的求救途徑：手在口袋或來不及看畫面時用力搖手機。
+              放在 SOS 按鈕正下方，讓兩種觸發方式在同一個視覺區塊。 */}
+          <div style={{ padding: '0 14px 10px' }}>
+            <ShakeSosGuard currentPos={userPos} destination={destination} />
           </div>
         </div>
       </div>
