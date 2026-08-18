@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { IconAlertTriangle, IconUser, IconBulb, IconVolume2, IconShield, IconX } from '@/components/Icons'
 import { sendLineNotification } from '@/lib/emergencyContacts'
 import { getUserId } from '@/lib/user'
@@ -28,6 +28,21 @@ export default function AnxietyReportModal({
   const [loadingCategory, setLoadingCategory] = useState<string | null>(null)
   const [resultMsg, setResultMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  /**
+   * 每次開啟時清掉上一輪的結果。
+   *
+   * 失敗路徑（例如定位失敗）設完 resultMsg 就 return，沒有安排清除，
+   * 於是它會一直留著；關掉再開時 `resultMsg ? 結果 : 分類清單` 仍然
+   * 走結果分支，使用者看到的是舊錯誤訊息且完全沒有可點的選項。
+   */
+  useEffect(() => {
+    if (!isOpen) return
+    queueMicrotask(() => {
+      setResultMsg(null)
+      setLoadingCategory(null)
+    })
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const handleSelectCategory = async (categoryLabel: string) => {
@@ -38,6 +53,10 @@ export default function AnxietyReportModal({
     let lat = currentPos?.lat
     let lng = currentPos?.lng
 
+    // 呼叫端沒給座標時才自己要。
+    // 允許 60 秒內的快取並關掉高精度：通報只需要街廓等級的精度，
+    // 而強制取得全新的高精度定位在室內常常逾時 —— 先前 3 秒逾時
+    // 加上不收快取，等於在室內幾乎必定失敗。
     if (typeof window !== 'undefined' && navigator.geolocation && !currentPos) {
       await new Promise<void>((resolve) => {
         navigator.geolocation.getCurrentPosition(
@@ -47,15 +66,18 @@ export default function AnxietyReportModal({
             resolve()
           },
           () => resolve(),
-          { timeout: 3000 }
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
         )
       })
     }
 
     // 定位失敗就不要用假座標硬送，通報一個錯誤的位置沒有意義
     if (lat === undefined || lng === undefined) {
-      setResultMsg({ ok: false, text: '定位失敗，無法取得目前位置，通報未送出。請確認已允許位置權限。' })
+      setResultMsg({ ok: false, text: '定位失敗，無法取得目前位置，通報未送出。請確認已允許位置權限後再試一次。' })
       setLoadingCategory(null)
+      // 定位失敗是可以重試的，幾秒後把選項放回來，
+      // 不要讓使用者以為功能壞了只能關掉視窗
+      setTimeout(() => setResultMsg(null), 4000)
       return
     }
 

@@ -1167,6 +1167,11 @@ export default function HomePage() {
       <AnxietyReportModal
         isOpen={showAnxietyModal}
         onClose={() => setShowAnxietyModal(false)}
+        // 首頁本來就在跑 watchPosition，把現成的座標傳進去，
+        // modal 就不必自己再要一次定位（室內常常要不到）。
+        // 用 originLatLng 而不是 userGpsRef：後者是 ref，在 render
+        // 期間讀取不保證與畫面一致，而且它更新時不會觸發重繪。
+        currentPos={originLatLng ?? undefined}
       />
     </div>
   )
