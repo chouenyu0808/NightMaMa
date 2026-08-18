@@ -24,9 +24,15 @@ function SOSContent() {
   const [fakeCallState, setFakeCallState] = useState<'ringing' | 'connected'>(isFakeCall ? 'ringing' : 'ringing')
   const [callDuration, setCallDuration] = useState(0)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [locationError, setLocationError] = useState<'denied' | 'unavailable' | 'timeout' | null>(null)
   const [notifyResult, setNotifyResult] = useState<{ sent: boolean; message: string } | null>(null)
   const [locationUnavailable, setLocationUnavailable] = useState(false)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
+
+  // 倒數用的 setInterval 會把當下的 sendSOSNotification 連同它讀到的 state
+  // 一起封進閉包。定位若在倒數的 5 秒之間才回來，state 更新不會反映到那個
+  // 閉包裡，訊息仍會寫「定位失敗」。改用 ref 讓送出當下永遠讀到最新座標。
+  const locationRef = useRef<{ lat: number; lng: number } | null>(null)
 
   // Call duration counter when connected
   useEffect(() => {
@@ -41,17 +47,62 @@ function SOSContent() {
     refreshContactsFromBackend().catch(() => {})
   }, [])
 
-  // Get location
+  // 定位。
   //
   // 定位失敗時「不」填入台北車站之類的預設座標：求救訊息附上一個錯誤的位置，
   // 比明講「定位失敗」更危險，會把救援引導到錯的地方。
+  //
+  // 雙策略的理由：先前只用一次性的 getCurrentPosition 搭配
+  // enableHighAccuracy + 10 秒逾時、且沒有 maximumAge，等於強制要一個
+  // 全新的高精度定位。室內或高樓間常常拿不到，而 SOS 倒數只有 5 秒，
+  // 時間到了座標還沒回來就送出「定位失敗」。
   useEffect(() => {
-    navigator.geolocation?.getCurrentPosition(
-      pos => setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setCurrentLocation(null),
-      { enableHighAccuracy: true, timeout: 10000 }
-    )
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      // 包一層 microtask，避開 effect body 內同步 setState 造成的串接渲染
+      queueMicrotask(() => setLocationError('unavailable'))
+      return
+    }
+
+    const accept = (pos: GeolocationPosition) => {
+      const p = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      locationRef.current = p
+      setCurrentLocation(p)
+      setLocationError(null)
+    }
+
+    const reject = (err: GeolocationPositionError) => {
+      // 已經有座標了就不要因為後續一次失敗把它清掉
+      if (locationRef.current) return
+      if (err.code === err.PERMISSION_DENIED) setLocationError('denied')
+      else if (err.code === err.TIMEOUT) setLocationError('timeout')
+      else setLocationError('unavailable')
+    }
+
+    // 策略 1：低精度 + 允許 60 秒內的快取，通常瞬間就有值
+    navigator.geolocation.getCurrentPosition(accept, reject, {
+      enableHighAccuracy: false,
+      timeout: 8000,
+      maximumAge: 60000,
+    })
+
+    // 策略 2：持續監聽高精度定位，之後會用更準的座標覆蓋策略 1 的結果
+    const watchId = navigator.geolocation.watchPosition(accept, reject, {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 10000,
+    })
+
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [])
+
+  /** 送出前最後再等一下定位，避免倒數結束時剛好還差一點。 */
+  const waitForLocation = async (maxWaitMs = 4000): Promise<{ lat: number; lng: number } | null> => {
+    const deadline = Date.now() + maxWaitMs
+    while (!locationRef.current && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 250))
+    }
+    return locationRef.current
+  }
 
   const handleSOS = () => {
     if (sosSent || sending) return
@@ -80,9 +131,12 @@ function SOSContent() {
     const contact = primaryContact()
     const contactName = contact?.name || '使用者'
 
-    const hasRealLocation = currentLocation !== null
-    const mapsUrl = currentLocation
-      ? `https://maps.google.com/?q=${currentLocation.lat},${currentLocation.lng}`
+    // 從 ref 讀，不是 state —— 這個函式是被 setInterval 的閉包呼叫的
+    const location = locationRef.current ?? (await waitForLocation())
+
+    const hasRealLocation = location !== null
+    const mapsUrl = location
+      ? `https://maps.google.com/?q=${location.lat},${location.lng}`
       : ''
 
     const locationLine = hasRealLocation
@@ -279,6 +333,28 @@ function SOSContent() {
         alignItems: 'center',
         gap: 24,
       }}>
+        {/* 定位狀態：按下 SOS 之前就要看得到，不然求救訊息送出才發現沒有位置 */}
+        {!sosSent && (
+          <div style={{
+            width: '100%', borderRadius: 12, padding: '10px 14px',
+            display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, lineHeight: 1.5,
+            background: currentLocation ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+            border: `1px solid ${currentLocation ? 'rgba(16,185,129,0.4)' : 'rgba(245,158,11,0.4)'}`,
+            color: currentLocation ? '#34d399' : '#fbbf24',
+          }}>
+            <IconPin size={14} color={currentLocation ? '#34d399' : '#fbbf24'} />
+            <span style={{ fontWeight: 600 }}>
+              {currentLocation
+                ? `已取得定位 ${currentLocation.lat.toFixed(5)}, ${currentLocation.lng.toFixed(5)}`
+                : locationError === 'denied'
+                  ? '位置權限被拒絕。求救訊息將無法附上你的位置 —— 請在瀏覽器網址列的鎖頭圖示開啟位置權限，再重新整理。'
+                  : locationError === 'unavailable'
+                    ? '此裝置或瀏覽器無法取得定位，求救訊息將不含位置。'
+                    : '定位中… 請稍候，取得後才能附上你的位置'}
+            </span>
+          </div>
+        )}
+
         {/* SOS Button */}
         {!sosSent ? (
           <>
