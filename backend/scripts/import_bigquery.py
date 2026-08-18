@@ -51,6 +51,18 @@ CAMERAS_SCHEMA = [
     bigquery.SchemaField("source_updated_at", "TIMESTAMP"),
 ]
 
+ROADS_SCHEMA = [
+    bigquery.SchemaField("lat", "FLOAT64"),
+    bigquery.SchemaField("lng", "FLOAT64"),
+    # OSM highway tag，safety_scorer 的 ROAD_OPENNESS 會查這個值
+    bigquery.SchemaField("cls", "STRING"),
+]
+
+JUNCTIONS_SCHEMA = [
+    bigquery.SchemaField("lat", "FLOAT64"),
+    bigquery.SchemaField("lng", "FLOAT64"),
+]
+
 UNSAFE_REPORTS_SCHEMA = [
     bigquery.SchemaField("id", "STRING"),
     bigquery.SchemaField("lat", "FLOAT64"),
@@ -122,6 +134,23 @@ def main() -> None:
     ]
     _load(client, settings.bq_dataset_cameras, settings.bq_table_cameras, CAMERAS_SCHEMA, camera_rows)
 
+    # OSM 路網：Prospect / Escape 評分用。先跑 fetch_osm_roads.py 產生檔案。
+    roads_path = os.path.join(DATA_DIR, "roads.json")
+    junctions_path = os.path.join(DATA_DIR, "intersections.json")
+    if os.path.exists(roads_path) and os.path.exists(junctions_path):
+        with open(roads_path, encoding="utf-8") as f:
+            roads = json.load(f)
+        _load(client, settings.bq_dataset_roads, settings.bq_table_roads, ROADS_SCHEMA, roads)
+
+        with open(junctions_path, encoding="utf-8") as f:
+            junctions = json.load(f)
+        _load(client, settings.bq_dataset_roads, settings.bq_table_junctions, JUNCTIONS_SCHEMA, junctions)
+    else:
+        print()
+        print("⚠️  找不到 roads.json / intersections.json，略過路網匯入。")
+        print("    先執行 python scripts/fetch_osm_roads.py 產生這兩個檔案，")
+        print("    否則 Prospect / Escape 這一項會退回中性值。")
+
     # unsafe_reports 只建表，資料由使用者回報累積
     _load(client, settings.bq_dataset, "unsafe_reports", UNSAFE_REPORTS_SCHEMA, [])
 
@@ -129,6 +158,8 @@ def main() -> None:
     print("完成。評分程式會從以下位置讀取：")
     print(f"  路燈: {settings.bq_dataset_lights}.{settings.bq_table_lights} ({LIGHT_LAT_COL}/{LIGHT_LNG_COL})")
     print(f"  CCTV: {settings.bq_dataset_cameras}.{settings.bq_table_cameras} ({CAMERA_LAT_COL}/{CAMERA_LNG_COL})")
+    print(f"  路網: {settings.bq_dataset_roads}.{settings.bq_table_roads} (lat/lng/cls)")
+    print(f"  路口: {settings.bq_dataset_roads}.{settings.bq_table_junctions} (lat/lng)")
 
 
 if __name__ == "__main__":

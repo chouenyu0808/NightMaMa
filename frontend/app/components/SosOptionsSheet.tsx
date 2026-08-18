@@ -4,7 +4,7 @@ import { useState } from 'react'
 import {
   IconPhoneCall, IconAlertTriangle, IconPin, IconShield, IconX, IconUser, IconVideo,
 } from '@/components/Icons'
-import { primaryContact, sendLineNotification } from '@/lib/emergencyContacts'
+import { primaryContact, triggerSos } from '@/lib/emergencyContacts'
 
 interface SosOptionsSheetProps {
   isOpen: boolean
@@ -46,11 +46,14 @@ export default function SosOptionsSheet({
     (currentPos ? `📍 我的即時位置：${mapsUrl}\n` : '📍 定位失敗，未能取得位置\n') +
     `⏰ ${new Date().toLocaleString('zh-TW')}\n\n請立即與我聯繫確認狀況。`
 
-  /** 分享位置給聯絡人。已綁定 LINE 就自動推播，否則開啟 LINE 分享。 */
+  /**
+   * 分享位置給聯絡人。走後端 /sos → Pub/Sub，會推播給「全部」已綁定的聯絡人；
+   * 後端不可用時退回 LINE 分享連結，由使用者自己選收件人。
+   */
   const shareLocation = async () => {
     setIsSending(true)
     setNotifyMsg(null)
-    const outcome = await sendLineNotification(buildMessage(), contact?.lineUserId)
+    const outcome = await triggerSos(currentPos ?? null, buildMessage())
     setIsSending(false)
 
     if (outcome.sent) {

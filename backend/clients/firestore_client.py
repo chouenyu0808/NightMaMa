@@ -11,15 +11,18 @@ def set_session_status(
     user_id: str,
     session_id: str,
     status: str,
-    lat: float,
-    lng: float,
+    lat: float | None,
+    lng: float | None,
     current_segment: str | None = None,
 ) -> None:
     data = {
         "status": status,
-        "current_location": firestore.GeoPoint(lat, lng),
         "last_updated": firestore.SERVER_TIMESTAMP,
     }
+    # 沒有座標時不寫 current_location，而不是寫 (0, 0)：merge=True 會保留上一次
+    # 的定位，那個舊位置至少是真的去過的地方，比幾內亞灣外海有用。
+    if lat is not None and lng is not None:
+        data["current_location"] = firestore.GeoPoint(lat, lng)
     if current_segment is not None:
         data["current_segment"] = current_segment
     db.collection("users").document(user_id).collection("sessions").document(session_id).set(

@@ -23,6 +23,11 @@ substitutions:
   # 前端呼叫後端、後端 CORS 白名單都用得到；服務網址穩定不會變動。
   _API_URL: https://nightmama-api-321739351322.asia-east1.run.app
   _WEB_URL: https://nightmama-web-321739351322.asia-east1.run.app
+  # SOS 通知：Pub/Sub topic 與 push subscription 用的服務帳號（只寫帳號名，
+  # 完整 email 在 deploy-api 步驟裡組。一次性的建立動作見
+  # backend/scripts/setup_pubsub_sos.sh）。
+  _SOS_TOPIC: sos-triggered
+  _SOS_PUSH_SA: pubsub-sos-push
 
 availableSecrets:
   secretManager:
@@ -104,8 +109,14 @@ steps:
       - --timeout=60
       - --min-instances=0
       - --max-instances=3
-      - --set-env-vars=^@^GCP_PROJECT_ID=$PROJECT_ID@CORS_ORIGINS=["$_WEB_URL"]
-      - --set-secrets=GOOGLE_MAPS_API_KEY=maps-server-key:latest
+      # PUBSUB_PUSH_* 是 /internal/pubsub/sos 的門禁：audience 要跟建立
+      # subscription 時的 --push-auth-token-audience 一模一樣，服務帳號也要
+      # 對得上，否則後端會把 Pub/Sub 推來的 SOS 事件擋掉（見 backend/scripts/
+      # setup_pubsub_sos.sh，那支腳本用的就是同一組值）。
+      # 分隔符號從 ^@^ 換成 ^;^：服務帳號的 email 本身就含 @，用 @ 當分隔
+      # 會把 PUBSUB_PUSH_SA_EMAIL 從中間切成兩半。
+      - --set-env-vars=^;^GCP_PROJECT_ID=$PROJECT_ID;CORS_ORIGINS=["$_WEB_URL"];PUBSUB_TOPIC_SOS=$_SOS_TOPIC;PUBSUB_PUSH_AUDIENCE=$_API_URL;PUBSUB_PUSH_SA_EMAIL=$_SOS_PUSH_SA@$PROJECT_ID.iam.gserviceaccount.com
+      - --set-secrets=^@^GOOGLE_MAPS_API_KEY=maps-server-key:latest@LINE_CHANNEL_ACCESS_TOKEN=line-channel-access-token:latest
       - --quiet
     waitFor: [push-api]
 

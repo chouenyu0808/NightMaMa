@@ -1001,6 +1001,19 @@ export default function HomePage() {
                   <span style={{ background: 'rgba(30,58,138,0.35)', color: '#93c5fd', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     <IconBadge size={11} /> {fmtCount(selectedRoute.policeCount)} 派出所
                   </span>
+                  {/* 視野與通報沒有「數量」可講（一個看道路分級、一個看距離衰減），
+                      所以顯示 0-100 的分項分數。資料未匯入時整顆不顯示，
+                      而不是show一個看起來像真的中性值。 */}
+                  {selectedRoute.opennessAvg !== null && selectedRoute.opennessAvg !== undefined && (
+                    <span style={{ background: 'rgba(139,92,246,0.2)', color: '#c4b5fd', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
+                      👁️ 視野 {Math.round(selectedRoute.opennessAvg)}
+                    </span>
+                  )}
+                  {selectedRoute.reportsAvg !== null && selectedRoute.reportsAvg !== undefined && selectedRoute.reportsAvg < 95 && (
+                    <span style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', fontSize: 11, padding: '3px 8px', borderRadius: 8, fontWeight: 700 }}>
+                      ⚠️ 沿線有通報
+                    </span>
+                  )}
                 </div>
                 <div style={{
                   fontSize: 12, fontWeight: 900,
@@ -1022,7 +1035,7 @@ export default function HomePage() {
                   fontSize: 11, lineHeight: 1.5, marginBottom: 10, fontWeight: 600,
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
-                  <IconAlertTriangle size={12} /> {scoreWarning}。路線仍可正常導航，但夜間安全評分（路燈／監視器密度）此次未能計算。
+                  <IconAlertTriangle size={12} /> {scoreWarning}。路線仍可正常導航，但夜間安全評分（照明／視野／庇護點）此次未能計算。
                 </div>
               )}
 

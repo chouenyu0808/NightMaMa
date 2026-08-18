@@ -150,6 +150,14 @@ export interface NotifyOutcome {
   /** true 代表訊息「確實已由伺服器送出」。分享連結不算，因為還沒送出。 */
   sent: boolean
   /**
+   * 走後端 Pub/Sub 派送時為 true：伺服器已受理，但推播是非同步的，
+   * 這個當下還無法確認聯絡人收到了。UI 的用字要跟著改（「正在通知」
+   * 而不是「已通知」），不可以把受理講成送達。
+   */
+  queued?: boolean
+  /** 後端會推播給幾位已綁定 LINE 的聯絡人。0 代表沒人收得到。 */
+  recipients?: number
+  /**
    * 有值時代表需要使用者接手：把這個網址開起來，LINE 會帶著預填訊息跳出，
    * 由使用者挑選收件人。呼叫端務必在 click handler 裡開啟，否則會被擋。
    */
@@ -209,4 +217,63 @@ export async function sendLineNotification(
       message: '網路連線失敗，請改用 LINE 手動傳送。',
     }
   }
+}
+
+/**
+ * 觸發 SOS：交給後端 POST /sos，由 Pub/Sub 非同步推播給「全部」已綁定的聯絡人。
+ *
+ * 為什麼不直接打 /api/line-notify：
+ * 1. 那條路只通知第一個聯絡人（primaryRecipient），設了三個也只送一個。
+ * 2. LINE 逾時就整個卡在使用者的請求裡，沒有重試；Pub/Sub 有。
+ * 3. 訊息內容與定位改由後端組，含反向地理編碼與 LINE 原生地圖卡片。
+ *
+ * 後端不可用、或後端回報「沒有任何收得到的聯絡人」時，一律退回舊路徑
+ * （手動 LINE 分享連結），求救不會因為後端掛掉就完全沒轍。
+ */
+export async function triggerSos(
+  location: { lat: number; lng: number } | null,
+  fallbackMessage: string
+): Promise<NotifyOutcome> {
+  const userId = getUserId()
+
+  if (BACKEND_URL && userId) {
+    try {
+      const res = await fetch(`${BACKEND_URL}/sos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          session_id: 'current',
+          // 定位失敗就送 null，不要塞預設座標：把救援引到錯的地方
+          // 比誠實說「沒有位置」危險得多。後端會據此略過地圖卡片。
+          lat: location?.lat ?? null,
+          lng: location?.lng ?? null,
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null)
+        const recipients: number = data?.recipients ?? 0
+        if (recipients > 0) {
+          return {
+            sent: true,
+            queued: true,
+            recipients,
+            message: `已送出求救，正在通知 ${recipients} 位緊急聯絡人。`,
+          }
+        }
+        // 後端收下了，但沒有任何收件人 —— 顯示成功等於騙人，退回手動分享
+        return {
+          sent: false,
+          shareUrl: buildLineShareUrl(fallbackMessage),
+          recipients: 0,
+          message: '尚無完成 LINE 綁定的緊急聯絡人，請在 LINE 中手動選擇收件人送出。',
+        }
+      }
+    } catch {
+      // 後端連不上，往下退回舊路徑
+    }
+  }
+
+  return sendLineNotification(fallbackMessage)
 }

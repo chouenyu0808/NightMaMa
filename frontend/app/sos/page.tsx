@@ -9,7 +9,7 @@ import {
   IconShield, IconAlertTriangle, IconAmbulance, IconUser,
 } from '@/components/Icons'
 
-import { primaryContact, refreshContactsFromBackend, sendLineNotification } from '@/lib/emergencyContacts'
+import { primaryContact, refreshContactsFromBackend, triggerSos } from '@/lib/emergencyContacts'
 
 function SOSContent() {
   const searchParams = useSearchParams()
@@ -143,9 +143,11 @@ function SOSContent() {
       ? `📍 即時 GPS 定位：${mapsUrl}`
       : '📍 定位失敗，未取得即時 GPS 位置'
 
-    const message = `🚨 【NightMaMa 緊急求救警報】\n您的聯絡人 (${contactName}) 在夜間步行時觸發了 SOS 緊急求救！\n\n${locationLine}\n⏰ 觸發時間：${new Date().toLocaleString('zh-TW')}\n\n請立即嘗試聯繫確認對方是否平安！`
+    // 這則訊息只是「後端不可用時手動分享」的備援內容。正常路徑上，訊息由
+    // 後端組（含反向地理編碼與 LINE 原生地圖卡片），前端不再自己拼字串。
+    const fallbackMessage = `🚨 【NightMaMa 緊急求救警報】\n您的聯絡人 (${contactName}) 在夜間步行時觸發了 SOS 緊急求救！\n\n${locationLine}\n⏰ 觸發時間：${new Date().toLocaleString('zh-TW')}\n\n請立即嘗試聯繫確認對方是否平安！`
 
-    const outcome = await sendLineNotification(message, contact?.lineUserId)
+    const outcome = await triggerSos(location, fallbackMessage)
 
     setSending(false)
     setSosSent(true)
@@ -390,10 +392,16 @@ function SOSContent() {
               <>
                 <IconCheckCircle size={60} color="#10b981" />
                 <div style={{ fontWeight: 700, fontSize: 18, color: '#10b981' }}>SOS 已發送！</div>
+                {/* 走後端時推播是非同步的，這個當下只能保證「已受理」。用字要
+                    跟著改成「正在通知」，把受理講成送達會讓使用者放棄改用
+                    其他求救方式。 */}
                 <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+                  {notifyResult.message}
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
                   {locationUnavailable
-                    ? '已通知緊急聯絡人，但定位失敗，訊息未附上你的位置'
-                    : '已通知緊急聯絡人並附上你的位置'}
+                    ? '定位失敗，訊息未附上你的位置'
+                    : '訊息已附上你的位置與地圖'}
                 </div>
               </>
             ) : (

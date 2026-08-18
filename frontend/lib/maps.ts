@@ -128,6 +128,9 @@ export interface RouteResult {
   cameraCount: number | null
   policeCount: number | null
   storeCount: number | null
+  /** 視野（道路分級＋路口）與社區通報的路線平均分。null = 該項資料尚未匯入 */
+  opennessAvg: number | null
+  reportsAvg: number | null
   segmentScores: number[]
   points: LatLng[]
   steps: RouteStep[]
@@ -211,6 +214,8 @@ export async function fetchRoutes(
               cameraCount: null,
               policeCount: null,
               storeCount: null,
+              opennessAvg: null,
+              reportsAvg: null,
               segmentScores: [],
               points: pathPoints,
               steps: (leg?.steps || []).map(s => {
@@ -370,6 +375,8 @@ export async function fetchRoutes(
                     cameraCount: null,
                     policeCount: null,
                     storeCount: null,
+                    opennessAvg: null,
+                    reportsAvg: null,
                     segmentScores: [],
                     points: (tr.overview_path || []).map(p => ({ lat: p.lat(), lng: p.lng() })),
                     steps,
