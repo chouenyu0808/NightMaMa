@@ -238,6 +238,19 @@ function NavigateContent() {
   const [showArrival, setShowArrival] = useState(false)
   const hasArrivedRef = useRef(false)
 
+  // 偏離重算的節流與競態保護（詳見 watchPosition 內的說明）
+  const isReroutingRef = useRef(false)
+  const lastRerouteAtRef = useRef(0)
+  /**
+   * 每個轉彎步驟的終點座標，用來判斷該步是否已走完。
+   *
+   * 不放進 NavStep 是因為那個型別同時給側邊清單渲染用，
+   * 加上座標會讓每次 render 都比較無關的欄位；也不需要進 state ——
+   * 它只在 GPS 回呼裡被讀取，放 ref 不會觸發重繪。
+   */
+  const stepEndsRef = useRef<Array<{ lat: number; lng: number } | null>>([])
+  const [isRerouting, setIsRerouting] = useState(false)
+
   // ponytail: demo-only shortcut to snap to destination without walking there; remove if this becomes a real debug menu
   const simulateArrival = useCallback(() => {
     const destPoint = routePointsRef.current[routePointsRef.current.length - 1]
@@ -340,12 +353,16 @@ function NavigateContent() {
               streetName: parseStreetName(s.instruction),
               icon: getManeuverIcon(s.maneuver),
             }))
+            stepEndsRef.current = raw.map(s => s.endLocation ?? null)
           }
         } catch {}
       }
 
       if (parsedSteps.length < 2) {
         parsedSteps = generateStepsFromPoints(points, destination)
+        // 自動生成的步驟沒有對應的原始座標，留空即可：
+        // 推進邏輯遇到 null 會停下，退回成不推進，而不是跳錯步。
+        stepEndsRef.current = parsedSteps.map(() => null)
       }
       setSteps(parsedSteps)
 
@@ -372,8 +389,14 @@ function NavigateContent() {
       const walk2 = busRange ? points.slice(busRange.end) : []
 
       // Leg 1: Walk to Bus Stop (Safety Evaluation & Green Shields)
+      //
+      // 這條要存進 polylineRef —— GPS 更新時的路徑裁剪與偏離重算都靠它。
+      // 先前這裡是 `new google.maps.Polyline(...)` 沒有接收回傳值，
+      // polylineRef.current 永遠是 null，於是所有 `polylineRef.current?.setPath()`
+      // 都被 optional chaining 靜默略過：路線畫上去之後就再也不會變，
+      // 走過的路段不會縮短，偏離路線也不會重畫。
       if (walk1.length >= 2) {
-        new google.maps.Polyline({
+        polylineRef.current = new google.maps.Polyline({
           path: walk1,
           map: mapInstance.current!,
           strokeColor: '#10b981',
@@ -534,19 +557,80 @@ function NavigateContent() {
               }
             })
 
-            // If user strays > 35m off route, trigger dynamic reroute from current position
+            // 偏離路線超過 35m 就從目前位置重算。
+            //
+            // 三個必要的防護：
+            // 1. 節流：watchPosition 每秒都會觸發，偏離期間會對 Directions API
+            //    連續發出請求。這裡限制至少間隔 15 秒。
+            // 2. in-flight 旗標：避免多個重算同時進行、後回來的舊結果覆蓋新結果。
+            // 3. 重算後要一併更新轉彎指引 —— 先前只換了路線點位，
+            //    頂部橫幅仍顯示舊路線的指示，等於把人導向錯的方向。
             if (minDistance > 35) {
-              fetchRoutes(current, destPoint).then((newRoutes: RouteResult[]) => {
-                if (newRoutes.length && mapInstance.current) {
-                  currentPoints = newRoutes[0].points
-                  polylineRef.current?.setPath([current, ...currentPoints])
-                }
-              }).catch(console.error)
+              const now = Date.now()
+              if (!isReroutingRef.current && now - lastRerouteAtRef.current > 15000) {
+                isReroutingRef.current = true
+                lastRerouteAtRef.current = now
+                setIsRerouting(true)
+
+                fetchRoutes(current, destPoint)
+                  .then((newRoutes: RouteResult[]) => {
+                    if (!newRoutes.length || !mapInstance.current) return
+                    const fresh = newRoutes[0]
+                    currentPoints = fresh.points
+                    routePointsRef.current = fresh.points
+                    polylineRef.current?.setPath(fresh.points)
+
+                    const rawSteps = fresh.steps ?? []
+                    const rebuilt = rawSteps.length > 0
+                      ? rawSteps.map(st => ({
+                          instruction: st.instruction,
+                          distanceM: st.distanceM,
+                          maneuver: st.maneuver,
+                          streetName: parseStreetName(st.instruction),
+                          icon: getManeuverIcon(st.maneuver),
+                        }))
+                      : generateStepsFromPoints(fresh.points, destination)
+                    setSteps(rebuilt)
+                    stepEndsRef.current = rawSteps.length > 0
+                      ? rawSteps.map(st => st.endLocation ?? null)
+                      : rebuilt.map(() => null)
+                    setCurrentStepIdx(0)
+                    setRealtimeDistanceM(fresh.distanceM)
+                  })
+                  .catch(console.error)
+                  .finally(() => {
+                    isReroutingRef.current = false
+                    setIsRerouting(false)
+                  })
+              }
             } else {
               // Dynamically clip remaining route path from current location
               const remainingPath = [current, ...currentPoints.slice(minIndex)]
               polylineRef.current?.setPath(remainingPath)
             }
+
+            // 依「已通過哪個轉彎點」推進目前步驟。
+            //
+            // 先前 setCurrentStepIdx 只有初始化時被設成 0，走再遠都不會變，
+            // 頂部橫幅因此從頭到尾顯示第一個指示。
+            //
+            // 用 endLocation 判斷：走到某一步的終點 30m 內就算完成該步，
+            // 切到下一步。30m 同樣是遷就市區 GPS 誤差；只往前不往後，
+            // 避免定位跳動讓指引來回跳。
+            setSteps(prevSteps => {
+              if (prevSteps.length === 0) return prevSteps
+              setCurrentStepIdx(prevIdx => {
+                let idx = prevIdx
+                while (idx < prevSteps.length - 1) {
+                  const end = stepEndsRef.current[idx]
+                  if (!end) break
+                  if (haversineMeters(current.lat, current.lng, end.lat, end.lng) > 30) break
+                  idx += 1
+                }
+                return idx
+              })
+              return prevSteps
+            })
 
             // Calculate movement heading to align map facing UP
             const userHeading =
@@ -715,6 +799,22 @@ function NavigateContent() {
             <span>接下來</span>
             <StepIcon icon={nextStep.icon} size={14} />
             <span>{nextStep.streetName}</span>
+          </div>
+        )}
+
+        {/* 重算中的提示。沒有這個，使用者偏離路線後會看到指引僵住幾秒，
+            以為程式當掉而反覆操作。 */}
+        {isRerouting && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            marginTop: 8, marginLeft: 6, padding: '5px 12px',
+            background: 'rgba(180, 83, 9, 0.92)', backdropFilter: 'blur(12px)',
+            borderRadius: 12, border: '1px solid rgba(251,191,36,0.5)',
+            color: '#fde68a', fontSize: 12, fontWeight: 700,
+            pointerEvents: 'auto',
+          }}>
+            <IconLoader size={13} color="#fde68a" />
+            <span>已偏離路線，重新規劃中…</span>
           </div>
         )}
       </div>
