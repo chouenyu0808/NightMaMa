@@ -81,11 +81,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: '無效的請求內容' }, { status: 400 })
   }
 
-  const { lat, lng, category, address } = (body ?? {}) as {
+  const { lat, lng, category, address, user_id: userId } = (body ?? {}) as {
     lat?: unknown
     lng?: unknown
     category?: unknown
     address?: unknown
+    user_id?: unknown
   }
 
   const latNum = Number(lat)
@@ -113,18 +114,34 @@ export async function POST(req: NextRequest) {
     reportsStore.length = MAX_STORED_REPORTS
   }
 
-  // Optionally forward to Python FastAPI backend if configured
+  // 轉發到 Python 後端，那裡才會寫進 BigQuery 的 unsafe_reports ——
+  // 也就是路線評分實際讀取的來源。
+  //
+  // 先前這裡沒有帶 session_id，而後端的 ReportRequest 把它列為必填，
+  // 因此每一筆通報都被擋在 422，再被下面的 catch 靜默吞掉：
+  // 通報看起來成功、地圖也有紅點，但完全沒有進到評分資料裡。
+  //
+  // session_id 只用來做 SHA-256 雜湊後的去識別化統計，後端不會存原值，
+  // 所以直接沿用前端的匿名 user_id 即可。
   if (BACKEND_URL) {
     fetch(`${BACKEND_URL}/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        session_id: typeof userId === 'string' && userId ? userId : 'anonymous',
+        user_id: typeof userId === 'string' ? userId : null,
         lat: newReport.lat,
         lng: newReport.lng,
         reason: newReport.reason,
+        category: newReport.reason,
         address: typeof address === 'string' ? address.slice(0, 200) : '',
       }),
-    }).catch(() => {})
+    })
+      .then(res => {
+        // 不阻塞回應，但要留下痕跡 —— 這條路徑壞掉時整個社區通報評分就是死的
+        if (!res.ok) console.error('[report] 後端拒絕通報', res.status)
+      })
+      .catch(err => console.error('[report] 轉發後端失敗', err))
   }
 
   return NextResponse.json({ success: true, report: newReport })
