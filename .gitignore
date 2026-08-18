@@ -41,3 +41,6 @@ nul
 # Python 虛擬環境
 .venv/
 venv/
+
+# demo_scoring.py 的產出（可隨時重新產生）
+demo_scoring.html
