@@ -476,8 +476,8 @@ function NavigateContent() {
         }
       }
 
-      // Destination Marker
-      new google.maps.Marker({
+      // Destination Marker（點紅圈 = demo 用，直接假裝已抵達）
+      const destMarker = new google.maps.Marker({
         position: points[points.length - 1],
         map: mapInstance.current!,
         title: destination,
@@ -490,6 +490,7 @@ function NavigateContent() {
           strokeWeight: 3,
         },
       })
+      destMarker.addListener('click', simulateArrival)
 
       routePointsRef.current = points
       const infoWindow = new google.maps.InfoWindow()
@@ -925,24 +926,7 @@ function NavigateContent() {
             {/* Left: Live Pulsing Green Dot + Navigation Status + Time/Dist */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap' }}>
               <div
-                onClick={() => {
-                  // ponytail: demo-only shortcut to snap to destination without walking there; remove if this becomes a real debug menu
-                  const destPoint = routePointsRef.current[routePointsRef.current.length - 1]
-                  if (!destPoint) return
-                  setUserPos(destPoint)
-                  setRealtimeDistanceM(0)
-                  setRemainingSec(0)
-                  if (mapInstance.current) {
-                    mapInstance.current.panTo(destPoint)
-                    mapInstance.current.setZoom(18.3)
-                  }
-                  if (userMarkerRef.current) userMarkerRef.current.setPosition(destPoint)
-                  polylineRef.current?.setPath([destPoint])
-                  if (!hasArrivedRef.current) {
-                    hasArrivedRef.current = true
-                    setShowArrival(true)
-                  }
-                }}
+                onClick={simulateArrival}
                 style={{
                   width: 8, height: 8, borderRadius: '50%',
                   background: '#10b981', boxShadow: '0 0 8px #10b981',

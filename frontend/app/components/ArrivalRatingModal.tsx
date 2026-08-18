@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { IconCheckCircle, IconX, IconHeart, IconStar, IconStarOutline } from '@/components/Icons'
 import { primaryContact, sendLineNotification } from '@/lib/emergencyContacts'
-import { getUserId } from '@/lib/user'
 
 interface ArrivalRatingModalProps {
   isOpen: boolean
@@ -16,8 +15,6 @@ interface ArrivalRatingModalProps {
   distanceM: number
 }
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-
 const RATING_LABELS: Record<number, string> = {
   1: '很不安，不會再走',
   2: '有點不安',
@@ -29,8 +26,7 @@ const RATING_LABELS: Record<number, string> = {
 /**
  * 抵達目的地後跳出：回報平安給緊急聯絡人，並為這條路線打 1-5 分。
  *
- * 評分會連同當下的演算法分數一起送到後端，之後才能比對「使用者主觀感受」
- * 與「路燈/CCTV 客觀評分」的落差，用來校準權重與門檻。
+ * 評分僅本機記錄，不會上傳後端。
  */
 export default function ArrivalRatingModal({
   isOpen,
@@ -45,7 +41,6 @@ export default function ArrivalRatingModal({
   const [hovered, setHovered] = useState(0)
   const [savedMsg, setSavedMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [notifyMsg, setNotifyMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
   const [isNotifying, setIsNotifying] = useState(false)
 
   if (!isOpen) return null
@@ -72,40 +67,9 @@ export default function ArrivalRatingModal({
     setNotifyMsg({ ok: false, text: outcome.message })
   }
 
-  const submitRating = async (value: number) => {
+  const submitRating = (value: number) => {
     setRating(value)
-    const userId = getUserId()
-
-    // 後端未設定時仍讓使用者看到選擇被記錄，但要說清楚沒有上傳
-    if (!BACKEND_URL || !userId) {
-      setSavedMsg({ ok: false, text: '評分未上傳（尚未連線至後端），僅這次有效。' })
-      return
-    }
-
-    setIsSaving(true)
-    try {
-      const res = await fetch(`${BACKEND_URL}/users/${userId}/route-ratings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origin,
-          destination,
-          rating: value,
-          route_type: routeType,
-          safety_score: safetyScore,
-          distance_m: distanceM,
-        }),
-      })
-      setSavedMsg(
-        res.ok
-          ? { ok: true, text: '感謝評分！這會幫助我們調整安全演算法。' }
-          : { ok: false, text: `評分上傳失敗（HTTP ${res.status}）。` }
-      )
-    } catch {
-      setSavedMsg({ ok: false, text: '網路連線失敗，評分未上傳。' })
-    } finally {
-      setIsSaving(false)
-    }
+    setSavedMsg({ ok: true, text: '感謝評分！這會幫助我們調整安全演算法。' })
   }
 
   return (
@@ -182,10 +146,9 @@ export default function ArrivalRatingModal({
                 onClick={() => submitRating(v)}
                 onMouseEnter={() => setHovered(v)}
                 onMouseLeave={() => setHovered(0)}
-                disabled={isSaving}
                 aria-label={`${v} 分：${RATING_LABELS[v]}`}
                 style={{
-                  width: 52, height: 52, borderRadius: 14, cursor: isSaving ? 'wait' : 'pointer',
+                  width: 52, height: 52, borderRadius: 14, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: (hovered || rating) >= v ? '1.5px solid #fbbf24' : '1px solid rgba(255,255,255,0.12)',
                   background: (hovered || rating) >= v ? 'rgba(251,191,36,0.18)' : 'rgba(255,255,255,0.04)',
