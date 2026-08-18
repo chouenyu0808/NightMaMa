@@ -51,6 +51,8 @@ def score_routes(req: ScoreRequest, bq: bigquery.Client = Depends(get_bigquery))
                 police_count=s.police_count,
                 store_count=s.store_count,
                 segment_scores=s.segment_scores,
+                openness_avg=s.openness_avg,
+                reports_avg=s.reports_avg,
             )
             for s in scored
         ]

@@ -47,6 +47,11 @@ class ScoredRouteItem(BaseModel):
     police_count: int = 0
     store_count: int = 0
     segment_scores: list[float] = []
+    # 視野與通報沒有「數量」可以顯示（一個是道路分級、一個是距離衰減），
+    # 因此回傳整條路線的平均子分數，讓 UI 說明分數是怎麼來的。
+    # None 代表對應的資料表尚未匯入，該項在評分中已降級為中性值。
+    openness_avg: float | None = None
+    reports_avg: float | None = None
 
 
 class ScoreResponse(BaseModel):

@@ -15,6 +15,8 @@ interface ScoredRouteItem {
   police_count: number
   store_count: number
   segment_scores: number[]
+  openness_avg: number | null
+  reports_avg: number | null
 }
 
 export type ScoreStatus = 'ok' | 'unavailable'
@@ -58,6 +60,13 @@ function combine(items: ScoredRouteItem[]): ScoredRouteItem | null {
     police_count: items.reduce((s, i) => s + i.police_count, 0),
     store_count: items.reduce((s, i) => s + i.store_count, 0),
     segment_scores: items.flatMap(i => i.segment_scores),
+    // 轉乘路線會有多個步行段，取平均的平均；任一段沒有資料就整體視為沒有
+    openness_avg: items.every(i => i.openness_avg !== null)
+      ? items.reduce((s, i) => s + (i.openness_avg ?? 0), 0) / items.length
+      : null,
+    reports_avg: items.every(i => i.reports_avg !== null)
+      ? items.reduce((s, i) => s + (i.reports_avg ?? 0), 0) / items.length
+      : null,
   }
 }
 
@@ -120,6 +129,8 @@ export async function attachSafetyScores(routes: RouteResult[]): Promise<ScoreOu
           cameraCount: merged.camera_count,
           policeCount: merged.police_count,
           storeCount: merged.store_count,
+          opennessAvg: merged.openness_avg,
+          reportsAvg: merged.reports_avg,
           segmentScores: merged.segment_scores,
         }
       }),

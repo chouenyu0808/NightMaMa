@@ -19,7 +19,13 @@ from google.cloud import bigquery
 
 from models.schemas import LatLng
 from services import bigquery_service, places_service
-from services.safety_scorer import Segment, score_route, score_segment
+from services.safety_scorer import (
+    Segment,
+    openness_score,
+    reports_score,
+    score_route,
+    score_segment,
+)
 from utils import geo
 
 # Middle of the 50-100m range the safety model is designed around.
@@ -55,6 +61,8 @@ class ScoredRoute:
     police_count: int
     store_count: int
     segment_scores: list[float]
+    openness_avg: float | None = None
+    reports_avg: float | None = None
 
 
 def score_polylines(
@@ -106,6 +114,9 @@ def score_polylines(
         road_classes = _safe_batch(roads_future, len(all_midpoints), [])
         junction_counts = _safe_batch(junctions_future, len(all_midpoints), 0)
         report_nearest = _safe_batch(reports_future, len(all_midpoints), 9999.0)
+        # 有沒有真的拿到資料，決定 UI 要不要顯示這兩項
+        has_roads = any(road_classes)
+        has_reports = any(d < 9999.0 for d in report_nearest)
         route_stores = [f.result() for f in store_futures]
         route_police_totals = [f.result() for f in police_futures]
 
@@ -143,6 +154,16 @@ def score_polylines(
                 police_count=police_total,
                 store_count=len(stores),
                 segment_scores=[round(score_segment(s, weights), 1) for s in segments],
+                # 路網／通報資料表缺席時 _safe_batch 已把值降級成中性，
+                # 這裡回報 None 而不是那個中性值，UI 才能誠實標示「未納入」。
+                openness_avg=(
+                    round(sum(openness_score(s) for s in segments) / len(segments), 1)
+                    if segments and has_roads else None
+                ),
+                reports_avg=(
+                    round(sum(reports_score(s) for s in segments) / len(segments), 1)
+                    if segments and has_reports else None
+                ),
             )
         )
 
